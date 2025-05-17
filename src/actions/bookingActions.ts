@@ -1,13 +1,13 @@
 
 "use server";
 
-import type { Booking, BookingFormData, BookingStatus } from "@/types/booking";
+import type { Booking, BookingFormData, BookingStatus, TrainClass } from "@/types/booking";
+import { ALL_TRAIN_CLASSES } from "@/types/booking";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/firebase"; // Ensure db is correctly initialized
 import { collection, addDoc, getDocs, doc, getDoc, updateDoc, serverTimestamp, query, orderBy, Timestamp, type DocumentSnapshot, type DocumentData } from "firebase/firestore";
 
-// This schema is used for server-side validation within addBooking
 const ServerBookingFormSchema = z.object({
   source: z.string().min(1, "Source is required"),
   destination: z.string().min(1, "Destination is required"),
@@ -15,9 +15,9 @@ const ServerBookingFormSchema = z.object({
   userName: z.string().min(1, "User name is required"),
   passengerDetails: z.string().min(1, "Passenger details are required"),
   bookingDate: z.string().min(1, "Booking date is required"), // Expects YYYY-MM-DD string
+  classType: z.enum(ALL_TRAIN_CLASSES, { errorMap: () => ({ message: "Invalid train class selected." }) }),
 });
 
-// Helper to safely convert Firestore Timestamps or other date representations to ISO string
 const toISOStringSafe = (value: any, fieldName: string, bookingId: string): string => {
   if (value instanceof Timestamp) {
     return value.toDate().toISOString();
@@ -28,11 +28,9 @@ const toISOStringSafe = (value: any, fieldName: string, bookingId: string): stri
       return date.toISOString();
     }
     console.error(`[DataFormatError] Booking ID ${bookingId}: Field '${fieldName}' is a string but not a valid date: ${value}`);
-    // Potentially throw, or return a default/error indicator depending on desired strictness
-    // For now, re-throwing helps surface the issue.
     throw new Error(`Invalid date format in '${fieldName}' for booking ${bookingId}. Expected valid date string, got ${value}`);
   }
-  if (typeof value === 'number') { // Handle milliseconds epoch
+  if (typeof value === 'number') { 
     const date = new Date(value);
     if (!isNaN(date.getTime())) {
       return date.toISOString();
@@ -40,18 +38,13 @@ const toISOStringSafe = (value: any, fieldName: string, bookingId: string): stri
     console.error(`[DataFormatError] Booking ID ${bookingId}: Field '${fieldName}' is a number but not a valid date timestamp: ${value}`);
     throw new Error(`Invalid date format in '${fieldName}' for booking ${bookingId}. Expected valid epoch milliseconds, got ${value}`);
   }
-  // If it's not a Timestamp, string, or number, or if string/number conversion failed
   console.error(`[DataFormatError] Booking ID ${bookingId}: Unexpected type or invalid value for timestamp field '${fieldName}':`, value);
   throw new Error(`Unexpected or invalid format for '${fieldName}' in booking ${bookingId}. Received type ${typeof value}`);
 };
 
-
-// Helper to convert Firestore document data to Booking type
 const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): Booking => {
   const data = document.data();
   if (!data) {
-    // This case should ideally not happen if docSnap.exists() is true,
-    // but good for type safety and robustness.
     console.error(`[DataError] No data found for document with id ${id} during mapping.`);
     throw new Error(`No data found for document with id ${id}`);
   }
@@ -60,10 +53,11 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     id,
     source: data.source as string,
     destination: data.destination as string,
-    journeyDate: data.journeyDate as string, // Assumed string from form
+    journeyDate: data.journeyDate as string, 
     userName: data.userName as string,
     passengerDetails: data.passengerDetails as string,
-    bookingDate: data.bookingDate as string, // Assumed string from form
+    bookingDate: data.bookingDate as string, 
+    classType: data.classType as TrainClass, // Added classType
     status: data.status as BookingStatus,
     createdAt: toISOStringSafe(data.createdAt, 'createdAt', id),
     updatedAt: toISOStringSafe(data.updatedAt, 'updatedAt', id),
@@ -99,17 +93,11 @@ export async function addBooking(formData: BookingFormData): Promise<{ success: 
 
     const docRef = await addDoc(collection(db, "bookings"), bookingDataForFirestore);
 
-    // For immediate feedback, we might use current client time, but Firestore timestamps are preferred for consistency.
-    // The `mapDocToBooking` will handle server timestamps upon fetching.
-    // For the returned booking, we can simulate what it would look like.
-    // A more robust approach would be to re-fetch the document, but for add, this is often acceptable.
     const now = new Date().toISOString(); 
     const newBooking: Booking = {
       ...validationResult.data,
       id: docRef.id,
       status: "Requested",
-      // These will be slightly different from serverTimestamps but okay for immediate UI update.
-      // The re-fetch on page load/revalidation will get the server-generated ones.
       createdAt: now, 
       updatedAt: now,
     };
@@ -118,14 +106,12 @@ export async function addBooking(formData: BookingFormData): Promise<{ success: 
       revalidatePath("/");
       revalidatePath("/suggestions");
     } catch (revalidationError) {
-      // Log revalidation errors but don't let them crash the main operation response
       console.warn("[Revalidation Warning] Failed to revalidate paths after booking:", revalidationError instanceof Error ? revalidationError.message : String(revalidationError));
     }
 
     return { success: true, booking: newBooking };
 
   } catch (error: unknown) {
-    // Ensure the logged error message is simple
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error("[Firestore/Server Error] In addBooking:", errorMessage);
 
@@ -143,7 +129,6 @@ export async function addBooking(formData: BookingFormData): Promise<{ success: 
     } else if (typeof error === 'string' && error.trim().length > 0) {
         specificMessage = error;
     }
-    // Removed redundant else block for specificMessage
 
     const errorsPayload: z.ZodError<BookingFormData>["formErrors"] = {
         formErrors: [specificMessage],
@@ -169,15 +154,14 @@ export async function getBookings(): Promise<Booking[]> {
         return mapDocToBooking(doc, doc.id);
       } catch (mapError) {
         console.error(`[Mapping Error] Failed to map document ${doc.id}:`, mapError instanceof Error ? mapError.message : String(mapError));
-        return null; // Or handle differently, e.g., filter out or return a placeholder
+        return null; 
       }
-    }).filter(booking => booking !== null) as Booking[]; // Filter out any nulls from mapping errors
+    }).filter(booking => booking !== null) as Booking[]; 
 
     return bookings;
   } catch (error) {
     console.error("[Firestore Error] In getBookings:", error instanceof Error ? error.message : String(error));
-    // Optionally re-throw or return a custom error object if the client needs to know
-    return []; // Return empty array on error to prevent breaking the page
+    return []; 
   }
 }
 
@@ -196,7 +180,6 @@ export async function getBookingById(id: string): Promise<Booking | null> {
   } catch (error) {
     console.error(`[Firestore Error] In getBookingById (ID: ${id}):`, error instanceof Error ? error.message : String(error));
     if (error instanceof Error && error.message.includes("Invalid date format")) {
-        // Propagate specific data format errors if needed
         throw error; 
     }
     return null;
@@ -222,11 +205,11 @@ export async function updateBookingStatus(id: string, status: BookingStatus): Pr
       console.warn(`[Revalidation Warning] Failed to revalidate paths after updating booking ${id}:`, revalidationError instanceof Error ? revalidationError.message : String(revalidationError));
     }
 
-    const updatedDocSnap = await getDoc(docRef); // Re-fetch to get the updated document with new server timestamp
+    const updatedDocSnap = await getDoc(docRef); 
     if (updatedDocSnap.exists()) {
       return mapDocToBooking(updatedDocSnap, updatedDocSnap.id);
     }
-    return null; // Should not happen if update was successful and doc existed
+    return null; 
   } catch (error) {
     console.error(`[Firestore Error] In updateBookingStatus (ID: ${id}, Status: ${status}):`, error instanceof Error ? error.message : String(error));
      if (error instanceof Error && error.message.includes("Invalid date format")) {
@@ -238,17 +221,17 @@ export async function updateBookingStatus(id: string, status: BookingStatus): Pr
 
 export async function getAllBookingsAsJsonString(): Promise<string> {
   try {
-    const currentBookings = await getBookings(); // This will now use the more robust getBookings
-    // Ensure only relevant, simple fields are stringified
+    const currentBookings = await getBookings(); 
     const simplifiedBookings = currentBookings.map(b => ({
       source: b.source,
       destination: b.destination,
-      journeyDate: b.journeyDate, // Should be YYYY-MM-DD string
+      journeyDate: b.journeyDate,
+      classType: b.classType, // Added classType
       status: b.status,
     }));
     return JSON.stringify(simplifiedBookings);
   } catch (error) {
     console.error("[Error] In getAllBookingsAsJsonString:", error instanceof Error ? error.message : String(error));
-    return JSON.stringify([]); // Return empty array string on error
+    return JSON.stringify([]); 
   }
 }

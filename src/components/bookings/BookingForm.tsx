@@ -18,11 +18,13 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { CalendarIcon, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { addBooking } from "@/actions/bookingActions";
-import type { BookingFormData } from "@/types/booking";
+import type { BookingFormData, TrainClass } from "@/types/booking";
+import { ALL_TRAIN_CLASSES } from "@/types/booking";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -34,6 +36,7 @@ const bookingFormSchema = z.object({
   userName: z.string().min(2, { message: "User name must be at least 2 characters." }),
   passengerDetails: z.string().min(5, { message: "Passenger details must be at least 5 characters." }),
   bookingDate: z.date({ required_error: "Booking date is required." }),
+  classType: z.enum(ALL_TRAIN_CLASSES, { required_error: "Train class is required." }),
 });
 
 type FormValues = z.infer<typeof bookingFormSchema>;
@@ -50,6 +53,7 @@ export function BookingForm() {
       destination: "",
       userName: "",
       passengerDetails: "",
+      // classType will use placeholder from SelectValue
     },
   });
 
@@ -59,6 +63,7 @@ export function BookingForm() {
       ...values,
       journeyDate: format(values.journeyDate, "yyyy-MM-dd"),
       bookingDate: format(values.bookingDate, "yyyy-MM-dd"),
+      classType: values.classType as TrainClass, // Zod enum ensures this
     };
 
     const result = await addBooking(formData);
@@ -95,11 +100,7 @@ export function BookingForm() {
         }
         
         if (formErrors && formErrors.length > 0) {
-           // Display general form errors if not tied to specific fields, or as additional info
-           // For react-hook-form, you can set a root error:
            form.setError("root.serverError", { type: "server", message: formErrors.join(", ") });
-           // You would then need to display form.formState.errors.root?.serverError?.message somewhere in your form.
-           // For now, the toast will carry the main message.
         }
       }
       
@@ -115,7 +116,6 @@ export function BookingForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
-        {/* Display root.serverError if you added logic for it */}
         {form.formState.errors.root?.serverError && (
           <FormMessage className="text-destructive p-2 bg-destructive/10 rounded-md">
             {form.formState.errors.root.serverError.message}
@@ -222,6 +222,31 @@ export function BookingForm() {
             )}
           />
         </div>
+
+        <FormField
+          control={form.control}
+          name="classType"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Train Class</FormLabel>
+              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                <FormControl>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a class" />
+                  </SelectTrigger>
+                </FormControl>
+                <SelectContent>
+                  {ALL_TRAIN_CLASSES.map((classOption) => (
+                    <SelectItem key={classOption} value={classOption}>
+                      {classOption}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
         
         <FormField
           control={form.control}
@@ -264,4 +289,3 @@ export function BookingForm() {
     </Form>
   );
 }
-

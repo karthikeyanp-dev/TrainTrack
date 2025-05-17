@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "./StatusBadge";
-import { CalendarDays, MapPin, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX } from "lucide-react";
+import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Armchair } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateBookingStatus } from "@/actions/bookingActions";
 import { useToast } from "@/hooks/use-toast";
@@ -65,15 +65,12 @@ export function BookingCard({ booking }: BookingCardProps) {
 
   const formatDate = (dateString: string) => {
     try {
-      // Ensure dateString is valid before formatting, potentially by parsing first if it's not guaranteed to be a full ISO string
-      // For YYYY-MM-DD, it's safer to append time to avoid timezone issues with `new Date()` parsing
       if (dateString && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
         return format(new Date(dateString + "T00:00:00"), "PPP");
       }
-      // For full ISO strings or other parsable date strings
       return format(new Date(dateString), "PPP");
     } catch (e) {
-      return dateString; // fallback if date is invalid
+      return dateString; 
     }
   }
 
@@ -98,6 +95,10 @@ export function BookingCard({ booking }: BookingCardProps) {
         <div className="flex items-center gap-2">
           <CalendarDays className="h-4 w-4 text-muted-foreground" />
           <span>Book by: {formatDate(booking.bookingDate)}</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Armchair className="h-4 w-4 text-muted-foreground" />
+          <span>Class: {booking.classType}</span>
         </div>
         <div className="flex items-start gap-2">
           <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
