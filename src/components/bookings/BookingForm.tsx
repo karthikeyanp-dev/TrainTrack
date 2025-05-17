@@ -52,6 +52,8 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
   const { toast } = useToast();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [journeyDatePopoverOpen, setJourneyDatePopoverOpen] = useState(false);
+  const [bookingDatePopoverOpen, setBookingDatePopoverOpen] = useState(false);
   const isEditMode = !!bookingId;
 
   const form = useForm<FormValues>({
@@ -190,7 +192,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             render={({ field }) => (
               <FormItem className="flex flex-col">
                 <FormLabel>Date of Journey</FormLabel>
-                <Popover>
+                <Popover open={journeyDatePopoverOpen} onOpenChange={setJourneyDatePopoverOpen}>
                   <PopoverTrigger asChild>
                     <FormControl>
                       <Button
@@ -209,7 +211,10 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                     <Calendar
                       mode="single"
                       selected={field.value}
-                      onSelect={field.onChange}
+                      onSelect={(date) => {
+                        field.onChange(date);
+                        setJourneyDatePopoverOpen(false);
+                      }}
                       disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) && !isEditMode } 
                       initialFocus
                     />
@@ -225,7 +230,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             render={({ field }) => (
               <FormItem className="flex flex-col">
                 <FormLabel>Date to be Booked By</FormLabel>
-                <Popover>
+                <Popover open={bookingDatePopoverOpen} onOpenChange={setBookingDatePopoverOpen}>
                   <PopoverTrigger asChild>
                     <FormControl>
                       <Button
@@ -244,7 +249,10 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                     <Calendar
                       mode="single"
                       selected={field.value}
-                      onSelect={field.onChange}
+                      onSelect={(date) => {
+                        field.onChange(date);
+                        setBookingDatePopoverOpen(false);
+                      }}
                       disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) && !isEditMode}
                       initialFocus
                     />
@@ -357,3 +365,4 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
     </Form>
   );
 }
+
