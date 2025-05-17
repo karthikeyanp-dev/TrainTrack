@@ -164,7 +164,12 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
               <FormItem>
                 <FormLabel>Source</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g., TEN" {...field} />
+                  <Input 
+                    placeholder="e.g., TEN" 
+                    {...field} 
+                    onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                    value={field.value || ''} 
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -177,7 +182,12 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
               <FormItem>
                 <FormLabel>Destination</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g., MS" {...field} />
+                  <Input 
+                    placeholder="e.g., MS" 
+                    {...field} 
+                    onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                    value={field.value || ''} 
+                  />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -330,7 +340,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             <FormItem>
               <FormLabel>Train Preference (Optional)</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Any express, specific train number" {...field} />
+                <Input placeholder="e.g., Any express, specific train number" {...field} value={field.value || ''} />
               </FormControl>
               <FormDescription>
                 Specify any preferred train(s) or types of trains.
@@ -347,7 +357,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             <FormItem>
               <FormLabel>Time Preference (Optional)</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Morning, after 6 PM, around noon" {...field} />
+                <Input placeholder="e.g., Morning, after 6 PM, around noon" {...field} value={field.value || ''} />
               </FormControl>
               <FormDescription>
                 Specify preferred departure or arrival times.
