@@ -8,14 +8,14 @@ import type { Booking } from "@/types/booking";
 import { AppShell } from "@/components/layout/AppShell";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format } from "date-fns";
+import { format, isToday, isTomorrow } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
 
 // Helper function to group bookings by date
 const groupBookingsByDate = (bookings: Booking[]): Record<string, Booking[]> => {
   return bookings.reduce((acc, booking) => {
-    const dateKey = booking.bookingDate; // Changed from journeyDate to bookingDate
+    const dateKey = booking.bookingDate;
     if (!acc[dateKey]) {
       acc[dateKey] = [];
     }
@@ -24,19 +24,31 @@ const groupBookingsByDate = (bookings: Booking[]): Record<string, Booking[]> => 
   }, {} as Record<string, Booking[]>);
 };
 
+// Helper function to format the date for display
+const formatDisplayDate = (dateString: string): string => {
+  const dateObject = new Date(dateString + 'T00:00:00'); // Ensure consistent parsing
+  if (isToday(dateObject)) {
+    return "Today";
+  }
+  if (isTomorrow(dateObject)) {
+    return "Tomorrow";
+  }
+  return format(dateObject, "PPP"); // e.g., "Jul 20, 2024"
+};
+
 async function BookingsDisplay() {
   const allBookings = await getBookings();
-  const today = new Date().toISOString().split("T")[0];
+  const todayString = new Date().toISOString().split("T")[0];
 
-  // Sort primarily by journeyDate still makes sense for "upcoming" nature of pending
+  // Filter for pending: status is "Requested"
   const pendingBookingsRaw = allBookings
-    .filter(booking => booking.status === "Requested" && booking.journeyDate >= today) // Filter logic still based on journeyDate for "pending" relevance
-    .sort((a, b) => new Date(a.journeyDate).getTime() - new Date(b.journeyDate).getTime());
+    .filter(booking => booking.status === "Requested")
+    .sort((a, b) => new Date(a.journeyDate).getTime() - new Date(b.journeyDate).getTime()); // Sort by journey date for consistent internal order
 
-  // Sort completed by journeyDate as well, showing most recent journey first
+  // Filter for completed: status is NOT "Requested"
   const completedBookingsRaw = allBookings
-    .filter(booking => booking.status !== "Requested") // "Booked", "Missed", "Booking Failed", "User Cancelled"
-    .sort((a, b) => new Date(b.journeyDate).getTime() - new Date(a.journeyDate).getTime()); 
+    .filter(booking => booking.status !== "Requested")
+    .sort((a, b) => new Date(b.journeyDate).getTime() - new Date(a.journeyDate).getTime()); // Sort by journey date (desc)
 
   const pendingBookingsByDate = groupBookingsByDate(pendingBookingsRaw);
   // Sort the bookingDate keys chronologically for pending
@@ -49,8 +61,8 @@ async function BookingsDisplay() {
   return (
     <Tabs defaultValue="pending" className="w-full">
       <TabsList className="grid w-full grid-cols-2 md:w-[400px]">
-        <TabsTrigger value="pending">Pending</TabsTrigger>
-        <TabsTrigger value="completed">Completed</TabsTrigger>
+        <TabsTrigger value="pending">Pending (by Book by Date)</TabsTrigger>
+        <TabsTrigger value="completed">Completed (by Book by Date)</TabsTrigger>
       </TabsList>
 
       <TabsContent value="pending" className="mt-6">
@@ -59,13 +71,13 @@ async function BookingsDisplay() {
           <Alert className="mt-4">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>No Pending Bookings</AlertTitle>
-            <AlertDescription>No bookings are currently in 'Requested' status for upcoming dates. Add a new one!</AlertDescription>
+            <AlertDescription>No bookings are currently in 'Requested' status. Add a new one!</AlertDescription>
           </Alert>
         ) : (
           pendingDates.map(date => (
             <div key={date} className="mb-8">
               <h3 className="text-xl font-medium mb-3 pb-2 border-b">
-                {format(new Date(date + 'T00:00:00'), "PPP")} 
+                {formatDisplayDate(date)}
               </h3>
               <BookingList bookings={pendingBookingsByDate[date]} />
             </div>
@@ -85,7 +97,7 @@ async function BookingsDisplay() {
           completedDates.map(date => (
             <div key={date} className="mb-8">
               <h3 className="text-xl font-medium mb-3 pb-2 border-b">
-                {format(new Date(date + 'T00:00:00'), "PPP")}
+                {formatDisplayDate(date)}
               </h3>
               <BookingList bookings={completedBookingsByDate[date]} />
             </div>
