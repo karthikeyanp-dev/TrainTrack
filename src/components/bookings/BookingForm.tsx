@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarIcon, Loader2, PlusCircle, Trash2, UserPlus, Users } from "lucide-react";
+import { CalendarIcon, Loader2, PlusCircle, UserPlus, Users, X } from "lucide-react"; // Added X icon
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { addBooking, updateBookingById } from "@/actions/bookingActions";
@@ -346,11 +346,23 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
         />
 
         <div>
-          <FormLabel className="flex items-center gap-2 mb-4">
+          <FormLabel className="flex items-center gap-2 mb-4 text-lg font-medium">
             <Users className="h-5 w-5" /> Passenger Details
           </FormLabel>
           {fields.map((item, index) => (
             <div key={item.id} className="space-y-4 p-4 mb-4 border rounded-md relative shadow-sm bg-card">
+              {fields.length > 1 && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => remove(index)}
+                  className="text-destructive hover:bg-destructive/10 md:absolute md:top-3 md:right-3 p-1"
+                  aria-label="Remove passenger"
+                >
+                  <X className="h-4 w-4" />
+                </Button>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
                 <FormField
                   control={form.control}
@@ -403,33 +415,22 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                   )}
                 />
               </div>
-              {fields.length > 1 && (
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => remove(index)}
-                  className="mt-2 md:absolute md:top-2 md:right-2"
-                >
-                  <Trash2 className="mr-1 h-4 w-4" /> Remove
-                </Button>
-              )}
             </div>
           ))}
           <Button
             type="button"
             variant="outline"
             onClick={() => append({ name: "", age: undefined, gender: undefined })}
-            className="mt-4"
+            className="mt-2"
           >
             <UserPlus className="mr-2 h-4 w-4" /> Add Passenger
           </Button>
-           {form.formState.errors.passengers && !form.formState.errors.passengers.root && (
+           {form.formState.errors.passengers && !form.formState.errors.passengers.root && ( // For array-level errors (e.g., min length)
             <FormMessage className="mt-2">
               {form.formState.errors.passengers.message}
             </FormMessage>
           )}
-           {form.formState.errors.passengers?.root && (
+           {form.formState.errors.passengers?.root && ( // For errors set by `setError("passengers.root.serverError", ...)`
              <FormMessage className="mt-2">
                 {form.formState.errors.passengers.root.message}
              </FormMessage>
@@ -479,3 +480,5 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
     </Form>
   );
 }
+
+    
