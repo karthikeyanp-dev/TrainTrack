@@ -1,6 +1,7 @@
-export type BookingStatus = "Requested" | "Booked" | "Missed" | "Booking Failed";
 
-export const ALL_BOOKING_STATUSES: BookingStatus[] = ["Requested", "Booked", "Missed", "Booking Failed"];
+export type BookingStatus = "Requested" | "Booked" | "Missed" | "Booking Failed" | "User Cancelled";
+
+export const ALL_BOOKING_STATUSES: BookingStatus[] = ["Requested", "Booked", "Missed", "Booking Failed", "User Cancelled"];
 
 export interface Booking {
   id: string;

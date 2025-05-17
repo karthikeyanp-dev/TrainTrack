@@ -1,3 +1,4 @@
+
 import type { BookingStatus } from "@/types/booking";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
@@ -25,6 +26,10 @@ export function StatusBadge({ status }: StatusBadgeProps) {
       break;
     case "Booking Failed":
       variant = "destructive"; // Uses destructive theme color (red)
+      break;
+    case "User Cancelled":
+      variant = "secondary"; // Using secondary as a base for custom orange
+      className = "bg-orange-500 hover:bg-orange-600 text-white";
       break;
     default:
       variant = "outline";

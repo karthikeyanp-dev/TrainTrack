@@ -1,3 +1,4 @@
+
 "use client";
 
 import type { Booking, BookingStatus } from "@/types/booking";
@@ -6,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "./StatusBadge";
-import { CalendarDays, MapPin, Users, AlertTriangle, CheckCircle2, XCircle, Info } from "lucide-react";
+import { CalendarDays, MapPin, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateBookingStatus } from "@/actions/bookingActions";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +23,7 @@ function getStatusIcon(status: BookingStatus) {
     case "Booked": return <CheckCircle2 className="h-4 w-4 text-green-600" />;
     case "Missed": return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
     case "Booking Failed": return <XCircle className="h-4 w-4 text-red-600" />;
+    case "User Cancelled": return <UserX className="h-4 w-4 text-orange-500" />;
     default: return <Info className="h-4 w-4" />;
   }
 }
@@ -63,7 +65,13 @@ export function BookingCard({ booking }: BookingCardProps) {
 
   const formatDate = (dateString: string) => {
     try {
-      return format(new Date(dateString), "PPP"); // e.g., Jun 20th, 2024
+      // Ensure dateString is valid before formatting, potentially by parsing first if it's not guaranteed to be a full ISO string
+      // For YYYY-MM-DD, it's safer to append time to avoid timezone issues with `new Date()` parsing
+      if (dateString && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        return format(new Date(dateString + "T00:00:00"), "PPP");
+      }
+      // For full ISO strings or other parsable date strings
+      return format(new Date(dateString), "PPP");
     } catch (e) {
       return dateString; // fallback if date is invalid
     }
