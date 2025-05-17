@@ -15,7 +15,7 @@ import { AlertCircle } from "lucide-react";
 // Helper function to group bookings by date
 const groupBookingsByDate = (bookings: Booking[]): Record<string, Booking[]> => {
   return bookings.reduce((acc, booking) => {
-    const dateKey = booking.journeyDate; // journeyDate is 'YYYY-MM-DD'
+    const dateKey = booking.bookingDate; // Changed from journeyDate to bookingDate
     if (!acc[dateKey]) {
       acc[dateKey] = [];
     }
@@ -28,18 +28,22 @@ async function BookingsDisplay() {
   const allBookings = await getBookings();
   const today = new Date().toISOString().split("T")[0];
 
+  // Sort primarily by journeyDate still makes sense for "upcoming" nature of pending
   const pendingBookingsRaw = allBookings
-    .filter(booking => booking.status === "Requested" && booking.journeyDate >= today)
+    .filter(booking => booking.status === "Requested" && booking.journeyDate >= today) // Filter logic still based on journeyDate for "pending" relevance
     .sort((a, b) => new Date(a.journeyDate).getTime() - new Date(b.journeyDate).getTime());
 
+  // Sort completed by journeyDate as well, showing most recent journey first
   const completedBookingsRaw = allBookings
     .filter(booking => booking.status !== "Requested") // "Booked", "Missed", "Booking Failed", "User Cancelled"
-    .sort((a, b) => new Date(b.journeyDate).getTime() - new Date(a.journeyDate).getTime()); // Show recent completed first
+    .sort((a, b) => new Date(b.journeyDate).getTime() - new Date(a.journeyDate).getTime()); 
 
   const pendingBookingsByDate = groupBookingsByDate(pendingBookingsRaw);
+  // Sort the bookingDate keys chronologically for pending
   const pendingDates = Object.keys(pendingBookingsByDate).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
 
   const completedBookingsByDate = groupBookingsByDate(completedBookingsRaw);
+  // Sort the bookingDate keys reverse-chronologically for completed
   const completedDates = Object.keys(completedBookingsByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
   return (
@@ -50,7 +54,7 @@ async function BookingsDisplay() {
       </TabsList>
 
       <TabsContent value="pending" className="mt-6">
-        <h2 className="text-2xl font-semibold mb-4">Pending Bookings</h2>
+        <h2 className="text-2xl font-semibold mb-4">Pending Bookings (Grouped by Book By Date)</h2>
         {pendingDates.length === 0 ? (
           <Alert className="mt-4">
             <AlertCircle className="h-4 w-4" />
@@ -61,8 +65,7 @@ async function BookingsDisplay() {
           pendingDates.map(date => (
             <div key={date} className="mb-8">
               <h3 className="text-xl font-medium mb-3 pb-2 border-b">
-                {/* Append T00:00:00 to ensure date is parsed in local timezone context for formatting */}
-                {format(new Date(date + 'T00:00:00'), "PPP")} 
+                Book By: {format(new Date(date + 'T00:00:00'), "PPP")} 
               </h3>
               <BookingList bookings={pendingBookingsByDate[date]} />
             </div>
@@ -71,7 +74,7 @@ async function BookingsDisplay() {
       </TabsContent>
 
       <TabsContent value="completed" className="mt-6">
-        <h2 className="text-2xl font-semibold mb-4">Completed Bookings</h2>
+        <h2 className="text-2xl font-semibold mb-4">Completed Bookings (Grouped by Book By Date)</h2>
         {completedDates.length === 0 ? (
           <Alert className="mt-4">
             <AlertCircle className="h-4 w-4" />
@@ -82,8 +85,7 @@ async function BookingsDisplay() {
           completedDates.map(date => (
             <div key={date} className="mb-8">
               <h3 className="text-xl font-medium mb-3 pb-2 border-b">
-                {/* Append T00:00:00 to ensure date is parsed in local timezone context for formatting */}
-                {format(new Date(date + 'T00:00:00'), "PPP")}
+                Booked/Finalized By (originally Book By): {format(new Date(date + 'T00:00:00'), "PPP")}
               </h3>
               <BookingList bookings={completedBookingsByDate[date]} />
             </div>
