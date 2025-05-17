@@ -1,19 +1,25 @@
 
 "use server";
 
-import type { Booking, BookingFormData, BookingStatus, TrainClass } from "@/types/booking";
-import { ALL_TRAIN_CLASSES } from "@/types/booking";
+import type { Booking, BookingFormData, BookingStatus, Passenger, PassengerGender, TrainClass } from "@/types/booking";
+import { ALL_TRAIN_CLASSES, ALL_PASSENGER_GENDERS } from "@/types/booking";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/firebase";
 import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, Timestamp, type DocumentSnapshot, type DocumentData } from "firebase/firestore";
+
+const PassengerSchema = z.object({
+  name: z.string().min(1, "Passenger name is required."),
+  age: z.number().int().positive("Passenger age must be a positive integer."),
+  gender: z.enum(ALL_PASSENGER_GENDERS, { errorMap: () => ({ message: "Invalid gender selected."}) }),
+});
 
 const ServerBookingFormSchema = z.object({
   source: z.string().min(1, "Source is required"),
   destination: z.string().min(1, "Destination is required"),
   journeyDate: z.string().min(1, "Journey date is required"), // Expects YYYY-MM-DD string
   userName: z.string().min(1, "User name is required"),
-  passengerDetails: z.string().min(1, "Passenger details are required"),
+  passengers: z.array(PassengerSchema).min(1, "At least one passenger is required."),
   bookingDate: z.string().min(1, "Booking date is required"), // Expects YYYY-MM-DD string
   classType: z.enum(ALL_TRAIN_CLASSES, { errorMap: () => ({ message: "Invalid train class selected." }) }),
   trainPreference: z.string().optional(),
@@ -57,7 +63,7 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     destination: data.destination as string,
     journeyDate: data.journeyDate as string,
     userName: data.userName as string,
-    passengerDetails: data.passengerDetails as string,
+    passengers: data.passengers as Passenger[], // Assuming passengers are stored as an array of objects
     bookingDate: data.bookingDate as string,
     classType: data.classType as TrainClass,
     trainPreference: data.trainPreference as string | undefined,
@@ -73,7 +79,7 @@ export async function addBooking(formData: BookingFormData): Promise<{ success: 
   const validationResult = ServerBookingFormSchema.safeParse(formData);
   if (!validationResult.success) {
     console.error("[Server Validation Failed] In addBooking:", validationResult.error.flatten());
-    return { success: false, errors: validationResult.error.formErrors };
+    return { success: false, errors: validationResult.error.flatten() as any }; // Use flatten() for detailed errors
   }
 
   try {
@@ -84,7 +90,7 @@ export async function addBooking(formData: BookingFormData): Promise<{ success: 
         errors: {
           formErrors: ["Firestore database is not configured correctly. Please contact support or check server logs."],
           fieldErrors: {}
-        }
+        } as any
       };
     }
 
@@ -94,16 +100,15 @@ export async function addBooking(formData: BookingFormData): Promise<{ success: 
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
-    // Remove undefined optional fields so they are not written to Firestore
     if (validationResult.data.trainPreference === undefined) delete bookingDataForFirestore.trainPreference;
     if (validationResult.data.timePreference === undefined) delete bookingDataForFirestore.timePreference;
-
 
     const docRef = await addDoc(collection(db, "bookings"), bookingDataForFirestore);
 
     const now = new Date().toISOString();
     const newBooking: Booking = {
       ...validationResult.data,
+      passengers: validationResult.data.passengers.map(p => ({...p, age: Number(p.age)})), // Ensure age is number
       id: docRef.id,
       status: "Requested",
       createdAt: now,
@@ -141,7 +146,7 @@ export async function addBooking(formData: BookingFormData): Promise<{ success: 
     const errorsPayload: z.ZodError<BookingFormData>["formErrors"] = {
         formErrors: [specificMessage],
         fieldErrors: {}
-    };
+    } as any;
 
     return { success: false, errors: errorsPayload };
   }
@@ -151,7 +156,7 @@ export async function updateBookingById(id: string, formData: BookingFormData): 
   const validationResult = ServerBookingFormSchema.safeParse(formData);
   if (!validationResult.success) {
     console.error("[Server Validation Failed] In updateBookingById:", validationResult.error.flatten());
-    return { success: false, errors: validationResult.error.formErrors };
+    return { success: false, errors: validationResult.error.flatten() as any };
   }
 
   try {
@@ -162,29 +167,28 @@ export async function updateBookingById(id: string, formData: BookingFormData): 
         errors: {
           formErrors: ["Firestore database is not configured correctly."],
           fieldErrors: {}
-        }
+        } as any
       };
     }
 
     const docRef = doc(db, "bookings", id);
     const bookingDataForFirestore: Record<string, any> = {
       ...validationResult.data,
+      passengers: validationResult.data.passengers.map(p => ({...p, age: Number(p.age)})),
       updatedAt: serverTimestamp(),
     };
-    // Remove undefined optional fields so they are not written to Firestore
-    // Or explicitly set them to null if you want to remove them from the document
     if (validationResult.data.trainPreference === undefined) {
-       delete bookingDataForFirestore.trainPreference; // Or bookingDataForFirestore.trainPreference = null;
+       delete bookingDataForFirestore.trainPreference;
     }
     if (validationResult.data.timePreference === undefined) {
-       delete bookingDataForFirestore.timePreference; // Or bookingDataForFirestore.timePreference = null;
+       delete bookingDataForFirestore.timePreference;
     }
 
     await updateDoc(docRef, bookingDataForFirestore);
 
     const updatedDocSnap = await getDoc(docRef);
     if (!updatedDocSnap.exists()) {
-        return { success: false, errors: { formErrors: ["Failed to retrieve booking after update."], fieldErrors: {} } };
+        return { success: false, errors: { formErrors: ["Failed to retrieve booking after update."], fieldErrors: {} } as any };
     }
     const updatedBooking = mapDocToBooking(updatedDocSnap, updatedDocSnap.id);
 
@@ -209,7 +213,7 @@ export async function updateBookingById(id: string, formData: BookingFormData): 
     const errorsPayload: z.ZodError<BookingFormData>["formErrors"] = {
         formErrors: [specificMessage],
         fieldErrors: {}
-    };
+    } as any;
     return { success: false, errors: errorsPayload };
   }
 }
@@ -327,6 +331,7 @@ export async function getAllBookingsAsJsonString(): Promise<string> {
       destination: b.destination,
       journeyDate: b.journeyDate,
       classType: b.classType,
+      passengers: b.passengers.map(p => `${p.name} ${p.age} ${p.gender}`).join(', '), // Simplified passenger string for JSON
       trainPreference: b.trainPreference,
       timePreference: b.timePreference,
       status: b.status,

@@ -7,13 +7,22 @@ export type TrainClass = "SL" | "3A" | "2A" | "1A" | "2S" | "EC" | "CC" | "UR";
 
 export const ALL_TRAIN_CLASSES: TrainClass[] = ["SL", "3A", "2A", "1A", "2S", "EC", "CC", "UR"];
 
+export type PassengerGender = "M" | "F" | "O";
+export const ALL_PASSENGER_GENDERS: PassengerGender[] = ["M", "F", "O"];
+
+export interface Passenger {
+  name: string;
+  age: number;
+  gender: PassengerGender;
+}
+
 export interface Booking {
   id: string;
   source: string;
   destination: string;
   journeyDate: string; // ISO string YYYY-MM-DD
   userName: string;
-  passengerDetails: string; // Text area for passenger names, ages, etc.
+  passengers: Passenger[]; // Replaces passengerDetails
   bookingDate: string; // ISO string YYYY-MM-DD (date by which it needs to be booked)
   classType: TrainClass;
   trainPreference?: string; // Optional
@@ -24,3 +33,4 @@ export interface Booking {
 }
 
 export type BookingFormData = Omit<Booking, "id" | "createdAt" | "updatedAt" | "status">;
+

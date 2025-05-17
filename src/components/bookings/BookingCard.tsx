@@ -62,8 +62,8 @@ export function BookingCard({ booking }: BookingCardProps) {
     mutationFn: ({ id, status }: { id: string; status: BookingStatus }) => updateBookingStatus(id, status),
     onSuccess: (updatedBooking) => {
       if (updatedBooking) {
-        queryClient.invalidateQueries({ queryKey: ["bookings"] }); // Refetch bookings
-        queryClient.invalidateQueries({queryKey: ['booking', updatedBooking.id]}); // Refetch specific booking if needed elsewhere
+        queryClient.invalidateQueries({ queryKey: ["bookings"] });
+        queryClient.invalidateQueries({queryKey: ['booking', updatedBooking.id]});
         toast({
           title: "Status Updated",
           description: `Booking for ${updatedBooking.userName} is now ${updatedBooking.status}.`,
@@ -137,6 +137,7 @@ export function BookingCard({ booking }: BookingCardProps) {
   };
 
   const handleShare = async () => {
+    const passengerDetailsText = booking.passengers.map(p => `${p.name} ${p.age} ${p.gender.toUpperCase()}`).join('\n');
     const bookingDetailsText = `
 Train Booking Details:
 ----------------------
@@ -146,11 +147,12 @@ Journey Date: ${formatDate(booking.journeyDate)}
 Day of Journey: ${format(new Date(booking.journeyDate + 'T00:00:00'), "EEEE")}
 Book By: ${formatDate(booking.bookingDate)}
 Class: ${booking.classType}
-Passengers: ${booking.passengerDetails}
+Passengers:
+${passengerDetailsText}
 ${booking.trainPreference ? `Train Preference: ${booking.trainPreference}` : ''}
 ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
 ----------------------
-    `.trim().replace(/^\n+|\n+$/g, '').replace(/\n\n+/g, '\n'); // Clean up extra newlines
+    `.trim().replace(/^\n+|\n+$/g, '').replace(/\n\n+/g, '\n');
 
     if (navigator.share) {
       try {
@@ -184,10 +186,10 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
         return format(new Date(dateString + "T00:00:00"), "PPP");
       }
       const date = new Date(dateString);
-      if (isNaN(date.getTime())) return dateString; 
+      if (isNaN(date.getTime())) return dateString;
       return format(date, "PPP");
     } catch (e) {
-      return dateString; 
+      return dateString;
     }
   }
 
@@ -217,10 +219,19 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
           <CalendarDays className="h-4 w-4 text-muted-foreground" />
           <span>Book by: {formatDate(booking.bookingDate)}</span>
         </div>
-        <div className="flex items-start gap-2">
-          <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
-          <span className="flex-1">Passengers: {booking.passengerDetails}</span>
+
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <Users className="h-4 w-4 text-muted-foreground" />
+            <span className="font-medium">Passengers:</span>
+          </div>
+          {booking.passengers.map((passenger, index) => (
+            <div key={index} className="ml-6 text-sm">
+              {passenger.name}, {passenger.age}, {passenger.gender.toUpperCase()}
+            </div>
+          ))}
         </div>
+
         {booking.trainPreference && (
           <div className="flex items-start gap-2">
             <Train className="h-4 w-4 text-muted-foreground mt-0.5" />
@@ -347,4 +358,3 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
     </Card>
   );
 }
-

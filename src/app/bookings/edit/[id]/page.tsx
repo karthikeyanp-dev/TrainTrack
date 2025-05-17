@@ -5,7 +5,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
-import type { BookingFormData } from "@/types/booking";
+import type { BookingFormData, Passenger } from "@/types/booking";
 
 interface EditBookingPageProps {
   params: { id: string };
@@ -28,18 +28,18 @@ export default async function EditBookingPage({ params }: EditBookingPageProps) 
     );
   }
 
-   const initialData: BookingFormData & { journeyDateObj: Date; bookingDateObj: Date } = {
+   const initialData: BookingFormData & { journeyDateObj: Date; bookingDateObj: Date; passengers: Passenger[] } = {
     source: booking.source,
     destination: booking.destination,
-    journeyDate: booking.journeyDate, 
-    bookingDate: booking.bookingDate, 
+    journeyDate: booking.journeyDate,
+    bookingDate: booking.bookingDate,
     userName: booking.userName,
-    passengerDetails: booking.passengerDetails,
+    passengers: booking.passengers,
     classType: booking.classType,
     trainPreference: booking.trainPreference || "",
     timePreference: booking.timePreference || "",
-    journeyDateObj: new Date(booking.journeyDate + 'T00:00:00'), 
-    bookingDateObj: new Date(booking.bookingDate + 'T00:00:00'), 
+    journeyDateObj: new Date(booking.journeyDate + 'T00:00:00'),
+    bookingDateObj: new Date(booking.bookingDate + 'T00:00:00'),
   };
 
 

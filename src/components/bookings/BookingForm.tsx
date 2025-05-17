@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useForm } from "react-hook-form";
+import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Button } from "@/components/ui/button";
@@ -15,26 +15,32 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { CalendarIcon, Loader2 } from "lucide-react";
+import { CalendarIcon, Loader2, PlusCircle, Trash2, UserPlus, Users } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { addBooking, updateBookingById } from "@/actions/bookingActions";
-import type { BookingFormData, TrainClass } from "@/types/booking";
-import { ALL_TRAIN_CLASSES } from "@/types/booking";
+import type { BookingFormData, Passenger, PassengerGender, TrainClass } from "@/types/booking";
+import { ALL_TRAIN_CLASSES, ALL_PASSENGER_GENDERS } from "@/types/booking";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { useState, useEffect } from "react";
+import { Separator } from "@/components/ui/separator";
+
+const passengerSchema = z.object({
+  name: z.string().min(2, { message: "Passenger name must be at least 2 characters." }),
+  age: z.coerce.number().positive({ message: "Age must be a positive number." }).max(120, { message: "Age seems too high."}),
+  gender: z.enum(ALL_PASSENGER_GENDERS, { required_error: "Gender is required." }),
+});
 
 const bookingFormSchema = z.object({
   source: z.string().min(2, { message: "Source must be at least 2 characters." }),
   destination: z.string().min(2, { message: "Destination must be at least 2 characters." }),
   journeyDate: z.date({ required_error: "Journey date is required." }),
   userName: z.string().min(2, { message: "User name must be at least 2 characters." }),
-  passengerDetails: z.string().min(5, { message: "Passenger details must be at least 5 characters." }),
+  passengers: z.array(passengerSchema).min(1, { message: "At least one passenger is required." }),
   bookingDate: z.date({ required_error: "Booking date is required." }),
   classType: z.enum(ALL_TRAIN_CLASSES, { required_error: "Train class is required." }),
   trainPreference: z.string().optional(),
@@ -44,7 +50,7 @@ const bookingFormSchema = z.object({
 type FormValues = z.infer<typeof bookingFormSchema>;
 
 interface BookingFormProps {
-  initialData?: BookingFormData & { journeyDateObj?: Date; bookingDateObj?: Date }; // Dates passed as objects for pre-fill
+  initialData?: BookingFormData & { journeyDateObj?: Date; bookingDateObj?: Date; passengers?: Passenger[] };
   bookingId?: string;
 }
 
@@ -63,12 +69,17 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
       destination: initialData?.destination || "",
       journeyDate: initialData?.journeyDateObj,
       userName: initialData?.userName || "",
-      passengerDetails: initialData?.passengerDetails || "",
+      passengers: initialData?.passengers && initialData.passengers.length > 0 ? initialData.passengers : [{ name: "", age: undefined, gender: undefined }],
       bookingDate: initialData?.bookingDateObj,
       classType: initialData?.classType || undefined,
       trainPreference: initialData?.trainPreference || "",
       timePreference: initialData?.timePreference || "",
     },
+  });
+
+  const { fields, append, remove } = useFieldArray({
+    control: form.control,
+    name: "passengers",
   });
 
   useEffect(() => {
@@ -78,7 +89,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
         destination: initialData.destination,
         journeyDate: initialData.journeyDateObj,
         userName: initialData.userName,
-        passengerDetails: initialData.passengerDetails,
+        passengers: initialData.passengers && initialData.passengers.length > 0 ? initialData.passengers : [{ name: "", age: undefined, gender: undefined }],
         bookingDate: initialData.bookingDateObj,
         classType: initialData.classType,
         trainPreference: initialData.trainPreference || "",
@@ -94,8 +105,12 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
       journeyDate: format(values.journeyDate, "yyyy-MM-dd"),
       bookingDate: format(values.bookingDate, "yyyy-MM-dd"),
       classType: values.classType as TrainClass,
-      trainPreference: values.trainPreference || undefined, // Ensure empty string becomes undefined
-      timePreference: values.timePreference || undefined,   // Ensure empty string becomes undefined
+      passengers: values.passengers.map(p => ({
+        ...p,
+        age: Number(p.age) // Ensure age is a number
+      })) as Passenger[],
+      trainPreference: values.trainPreference || undefined,
+      timePreference: values.timePreference || undefined,
     };
 
     const result = isEditMode && bookingId
@@ -108,37 +123,54 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
         description: `Request for ${result.booking.userName} from ${result.booking.source} to ${result.booking.destination} ${isEditMode ? 'updated' : 'saved'}.`,
       });
       router.push("/");
-      router.refresh(); 
+      router.refresh();
     } else {
       let errorToastMessage = "An unexpected error occurred. Please try again.";
       if (result.errors) {
-        const { formErrors, fieldErrors } = result.errors;
-        
+        const { formErrors, fieldErrors } = result.errors as any; // Cast to any to handle nested field errors
+
         if (formErrors && formErrors.length > 0) {
           errorToastMessage = formErrors.join(" ");
         } else if (fieldErrors && Object.keys(fieldErrors).length > 0) {
           errorToastMessage = "Please check the form for specific errors highlighted below.";
+           // Handle passengers array errors
+          if (fieldErrors.passengers && Array.isArray(fieldErrors.passengers)) {
+            fieldErrors.passengers.forEach((passengerError: any, index: number) => {
+              if (passengerError) {
+                Object.keys(passengerError).forEach(key => {
+                  form.setError(`passengers.${index}.${key as keyof Passenger}` as any, {
+                    type: 'server',
+                    message: passengerError[key]?._errors?.join(', ') || "Invalid value"
+                  });
+                });
+              }
+            });
+          } else if (typeof fieldErrors.passengers === 'object' && fieldErrors.passengers?._errors) {
+             form.setError('passengers', { type: 'server', message: fieldErrors.passengers._errors.join(', ') });
+          }
+
+
+          // Handle other field errors
+          (Object.keys(fieldErrors) as Array<keyof FormValues>).forEach((fieldName) => {
+            if (fieldName !== 'passengers') {
+              const messages = fieldErrors[fieldName]?._errors;
+              if (messages && messages.length > 0) {
+                form.setError(fieldName, {
+                  type: "server",
+                  message: messages.join(", "),
+                });
+              }
+            }
+          });
         } else {
           errorToastMessage = "Validation failed. Please check your input.";
         }
 
-        if (fieldErrors) {
-          (Object.keys(fieldErrors) as Array<keyof FormValues>).forEach((fieldName) => {
-            const messages = fieldErrors[fieldName];
-            if (messages && messages.length > 0) {
-              form.setError(fieldName, {
-                type: "server",
-                message: messages.join(", "),
-              });
-            }
-          });
-        }
-        
         if (formErrors && formErrors.length > 0) {
            form.setError("root.serverError", { type: "server", message: formErrors.join(", ") });
         }
       }
-      
+
       toast({
         title: `Error ${isEditMode ? 'Updating' : 'Adding'} Booking`,
         description: errorToastMessage,
@@ -164,11 +196,11 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
               <FormItem>
                 <FormLabel>Source</FormLabel>
                 <FormControl>
-                  <Input 
-                    placeholder="e.g., TEN" 
-                    {...field} 
+                  <Input
+                    placeholder="e.g., TEN"
+                    {...field}
                     onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                    value={field.value || ''} 
+                    value={field.value || ''}
                   />
                 </FormControl>
                 <FormMessage />
@@ -182,11 +214,11 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
               <FormItem>
                 <FormLabel>Destination</FormLabel>
                 <FormControl>
-                  <Input 
-                    placeholder="e.g., MS" 
-                    {...field} 
+                  <Input
+                    placeholder="e.g., MS"
+                    {...field}
                     onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                    value={field.value || ''} 
+                    value={field.value || ''}
                   />
                 </FormControl>
                 <FormMessage />
@@ -225,7 +257,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                         field.onChange(date);
                         setJourneyDatePopoverOpen(false);
                       }}
-                      disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) && !isEditMode } 
+                      disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) && !isEditMode }
                       initialFocus
                     />
                   </PopoverContent>
@@ -298,7 +330,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             </FormItem>
           )}
         />
-        
+
         <FormField
           control={form.control}
           name="userName"
@@ -306,32 +338,104 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             <FormItem>
               <FormLabel>Requested by</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Rajesh" {...field} />
+                <Input placeholder="e.g., Rajesh" {...field} value={field.value || ''}/>
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
-        <FormField
-          control={form.control}
-          name="passengerDetails"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Passenger(s) Details</FormLabel>
-              <FormControl>
-                <Textarea
-                  placeholder="e.g., Joseph (M, 32), Rose (F, 28)"
-                  className="resize-y min-h-[100px]"
-                  {...field}
+
+        <div>
+          <FormLabel className="flex items-center gap-2 mb-4">
+            <Users className="h-5 w-5" /> Passenger Details
+          </FormLabel>
+          {fields.map((item, index) => (
+            <div key={item.id} className="space-y-4 p-4 mb-4 border rounded-md relative shadow-sm bg-card">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+                <FormField
+                  control={form.control}
+                  name={`passengers.${index}.name`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Passenger Name</FormLabel>
+                      <FormControl>
+                        <Input placeholder="Full Name" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
-              </FormControl>
-              <FormDescription>
-                Enter names, ages, and any other relevant details for all passengers.
-              </FormDescription>
-              <FormMessage />
-            </FormItem>
+                <FormField
+                  control={form.control}
+                  name={`passengers.${index}.age`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Age</FormLabel>
+                      <FormControl>
+                        <Input type="number" placeholder="e.g., 30" {...field} onChange={e => field.onChange(e.target.value === '' ? undefined : +e.target.value)} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name={`passengers.${index}.gender`}
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Gender</FormLabel>
+                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select gender" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {ALL_PASSENGER_GENDERS.map((gender) => (
+                            <SelectItem key={gender} value={gender}>
+                              {gender === 'M' ? 'Male' : gender === 'F' ? 'Female' : 'Other'}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              {fields.length > 1 && (
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => remove(index)}
+                  className="mt-2 md:absolute md:top-2 md:right-2"
+                >
+                  <Trash2 className="mr-1 h-4 w-4" /> Remove
+                </Button>
+              )}
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => append({ name: "", age: undefined, gender: undefined })}
+            className="mt-4"
+          >
+            <UserPlus className="mr-2 h-4 w-4" /> Add Passenger
+          </Button>
+           {form.formState.errors.passengers && !form.formState.errors.passengers.root && (
+            <FormMessage className="mt-2">
+              {form.formState.errors.passengers.message}
+            </FormMessage>
           )}
-        />
+           {form.formState.errors.passengers?.root && (
+             <FormMessage className="mt-2">
+                {form.formState.errors.passengers.root.message}
+             </FormMessage>
+           )}
+        </div>
+        <Separator />
 
         <FormField
           control={form.control}
@@ -375,4 +479,3 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
     </Form>
   );
 }
-
