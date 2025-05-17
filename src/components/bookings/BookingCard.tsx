@@ -31,6 +31,8 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { Label } from "@/components/ui/label";
+
 
 interface BookingCardProps {
   booking: Booking;
@@ -51,16 +53,17 @@ export function BookingCard({ booking }: BookingCardProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const router = useRouter();
-
-  const [showDeleteConfirmDialog, setShowDeleteConfirmDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showStatusConfirmDialog, setShowStatusConfirmDialog] = useState(false);
   const [statusToConfirm, setStatusToConfirm] = useState<BookingStatus | null>(null);
+
 
   const statusUpdateMutation = useMutation({
     mutationFn: ({ id, status }: { id: string; status: BookingStatus }) => updateBookingStatus(id, status),
     onSuccess: (updatedBooking) => {
       if (updatedBooking) {
-        queryClient.invalidateQueries({ queryKey: ["bookings"] });
+        queryClient.invalidateQueries({ queryKey: ["bookings"] }); // Refetch bookings
+        queryClient.invalidateQueries({queryKey: ['booking', updatedBooking.id]}); // Refetch specific booking if needed elsewhere
         toast({
           title: "Status Updated",
           description: `Booking for ${updatedBooking.userName} is now ${updatedBooking.status}.`,
@@ -72,6 +75,7 @@ export function BookingCard({ booking }: BookingCardProps) {
           variant: "destructive",
         });
       }
+      setShowStatusConfirmDialog(false);
       setStatusToConfirm(null);
     },
     onError: (error) => {
@@ -80,6 +84,7 @@ export function BookingCard({ booking }: BookingCardProps) {
         description: `Failed to update status: ${error.message}`,
         variant: "destructive",
       });
+      setShowStatusConfirmDialog(false);
       setStatusToConfirm(null);
     },
   });
@@ -100,6 +105,7 @@ export function BookingCard({ booking }: BookingCardProps) {
           variant: "destructive",
         });
       }
+      setShowDeleteDialog(false);
     },
     onError: (error) => {
       toast({
@@ -107,29 +113,23 @@ export function BookingCard({ booking }: BookingCardProps) {
         description: error.message,
         variant: "destructive",
       });
+      setShowDeleteDialog(false);
     },
   });
 
-  const handleProposeStatusChange = (newStatus: string) => {
+  const handleStatusSelect = (newStatus: string) => {
     setStatusToConfirm(newStatus as BookingStatus);
     setShowStatusConfirmDialog(true);
   };
 
-  const handleConfirmStatusChange = () => {
+  const handleConfirmStatusUpdate = () => {
     if (statusToConfirm) {
       statusUpdateMutation.mutate({ id: booking.id, status: statusToConfirm });
     }
-    setShowStatusConfirmDialog(false);
-  };
-
-  const handleCancelStatusChange = () => {
-    setShowStatusConfirmDialog(false);
-    setStatusToConfirm(null);
   };
 
   const handleDelete = () => {
     deleteMutation.mutate(booking.id);
-    setShowDeleteConfirmDialog(false);
   };
 
   const handleEdit = () => {
@@ -143,14 +143,14 @@ Train Booking Details:
 From: ${booking.source.toUpperCase()}
 To: ${booking.destination.toUpperCase()}
 Journey Date: ${formatDate(booking.journeyDate)}
+Day of Journey: ${format(new Date(booking.journeyDate + 'T00:00:00'), "EEEE")}
 Book By: ${formatDate(booking.bookingDate)}
 Class: ${booking.classType}
 Passengers: ${booking.passengerDetails}
 ${booking.trainPreference ? `Train Preference: ${booking.trainPreference}` : ''}
 ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
-Status: ${booking.status}
 ----------------------
-    `.trim().replace(/^\\n+|\\n+$/g, '').replace(/\\n\\n+/g, '\\n');
+    `.trim().replace(/^\n+|\n+$/g, '').replace(/\n\n+/g, '\n'); // Clean up extra newlines
 
     if (navigator.share) {
       try {
@@ -180,7 +180,7 @@ Status: ${booking.status}
 
   const formatDate = (dateString: string) => {
     try {
-      if (dateString && dateString.match(/^\\d{4}-\\d{2}-\\d{2}$/)) {
+      if (dateString && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
         return format(new Date(dateString + "T00:00:00"), "PPP");
       }
       const date = new Date(dateString);
@@ -204,7 +204,7 @@ Status: ${booking.status}
           </div>
           <div className="flex flex-col items-end gap-1.5">
             <StatusBadge status={booking.status} />
-            <span className="text-3xl font-bold text-primary">{booking.classType}</span>
+            <span className="text-3xl font-semibold text-primary">{booking.classType}</span>
           </div>
         </div>
       </CardHeader>
@@ -266,7 +266,7 @@ Status: ${booking.status}
                 </Tooltip>
             </TooltipProvider>
 
-            <AlertDialog open={showDeleteConfirmDialog} onOpenChange={setShowDeleteConfirmDialog}>
+            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
                 <TooltipProvider>
                     <Tooltip>
                     <TooltipTrigger asChild>
@@ -301,26 +301,26 @@ Status: ${booking.status}
             </AlertDialog>
             </div>
         </div>
-        
-        <div className="space-y-1">
-          <label htmlFor={`status-select-${booking.id}`} className="text-xs font-medium text-muted-foreground">Update Booking Status:</label>
-          <Select 
-            onValueChange={handleProposeStatusChange} 
-            value={booking.status} // Controlled component
-            disabled={statusUpdateMutation.isPending}
-            name={`status-select-${booking.id}`}
+        <div className="flex flex-col gap-1.5">
+           <Label htmlFor={`status-select-${booking.id}`} className="text-xs font-medium text-muted-foreground">Update Booking Status:</Label>
+            <Select
+                value={booking.status}
+                onValueChange={handleStatusSelect}
+                disabled={statusUpdateMutation.isPending}
+                name={`status-select-${booking.id}`}
+                aria-labelledby={`status-select-label-${booking.id}`}
             >
-            <SelectTrigger id={`status-select-${booking.id}`} className="w-full">
-              <SelectValue placeholder="Update status" />
-            </SelectTrigger>
-            <SelectContent>
-              {ALL_BOOKING_STATUSES.map((statusOption) => (
-                <SelectItem key={statusOption} value={statusOption}>
-                  {statusOption}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+                <SelectTrigger id={`status-select-${booking.id}`} className="w-full">
+                    <SelectValue placeholder="Update status" />
+                </SelectTrigger>
+                <SelectContent>
+                    {ALL_BOOKING_STATUSES.map((statusOption) => (
+                    <SelectItem key={statusOption} value={statusOption}>
+                        {statusOption}
+                    </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
         </div>
 
         <AlertDialog open={showStatusConfirmDialog} onOpenChange={setShowStatusConfirmDialog}>
@@ -328,18 +328,21 @@ Status: ${booking.status}
             <AlertDialogHeader>
               <AlertDialogTitle>Confirm Status Change</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to change the status of this booking for {booking.userName} to "<strong>{statusToConfirm}</strong>"?
+                Are you sure you want to change the status to "{statusToConfirm}" for the booking
+                from {booking.source.toUpperCase()} to {booking.destination.toUpperCase()} for {booking.userName}?
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
-              <AlertDialogCancel onClick={handleCancelStatusChange}>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleConfirmStatusChange} disabled={statusUpdateMutation.isPending}>
+              <AlertDialogCancel onClick={() => { setStatusToConfirm(null); setShowStatusConfirmDialog(false); }}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmStatusUpdate}
+                disabled={statusUpdateMutation.isPending}
+              >
                 {statusUpdateMutation.isPending ? "Updating..." : "Confirm"}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
-
       </CardFooter>
     </Card>
   );
