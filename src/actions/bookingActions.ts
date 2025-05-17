@@ -5,8 +5,8 @@ import type { Booking, BookingFormData, BookingStatus, TrainClass } from "@/type
 import { ALL_TRAIN_CLASSES } from "@/types/booking";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { db } from "@/lib/firebase"; // Ensure db is correctly initialized
-import { collection, addDoc, getDocs, doc, getDoc, updateDoc, serverTimestamp, query, orderBy, Timestamp, type DocumentSnapshot, type DocumentData } from "firebase/firestore";
+import { db } from "@/lib/firebase";
+import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, Timestamp, type DocumentSnapshot, type DocumentData } from "firebase/firestore";
 
 const ServerBookingFormSchema = z.object({
   source: z.string().min(1, "Source is required"),
@@ -30,7 +30,7 @@ const toISOStringSafe = (value: any, fieldName: string, bookingId: string): stri
     console.error(`[DataFormatError] Booking ID ${bookingId}: Field '${fieldName}' is a string but not a valid date: ${value}`);
     throw new Error(`Invalid date format in '${fieldName}' for booking ${bookingId}. Expected valid date string, got ${value}`);
   }
-  if (typeof value === 'number') { 
+  if (typeof value === 'number') {
     const date = new Date(value);
     if (!isNaN(date.getTime())) {
       return date.toISOString();
@@ -48,16 +48,16 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     console.error(`[DataError] No data found for document with id ${id} during mapping.`);
     throw new Error(`No data found for document with id ${id}`);
   }
-  
+
   return {
     id,
     source: data.source as string,
     destination: data.destination as string,
-    journeyDate: data.journeyDate as string, 
+    journeyDate: data.journeyDate as string,
     userName: data.userName as string,
     passengerDetails: data.passengerDetails as string,
-    bookingDate: data.bookingDate as string, 
-    classType: data.classType as TrainClass, // Added classType
+    bookingDate: data.bookingDate as string,
+    classType: data.classType as TrainClass,
     status: data.status as BookingStatus,
     createdAt: toISOStringSafe(data.createdAt, 'createdAt', id),
     updatedAt: toISOStringSafe(data.updatedAt, 'updatedAt', id),
@@ -93,12 +93,12 @@ export async function addBooking(formData: BookingFormData): Promise<{ success: 
 
     const docRef = await addDoc(collection(db, "bookings"), bookingDataForFirestore);
 
-    const now = new Date().toISOString(); 
+    const now = new Date().toISOString();
     const newBooking: Booking = {
       ...validationResult.data,
       id: docRef.id,
       status: "Requested",
-      createdAt: now, 
+      createdAt: now,
       updatedAt: now,
     };
 
@@ -106,7 +106,7 @@ export async function addBooking(formData: BookingFormData): Promise<{ success: 
       revalidatePath("/");
       revalidatePath("/suggestions");
     } catch (revalidationError) {
-      console.warn("[Revalidation Warning] Failed to revalidate paths after booking:", revalidationError instanceof Error ? revalidationError.message : String(revalidationError));
+      console.warn("[Revalidation Warning] Failed to revalidate paths after adding booking:", revalidationError instanceof Error ? revalidationError.message : String(revalidationError));
     }
 
     return { success: true, booking: newBooking };
@@ -139,6 +139,91 @@ export async function addBooking(formData: BookingFormData): Promise<{ success: 
   }
 }
 
+export async function updateBookingById(id: string, formData: BookingFormData): Promise<{ success: boolean; errors?: z.ZodError<BookingFormData>["formErrors"]; booking?: Booking }> {
+  const validationResult = ServerBookingFormSchema.safeParse(formData);
+  if (!validationResult.success) {
+    console.error("[Server Validation Failed] In updateBookingById:", validationResult.error.flatten());
+    return { success: false, errors: validationResult.error.formErrors };
+  }
+
+  try {
+    if (!db) {
+      console.error("[Firestore Error] In updateBookingById: Firestore db instance is not available.");
+      return {
+        success: false,
+        errors: {
+          formErrors: ["Firestore database is not configured correctly."],
+          fieldErrors: {}
+        }
+      };
+    }
+
+    const docRef = doc(db, "bookings", id);
+    const bookingDataForFirestore = {
+      ...validationResult.data,
+      updatedAt: serverTimestamp(),
+    };
+
+    await updateDoc(docRef, bookingDataForFirestore);
+
+    const updatedDocSnap = await getDoc(docRef);
+    if (!updatedDocSnap.exists()) {
+        return { success: false, errors: { formErrors: ["Failed to retrieve booking after update."], fieldErrors: {} } };
+    }
+    const updatedBooking = mapDocToBooking(updatedDocSnap, updatedDocSnap.id);
+
+
+    try {
+      revalidatePath("/");
+      revalidatePath("/suggestions");
+      revalidatePath(`/bookings/edit/${id}`);
+    } catch (revalidationError) {
+      console.warn(`[Revalidation Warning] Failed to revalidate paths after updating booking ${id}:`, revalidationError instanceof Error ? revalidationError.message : String(revalidationError));
+    }
+
+    return { success: true, booking: updatedBooking };
+
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[Firestore/Server Error] In updateBookingById (ID: ${id}):`, errorMessage);
+    // Simplified error message construction
+    let specificMessage = "An unexpected server error occurred. Failed to update booking.";
+    if (errorMessage.trim().length > 0) {
+        specificMessage = errorMessage;
+    }
+    const errorsPayload: z.ZodError<BookingFormData>["formErrors"] = {
+        formErrors: [specificMessage],
+        fieldErrors: {}
+    };
+    return { success: false, errors: errorsPayload };
+  }
+}
+
+
+export async function deleteBooking(id: string): Promise<{ success: boolean; error?: string }> {
+  try {
+    if (!db) {
+      console.error("[Firestore Error] In deleteBooking: Firestore db instance is not available.");
+      return { success: false, error: "Firestore database is not configured correctly." };
+    }
+    const docRef = doc(db, "bookings", id);
+    await deleteDoc(docRef);
+
+    try {
+      revalidatePath("/");
+      revalidatePath("/suggestions");
+    } catch (revalidationError) {
+      console.warn(`[Revalidation Warning] Failed to revalidate paths after deleting booking ${id}:`, revalidationError instanceof Error ? revalidationError.message : String(revalidationError));
+    }
+    return { success: true };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[Firestore Error] In deleteBooking (ID: ${id}):`, errorMessage);
+    return { success: false, error: `Failed to delete booking: ${errorMessage}` };
+  }
+}
+
+
 export async function getBookings(): Promise<Booking[]> {
   try {
     if (!db) {
@@ -148,20 +233,20 @@ export async function getBookings(): Promise<Booking[]> {
     const bookingsCollection = collection(db, "bookings");
     const q = query(bookingsCollection, orderBy("createdAt", "desc"));
     const querySnapshot = await getDocs(q);
-    
+
     const bookings = querySnapshot.docs.map(doc => {
       try {
         return mapDocToBooking(doc, doc.id);
       } catch (mapError) {
         console.error(`[Mapping Error] Failed to map document ${doc.id}:`, mapError instanceof Error ? mapError.message : String(mapError));
-        return null; 
+        return null;
       }
-    }).filter(booking => booking !== null) as Booking[]; 
+    }).filter(booking => booking !== null) as Booking[];
 
     return bookings;
   } catch (error) {
     console.error("[Firestore Error] In getBookings:", error instanceof Error ? error.message : String(error));
-    return []; 
+    return [];
   }
 }
 
@@ -180,7 +265,7 @@ export async function getBookingById(id: string): Promise<Booking | null> {
   } catch (error) {
     console.error(`[Firestore Error] In getBookingById (ID: ${id}):`, error instanceof Error ? error.message : String(error));
     if (error instanceof Error && error.message.includes("Invalid date format")) {
-        throw error; 
+        throw error;
     }
     return null;
   }
@@ -205,11 +290,11 @@ export async function updateBookingStatus(id: string, status: BookingStatus): Pr
       console.warn(`[Revalidation Warning] Failed to revalidate paths after updating booking ${id}:`, revalidationError instanceof Error ? revalidationError.message : String(revalidationError));
     }
 
-    const updatedDocSnap = await getDoc(docRef); 
+    const updatedDocSnap = await getDoc(docRef);
     if (updatedDocSnap.exists()) {
       return mapDocToBooking(updatedDocSnap, updatedDocSnap.id);
     }
-    return null; 
+    return null;
   } catch (error) {
     console.error(`[Firestore Error] In updateBookingStatus (ID: ${id}, Status: ${status}):`, error instanceof Error ? error.message : String(error));
      if (error instanceof Error && error.message.includes("Invalid date format")) {
@@ -221,17 +306,17 @@ export async function updateBookingStatus(id: string, status: BookingStatus): Pr
 
 export async function getAllBookingsAsJsonString(): Promise<string> {
   try {
-    const currentBookings = await getBookings(); 
+    const currentBookings = await getBookings();
     const simplifiedBookings = currentBookings.map(b => ({
       source: b.source,
       destination: b.destination,
       journeyDate: b.journeyDate,
-      classType: b.classType, // Added classType
+      classType: b.classType,
       status: b.status,
     }));
     return JSON.stringify(simplifiedBookings);
   } catch (error) {
     console.error("[Error] In getAllBookingsAsJsonString:", error instanceof Error ? error.message : String(error));
-    return JSON.stringify([]); 
+    return JSON.stringify([]);
   }
 }

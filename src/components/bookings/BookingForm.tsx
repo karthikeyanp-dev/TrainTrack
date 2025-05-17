@@ -22,12 +22,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { CalendarIcon, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { addBooking } from "@/actions/bookingActions";
+import { addBooking, updateBookingById } from "@/actions/bookingActions";
 import type { BookingFormData, TrainClass } from "@/types/booking";
 import { ALL_TRAIN_CLASSES } from "@/types/booking";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const bookingFormSchema = z.object({
   source: z.string().min(2, { message: "Source must be at least 2 characters." }),
@@ -41,39 +41,64 @@ const bookingFormSchema = z.object({
 
 type FormValues = z.infer<typeof bookingFormSchema>;
 
-export function BookingForm() {
+interface BookingFormProps {
+  initialData?: BookingFormData & { journeyDateObj?: Date; bookingDateObj?: Date }; // Dates passed as objects for pre-fill
+  bookingId?: string;
+}
+
+export function BookingForm({ initialData, bookingId }: BookingFormProps) {
   const { toast } = useToast();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const isEditMode = !!bookingId;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
-      source: "",
-      destination: "",
-      userName: "",
-      passengerDetails: "",
-      // classType will use placeholder from SelectValue
+      source: initialData?.source || "",
+      destination: initialData?.destination || "",
+      journeyDate: initialData?.journeyDateObj, // Use pre-parsed Date object
+      userName: initialData?.userName || "",
+      passengerDetails: initialData?.passengerDetails || "",
+      bookingDate: initialData?.bookingDateObj, // Use pre-parsed Date object
+      classType: initialData?.classType || undefined,
     },
   });
 
+  useEffect(() => {
+    if (initialData) {
+      form.reset({
+        source: initialData.source,
+        destination: initialData.destination,
+        journeyDate: initialData.journeyDateObj,
+        userName: initialData.userName,
+        passengerDetails: initialData.passengerDetails,
+        bookingDate: initialData.bookingDateObj,
+        classType: initialData.classType,
+      });
+    }
+  }, [initialData, form]);
+
   async function onSubmit(values: FormValues) {
     setIsSubmitting(true);
-    const formData: BookingFormData = {
+    const formDataForAction: BookingFormData = {
       ...values,
       journeyDate: format(values.journeyDate, "yyyy-MM-dd"),
       bookingDate: format(values.bookingDate, "yyyy-MM-dd"),
-      classType: values.classType as TrainClass, // Zod enum ensures this
+      classType: values.classType as TrainClass,
     };
 
-    const result = await addBooking(formData);
+    const result = isEditMode && bookingId
+      ? await updateBookingById(bookingId, formDataForAction)
+      : await addBooking(formDataForAction);
 
     if (result.success && result.booking) {
       toast({
-        title: "Booking Request Added!",
-        description: `Request for ${result.booking.userName} from ${result.booking.source} to ${result.booking.destination} saved.`,
+        title: isEditMode ? "Booking Updated!" : "Booking Request Added!",
+        description: `Request for ${result.booking.userName} from ${result.booking.source} to ${result.booking.destination} ${isEditMode ? 'updated' : 'saved'}.`,
       });
       router.push("/");
+      router.refresh(); // Ensure data is refreshed on the homepage
     } else {
       let errorToastMessage = "An unexpected error occurred. Please try again.";
       if (result.errors) {
@@ -105,7 +130,7 @@ export function BookingForm() {
       }
       
       toast({
-        title: "Error Adding Booking",
+        title: `Error ${isEditMode ? 'Updating' : 'Adding'} Booking`,
         description: errorToastMessage,
         variant: "destructive",
       });
@@ -177,7 +202,7 @@ export function BookingForm() {
                       mode="single"
                       selected={field.value}
                       onSelect={field.onChange}
-                      disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) } // Disable past dates
+                      disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) && !isEditMode } // Allow past dates in edit mode for viewing
                       initialFocus
                     />
                   </PopoverContent>
@@ -212,7 +237,7 @@ export function BookingForm() {
                       mode="single"
                       selected={field.value}
                       onSelect={field.onChange}
-                      disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) }
+                      disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) && !isEditMode}
                       initialFocus
                     />
                   </PopoverContent>
@@ -283,7 +308,7 @@ export function BookingForm() {
         />
         <Button type="submit" className="w-full md:w-auto" disabled={isSubmitting}>
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isSubmitting ? "Saving Request..." : "Save Booking Request"}
+          {isSubmitting ? (isEditMode ? "Updating..." : "Saving Request...") : (isEditMode ? "Update Booking" : "Save Booking Request")}
         </Button>
       </form>
     </Form>
