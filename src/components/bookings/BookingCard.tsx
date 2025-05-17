@@ -13,7 +13,7 @@ import { updateBookingStatus, deleteBooking } from "@/actions/bookingActions";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react"; // Added useEffect, useCallback
 import {
   AlertDialog,
   AlertDialogAction,
@@ -56,6 +56,39 @@ export function BookingCard({ booking }: BookingCardProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showStatusConfirmDialog, setShowStatusConfirmDialog] = useState(false);
   const [statusToConfirm, setStatusToConfirm] = useState<BookingStatus | null>(null);
+
+  const [clientFormattedCreatedAt, setClientFormattedCreatedAt] = useState<string | null>(null);
+  const [clientFormattedUpdatedAt, setClientFormattedUpdatedAt] = useState<string | null>(null);
+
+  // Robust date formatting, memoized
+  const formatDate = useCallback((dateString: string): string => {
+    if (!dateString) return 'N/A';
+    try {
+      // For YYYY-MM-DD strings (journeyDate, bookingDate)
+      if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
+        const [year, month, day] = dateString.split('-').map(Number);
+        // Create date at noon in local time to avoid DST/midnight issues for date-only display
+        const localDate = new Date(year, month - 1, day, 12);
+        return format(localDate, "PPP");
+      }
+      // For full ISO strings (createdAt, updatedAt)
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) {
+        console.warn(`[BookingCard] Invalid timestamp string: ${dateString}`);
+        return 'Invalid Date';
+      }
+      return format(date, "PPP"); // date-fns format will use local settings
+    } catch (error) {
+      console.error(`[BookingCard] Error formatting date "${dateString}":`, error);
+      return 'Error Date';
+    }
+  }, []);
+
+  useEffect(() => {
+    // This effect runs only on the client, after hydration
+    setClientFormattedCreatedAt(formatDate(booking.createdAt));
+    setClientFormattedUpdatedAt(formatDate(booking.updatedAt));
+  }, [booking.createdAt, booking.updatedAt, formatDate]);
 
 
   const statusUpdateMutation = useMutation({
@@ -138,14 +171,17 @@ export function BookingCard({ booking }: BookingCardProps) {
 
   const handleShare = async () => {
     const passengerDetailsText = booking.passengers.map(p => `${p.name} ${p.age} ${p.gender.toUpperCase()}`).join('\n');
+    const journeyDateFormatted = formatDate(booking.journeyDate);
+    const bookingDateFormatted = formatDate(booking.bookingDate);
+    
     const bookingDetailsText = `
 Train Booking Details:
 ----------------------
 From: ${booking.source.toUpperCase()}
 To: ${booking.destination.toUpperCase()}
-Journey Date: ${formatDate(booking.journeyDate)}
-Day of Journey: ${format(new Date(booking.journeyDate + 'T00:00:00'), "EEEE")}
-Book By: ${formatDate(booking.bookingDate)}
+Journey Date: ${journeyDateFormatted}
+Day of Journey: ${format(new Date(booking.journeyDate + 'T12:00:00'), "EEEE")} 
+Book By: ${bookingDateFormatted}
 Class: ${booking.classType}
 Passengers:
 ${passengerDetailsText}
@@ -178,20 +214,6 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
       console.error("Failed to copy to clipboard:", err);
     });
   };
-
-
-  const formatDate = (dateString: string) => {
-    try {
-      if (dateString && dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        return format(new Date(dateString + "T00:00:00"), "PPP");
-      }
-      const date = new Date(dateString);
-      if (isNaN(date.getTime())) return dateString;
-      return format(date, "PPP");
-    } catch (e) {
-      return dateString;
-    }
-  }
 
   return (
     <Card className="w-full shadow-md hover:shadow-lg transition-shadow duration-200 flex flex-col">
@@ -246,13 +268,13 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
         )}
         <div className="flex items-center gap-2">
           {getStatusIcon(booking.status)}
-          <span>Created: {formatDate(booking.createdAt)}</span>
+          <span>Created: {clientFormattedCreatedAt || "..."}</span>
         </div>
       </CardContent>
       <CardFooter className="flex flex-col items-stretch gap-3 pt-4 border-t">
         <div className="flex justify-between items-center">
             <div className="text-xs text-muted-foreground">
-            Last updated: {formatDate(booking.updatedAt)}
+            Last updated: {clientFormattedUpdatedAt || "..."}
             </div>
             <div className="flex gap-1">
             <TooltipProvider>
@@ -358,3 +380,5 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
     </Card>
   );
 }
+
+    
