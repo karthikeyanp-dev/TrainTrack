@@ -1,4 +1,6 @@
 
+export const dynamic = 'force-dynamic'; // Ensures the page is re-rendered on every request
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BookingList } from "@/components/bookings/BookingList";
 import { getBookings } from "@/actions/bookingActions";
@@ -31,7 +33,7 @@ async function BookingsDisplay() {
     .sort((a, b) => new Date(a.journeyDate).getTime() - new Date(b.journeyDate).getTime());
 
   const completedBookingsRaw = allBookings
-    .filter(booking => booking.status !== "Requested") // "Booked", "Missed", "Booking Failed"
+    .filter(booking => booking.status !== "Requested") // "Booked", "Missed", "Booking Failed", "User Cancelled"
     .sort((a, b) => new Date(b.journeyDate).getTime() - new Date(a.journeyDate).getTime()); // Show recent completed first
 
   const pendingBookingsByDate = groupBookingsByDate(pendingBookingsRaw);
@@ -74,7 +76,7 @@ async function BookingsDisplay() {
           <Alert className="mt-4">
             <AlertCircle className="h-4 w-4" />
             <AlertTitle>No Completed Bookings</AlertTitle>
-            <AlertDescription>No bookings have been marked as 'Booked', 'Missed', or 'Booking Failed' yet.</AlertDescription>
+            <AlertDescription>No bookings have been marked as 'Booked', 'Missed', 'Booking Failed', or 'User Cancelled' yet.</AlertDescription>
           </Alert>
         ) : (
           completedDates.map(date => (
