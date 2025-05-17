@@ -4,59 +4,8 @@
 import type { Booking, BookingFormData, BookingStatus } from "@/types/booking";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import crypto from 'crypto'; // For crypto.randomUUID()
-
-// In-memory store for bookings
-let bookings: Booking[] = [
-  {
-    id: "1",
-    source: "New York",
-    destination: "Boston",
-    journeyDate: "2024-08-15",
-    userName: "Alice Smith",
-    passengerDetails: "Alice Smith (Adult)",
-    bookingDate: "2024-08-01",
-    status: "Requested",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "2",
-    source: "London",
-    destination: "Paris",
-    journeyDate: "2024-07-20", // Past date
-    userName: "Bob Johnson",
-    passengerDetails: "Bob Johnson (Adult), Jane Johnson (Child)",
-    bookingDate: "2024-07-10",
-    status: "Booked",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "3",
-    source: "Tokyo",
-    destination: "Kyoto",
-    journeyDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Future date
-    userName: "Kenji Tanaka",
-    passengerDetails: "Kenji Tanaka (Adult)",
-    bookingDate: new Date().toISOString().split('T')[0],
-    status: "Requested",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-  {
-    id: "4",
-    source: "Berlin",
-    destination: "Munich",
-    journeyDate: new Date().toISOString().split('T')[0], // Today
-    userName: "Greta Muller",
-    passengerDetails: "Greta Muller (Adult)",
-    bookingDate: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // Past booking date
-    status: "Booking Failed",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
+import { db } from "@/lib/firebase";
+import { collection, addDoc, getDocs, doc, getDoc, updateDoc, serverTimestamp, query, orderBy, Timestamp } from "firebase/firestore";
 
 // This schema is used for server-side validation within addBooking
 const ServerBookingFormSchema = z.object({
@@ -68,6 +17,24 @@ const ServerBookingFormSchema = z.object({
   bookingDate: z.string().min(1, "Booking date is required"), // Expects YYYY-MM-DD string
 });
 
+// Helper to convert Firestore document data to Booking type
+const mapDocToBooking = (document: any, id: string): Booking => {
+  const data = document.data();
+  return {
+    id,
+    source: data.source,
+    destination: data.destination,
+    journeyDate: data.journeyDate, // Assuming stored as YYYY-MM-DD string
+    userName: data.userName,
+    passengerDetails: data.passengerDetails,
+    bookingDate: data.bookingDate, // Assuming stored as YYYY-MM-DD string
+    status: data.status,
+    // Convert Firestore Timestamps to ISO strings if they exist
+    createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date(data.createdAt).toISOString(),
+    updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt).toISOString(),
+  };
+};
+
 
 export async function addBooking(formData: BookingFormData): Promise<{ success: boolean; errors?: z.ZodError<BookingFormData>["formErrors"]; booking?: Booking }> {
   const validationResult = ServerBookingFormSchema.safeParse(formData);
@@ -75,49 +42,93 @@ export async function addBooking(formData: BookingFormData): Promise<{ success: 
     return { success: false, errors: validationResult.error.formErrors };
   }
   
-  const newBooking: Booking = {
-    ...validationResult.data,
-    id: crypto.randomUUID(), // Use crypto.randomUUID() for a more robust unique ID
-    status: "Requested",
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  bookings.push(newBooking);
-  revalidatePath("/"); // Revalidate dashboard to show new booking
-  revalidatePath("/suggestions"); // Revalidate suggestions page if it uses bookings
-  return { success: true, booking: newBooking };
+  try {
+    const bookingDataForFirestore = {
+      ...validationResult.data,
+      status: "Requested" as BookingStatus,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    const docRef = await addDoc(collection(db, "bookings"), bookingDataForFirestore);
+    
+    // For the return object, we need to simulate what the object would look like with actual dates
+    // serverTimestamp() is a sentinel value, not an actual date yet.
+    // We'll use current date for immediate feedback, Firestore will have the accurate server time.
+    const now = new Date().toISOString();
+
+    const newBooking: Booking = {
+      ...validationResult.data,
+      id: docRef.id,
+      status: "Requested",
+      createdAt: now, 
+      updatedAt: now,
+    };
+
+    revalidatePath("/");
+    revalidatePath("/suggestions");
+    return { success: true, booking: newBooking };
+  } catch (error) {
+    console.error("Error adding booking to Firestore:", error);
+    // It's good practice to map specific Firestore errors to user-friendly messages if possible
+    let errorMessage = "Failed to save booking request due to a server error.";
+    if (error instanceof Error && error.message.includes("permission-denied")) {
+        errorMessage = "You do not have permission to save bookings. Please check Firestore rules."
+    }
+    return { success: false, errors: { formErrors: [errorMessage], fieldErrors: {} } };
+  }
 }
 
 export async function getBookings(): Promise<Booking[]> {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 500));
-  return JSON.parse(JSON.stringify(bookings)); // Return a copy to avoid direct mutation
+  try {
+    // Consider adding orderBy, e.g., orderBy("journeyDate", "asc") or orderBy("createdAt", "desc")
+    const bookingsCollection = collection(db, "bookings");
+    const q = query(bookingsCollection, orderBy("createdAt", "desc")); // Order by creation date, newest first
+    const querySnapshot = await getDocs(q);
+    const bookings = querySnapshot.docs.map(doc => mapDocToBooking(doc, doc.id));
+    return bookings;
+  } catch (error) {
+    console.error("Error fetching bookings from Firestore:", error);
+    return []; // Return empty array on error
+  }
 }
 
 export async function getBookingById(id: string): Promise<Booking | null> {
-  await new Promise(resolve => setTimeout(resolve, 200));
-  const booking = bookings.find(b => b.id === id);
-  return booking ? JSON.parse(JSON.stringify(booking)) : null;
+  try {
+    const docRef = doc(db, "bookings", id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      return mapDocToBooking(docSnap, docSnap.id);
+    }
+    return null;
+  } catch (error) {
+    console.error("Error fetching booking by ID from Firestore:", error);
+    return null;
+  }
 }
 
 export async function updateBookingStatus(id: string, status: BookingStatus): Promise<Booking | null> {
-  const bookingIndex = bookings.findIndex(b => b.id === id);
-  if (bookingIndex === -1) {
+ try {
+    const docRef = doc(db, "bookings", id);
+    await updateDoc(docRef, {
+      status,
+      updatedAt: serverTimestamp(),
+    });
+    revalidatePath("/");
+    revalidatePath("/suggestions");
+    // Fetch the updated document to return it
+    const updatedDocSnap = await getDoc(docRef);
+    if (updatedDocSnap.exists()) {
+      return mapDocToBooking(updatedDocSnap, updatedDocSnap.id);
+    }
+    return null; // Should not happen if update was successful
+  } catch (error) {
+    console.error("Error updating booking status in Firestore:", error);
     return null;
   }
-  bookings[bookingIndex] = {
-    ...bookings[bookingIndex],
-    status,
-    updatedAt: new Date().toISOString(),
-  };
-  revalidatePath("/");
-  revalidatePath("/suggestions");
-  return JSON.parse(JSON.stringify(bookings[bookingIndex]));
 }
 
-// Helper to get a plain string for AI input
 export async function getAllBookingsAsJsonString(): Promise<string> {
-  const currentBookings = await getBookings();
+  const currentBookings = await getBookings(); // This now fetches from Firestore
   return JSON.stringify(currentBookings.map(b => ({
     source: b.source,
     destination: b.destination,
@@ -125,4 +136,3 @@ export async function getAllBookingsAsJsonString(): Promise<string> {
     status: b.status,
   })));
 }
-
