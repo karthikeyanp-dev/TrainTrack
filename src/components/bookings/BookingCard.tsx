@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "./StatusBadge";
-import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Armchair, Trash2, Edit3, Share2 } from "lucide-react";
+import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateBookingStatus, deleteBooking } from "@/actions/bookingActions";
 import { useToast } from "@/hooks/use-toast";
@@ -183,7 +183,10 @@ Last updated: ${formatDate(booking.updatedAt)}
             </CardTitle>
             <CardDescription>For {booking.userName}</CardDescription>
           </div>
-          <StatusBadge status={booking.status} />
+          <div className="flex flex-col items-end gap-1.5">
+            <StatusBadge status={booking.status} />
+            <span className="text-lg font-semibold text-primary">{booking.classType}</span>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-3 text-sm flex-grow">
@@ -194,10 +197,6 @@ Last updated: ${formatDate(booking.updatedAt)}
         <div className="flex items-center gap-2">
           <CalendarDays className="h-4 w-4 text-muted-foreground" />
           <span>Book by: {formatDate(booking.bookingDate)}</span>
-        </div>
-        <div className="flex items-center gap-2">
-          <Armchair className="h-4 w-4 text-muted-foreground" />
-          <span>Class: {booking.classType}</span>
         </div>
         <div className="flex items-start gap-2">
           <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
