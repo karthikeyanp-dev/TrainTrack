@@ -24,7 +24,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${openSans.variable} font-sans antialiased`}>
-        <Providers>{children}</Providers>
+        <section id="main" className='max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8'>
+          <Providers>{children}</Providers>
+        </section>
       </body>
     </html>
   );

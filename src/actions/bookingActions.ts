@@ -1,8 +1,10 @@
+
 "use server";
 
 import type { Booking, BookingFormData, BookingStatus } from "@/types/booking";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import crypto from 'crypto'; // For crypto.randomUUID()
 
 // In-memory store for bookings
 let bookings: Booking[] = [
@@ -56,25 +58,26 @@ let bookings: Booking[] = [
   },
 ];
 
-const BookingFormSchema = z.object({
+// This schema is used for server-side validation within addBooking
+const ServerBookingFormSchema = z.object({
   source: z.string().min(1, "Source is required"),
   destination: z.string().min(1, "Destination is required"),
-  journeyDate: z.string().min(1, "Journey date is required"),
+  journeyDate: z.string().min(1, "Journey date is required"), // Expects YYYY-MM-DD string
   userName: z.string().min(1, "User name is required"),
   passengerDetails: z.string().min(1, "Passenger details are required"),
-  bookingDate: z.string().min(1, "Booking date is required"),
+  bookingDate: z.string().min(1, "Booking date is required"), // Expects YYYY-MM-DD string
 });
 
 
 export async function addBooking(formData: BookingFormData): Promise<{ success: boolean; errors?: z.ZodError<BookingFormData>["formErrors"]; booking?: Booking }> {
-  const validationResult = BookingFormSchema.safeParse(formData);
+  const validationResult = ServerBookingFormSchema.safeParse(formData);
   if (!validationResult.success) {
     return { success: false, errors: validationResult.error.formErrors };
   }
   
   const newBooking: Booking = {
     ...validationResult.data,
-    id: String(Date.now()), // Simple unique ID
+    id: crypto.randomUUID(), // Use crypto.randomUUID() for a more robust unique ID
     status: "Requested",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -122,3 +125,4 @@ export async function getAllBookingsAsJsonString(): Promise<string> {
     status: b.status,
   })));
 }
+

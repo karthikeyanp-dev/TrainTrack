@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useForm } from "react-hook-form";
@@ -69,22 +70,44 @@ export function BookingForm() {
       });
       router.push("/");
     } else {
+      let errorToastMessage = "An unexpected error occurred. Please try again.";
+      if (result.errors) {
+        const { formErrors, fieldErrors } = result.errors;
+        
+        if (formErrors && formErrors.length > 0) {
+          errorToastMessage = formErrors.join(" ");
+        } else if (fieldErrors && Object.keys(fieldErrors).length > 0) {
+          errorToastMessage = "Please check the form for specific errors highlighted below.";
+        } else {
+          errorToastMessage = "Validation failed. Please check your input.";
+        }
+
+        if (fieldErrors) {
+          (Object.keys(fieldErrors) as Array<keyof FormValues>).forEach((fieldName) => {
+            const messages = fieldErrors[fieldName];
+            if (messages && messages.length > 0) {
+              form.setError(fieldName, {
+                type: "server",
+                message: messages.join(", "),
+              });
+            }
+          });
+        }
+        
+        if (formErrors && formErrors.length > 0) {
+           // Display general form errors if not tied to specific fields, or as additional info
+           // For react-hook-form, you can set a root error:
+           form.setError("root.serverError", { type: "server", message: formErrors.join(", ") });
+           // You would then need to display form.formState.errors.root?.serverError?.message somewhere in your form.
+           // For now, the toast will carry the main message.
+        }
+      }
+      
       toast({
         title: "Error Adding Booking",
-        description: result.errors ? 
-          Object.values(result.errors._errors).join(", ") || "Please check the form for errors." 
-          : "An unexpected error occurred.",
+        description: errorToastMessage,
         variant: "destructive",
       });
-      // Populate form errors if available
-      if (result.errors) {
-        (Object.keys(result.errors) as Array<keyof FormValues | "_errors">).forEach((key) => {
-          if (key !== "_errors" && result.errors[key]) {
-             // @ts-ignore
-            form.setError(key, { type: "manual", message: result.errors[key]?.join(", ") });
-          }
-        });
-      }
     }
     setIsSubmitting(false);
   }
@@ -92,6 +115,12 @@ export function BookingForm() {
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+        {/* Display root.serverError if you added logic for it */}
+        {form.formState.errors.root?.serverError && (
+          <FormMessage className="text-destructive p-2 bg-destructive/10 rounded-md">
+            {form.formState.errors.root.serverError.message}
+          </FormMessage>
+        )}
         <div className="grid md:grid-cols-2 gap-6">
           <FormField
             control={form.control}
@@ -235,3 +264,4 @@ export function BookingForm() {
     </Form>
   );
 }
+
