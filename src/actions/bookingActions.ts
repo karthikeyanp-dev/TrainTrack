@@ -63,7 +63,7 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     destination: data.destination as string,
     journeyDate: data.journeyDate as string,
     userName: data.userName as string,
-    passengers: data.passengers as Passenger[], // Assuming passengers are stored as an array of objects
+    passengers: Array.isArray(data.passengers) ? data.passengers as Passenger[] : [], // Default to empty array if not present or not an array
     bookingDate: data.bookingDate as string,
     classType: data.classType as TrainClass,
     trainPreference: data.trainPreference as string | undefined,
@@ -342,3 +342,6 @@ export async function getAllBookingsAsJsonString(): Promise<string> {
     return JSON.stringify([]);
   }
 }
+
+
+    
