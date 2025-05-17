@@ -24,10 +24,10 @@ const mapDocToBooking = (document: any, id: string): Booking => {
     id,
     source: data.source,
     destination: data.destination,
-    journeyDate: data.journeyDate, 
+    journeyDate: data.journeyDate,
     userName: data.userName,
     passengerDetails: data.passengerDetails,
-    bookingDate: data.bookingDate, 
+    bookingDate: data.bookingDate,
     status: data.status,
     createdAt: data.createdAt instanceof Timestamp ? data.createdAt.toDate().toISOString() : new Date(data.createdAt).toISOString(),
     updatedAt: data.updatedAt instanceof Timestamp ? data.updatedAt.toDate().toISOString() : new Date(data.updatedAt).toISOString(),
@@ -41,17 +41,16 @@ export async function addBooking(formData: BookingFormData): Promise<{ success: 
     console.error("[Server Validation Failed] In addBooking:", validationResult.error.flatten());
     return { success: false, errors: validationResult.error.formErrors };
   }
-  
+
   try {
-    // Ensure db is available
     if (!db) {
       console.error("[Firestore Error] In addBooking: Firestore db instance is not available. Check Firebase configuration and .env variables.");
-      return { 
-        success: false, 
-        errors: { 
-          formErrors: ["Firestore database is not configured correctly. Please contact support or check server logs."], 
-          fieldErrors: {} 
-        } 
+      return {
+        success: false,
+        errors: {
+          formErrors: ["Firestore database is not configured correctly. Please contact support or check server logs."],
+          fieldErrors: {}
+        }
       };
     }
 
@@ -61,45 +60,54 @@ export async function addBooking(formData: BookingFormData): Promise<{ success: 
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
-    
+
     const docRef = await addDoc(collection(db, "bookings"), bookingDataForFirestore);
-    
+
     const now = new Date().toISOString();
     const newBooking: Booking = {
       ...validationResult.data,
       id: docRef.id,
       status: "Requested",
-      createdAt: now, 
+      createdAt: now,
       updatedAt: now,
     };
 
-    revalidatePath("/");
-    revalidatePath("/suggestions");
+    try {
+      revalidatePath("/");
+      revalidatePath("/suggestions");
+    } catch (revalidationError) {
+      // Log revalidation errors but don't let them crash the main operation response
+      console.warn("[Revalidation Warning] Failed to revalidate paths after booking:", revalidationError instanceof Error ? revalidationError.message : String(revalidationError));
+    }
+
     return { success: true, booking: newBooking };
 
-  } catch (error: unknown) { // Catch unknown type for better error handling
-    console.error("[Firestore/Server Error] In addBooking:", error);
+  } catch (error: unknown) {
+    // Ensure the logged error message is simple
+    console.error("[Firestore/Server Error] In addBooking:", error instanceof Error ? error.message : String(error));
 
-    let errorMessage = "An unexpected server error occurred. Failed to save booking request.";
-    
+    let specificMessage = "An unexpected server error occurred. Failed to save booking request.";
+
     if (error instanceof Error) {
-        const firebaseErrorCode = (error as any)?.code; 
+        const firebaseErrorCode = (error as any)?.code;
         if (firebaseErrorCode === "permission-denied" || error.message.includes("permission-denied")) {
-            errorMessage = "Permission denied when trying to save the booking. Please check Firestore security rules or API permissions.";
+            specificMessage = "Permission denied when trying to save the booking. Please check Firestore security rules or API permissions.";
         } else if (firebaseErrorCode === "unavailable") {
-            errorMessage = "The Firestore service is currently unavailable. Please try again later.";
+            specificMessage = "The Firestore service is currently unavailable. Please try again later.";
         } else {
-           errorMessage = `Server error: ${error.message || "Could not save booking."}`;
+           specificMessage = error.message || "Could not save booking.";
         }
-    } else if (typeof error === 'string') {
-        errorMessage = error;
+    } else if (typeof error === 'string' && error.trim().length > 0) {
+        specificMessage = error;
+    } else {
+        specificMessage = "An unknown server error occurred while processing the booking.";
     }
-    
+
     const errorsPayload: z.ZodError<BookingFormData>["formErrors"] = {
-        formErrors: [errorMessage],
-        fieldErrors: {} 
+        formErrors: [specificMessage],
+        fieldErrors: {}
     };
-    
+
     return { success: false, errors: errorsPayload };
   }
 }
@@ -108,7 +116,7 @@ export async function getBookings(): Promise<Booking[]> {
   try {
     if (!db) {
       console.error("[Firestore Error] In getBookings: Firestore db instance is not available. Check Firebase configuration.");
-      return []; // Return empty or throw, consistent with how you want to handle this upstream
+      return [];
     }
     const bookingsCollection = collection(db, "bookings");
     const q = query(bookingsCollection, orderBy("createdAt", "desc"));
@@ -116,10 +124,8 @@ export async function getBookings(): Promise<Booking[]> {
     const bookings = querySnapshot.docs.map(doc => mapDocToBooking(doc, doc.id));
     return bookings;
   } catch (error) {
-    console.error("[Firestore Error] In getBookings:", error);
-    // Consider how to propagate this error. For now, returning empty array as before.
-    // You might want to throw or return an object indicating an error.
-    return []; 
+    console.error("[Firestore Error] In getBookings:", error instanceof Error ? error.message : String(error));
+    return [];
   }
 }
 
@@ -136,7 +142,7 @@ export async function getBookingById(id: string): Promise<Booking | null> {
     }
     return null;
   } catch (error) {
-    console.error("[Firestore Error] In getBookingById (ID: ${id}):", error);
+    console.error(`[Firestore Error] In getBookingById (ID: ${id}):`, error instanceof Error ? error.message : String(error));
     return null;
   }
 }
@@ -152,27 +158,39 @@ export async function updateBookingStatus(id: string, status: BookingStatus): Pr
       status,
       updatedAt: serverTimestamp(),
     });
-    revalidatePath("/");
-    revalidatePath("/suggestions");
+
+    try {
+      revalidatePath("/");
+      revalidatePath("/suggestions");
+    } catch (revalidationError) {
+      console.warn(`[Revalidation Warning] Failed to revalidate paths after updating booking ${id}:`, revalidationError instanceof Error ? revalidationError.message : String(revalidationError));
+    }
+
     const updatedDocSnap = await getDoc(docRef);
     if (updatedDocSnap.exists()) {
       return mapDocToBooking(updatedDocSnap, updatedDocSnap.id);
     }
-    return null; 
+    return null;
   } catch (error) {
-    console.error(`[Firestore Error] In updateBookingStatus (ID: ${id}, Status: ${status}):`, error);
+    console.error(`[Firestore Error] In updateBookingStatus (ID: ${id}, Status: ${status}):`, error instanceof Error ? error.message : String(error));
     return null;
   }
 }
 
 export async function getAllBookingsAsJsonString(): Promise<string> {
-  // This function relies on getBookings, so errors there will propagate.
-  // Consider adding specific try-catch here if direct errors are possible or need special handling.
-  const currentBookings = await getBookings(); 
-  return JSON.stringify(currentBookings.map(b => ({
-    source: b.source,
-    destination: b.destination,
-    journeyDate: b.journeyDate,
-    status: b.status,
-  })));
+  try {
+    const currentBookings = await getBookings();
+    // Ensure only relevant, simple fields are stringified
+    const simplifiedBookings = currentBookings.map(b => ({
+      source: b.source,
+      destination: b.destination,
+      journeyDate: b.journeyDate, // Should be YYYY-MM-DD string
+      status: b.status,
+    }));
+    return JSON.stringify(simplifiedBookings);
+  } catch (error) {
+    console.error("[Error] In getAllBookingsAsJsonString:", error instanceof Error ? error.message : String(error));
+    return JSON.stringify([]); // Return empty array string on error
+  }
 }
+
