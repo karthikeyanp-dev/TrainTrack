@@ -6,11 +6,11 @@ import { BookingList } from "@/components/bookings/BookingList";
 import { getBookings } from "@/actions/bookingActions";
 import type { Booking } from "@/types/booking";
 import { AppShell } from "@/components/layout/AppShell";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
-import { format, isToday, isTomorrow, parseISO } from "date-fns";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle } from "lucide-react";
+import { DateGroupHeading } from "@/components/bookings/DateGroupHeading";
 
 // Helper function to group bookings by date
 const groupBookingsByDate = (bookings: Booking[]): Record<string, Booking[]> => {
@@ -23,35 +23,6 @@ const groupBookingsByDate = (bookings: Booking[]): Record<string, Booking[]> => 
     return acc;
   }, {} as Record<string, Booking[]>);
 };
-
-// Client-side component for rendering date group headings
-function DateGroupHeading({ dateString }: { dateString: string }) {
-  const [displayDate, setDisplayDate] = useState("..."); // Initial placeholder
-
-  useEffect(() => {
-    // Parse the YYYY-MM-DD string.
-    // Adding 'T00:00:00' ensures it's parsed as local time at midnight.
-    // For date-only strings, this is generally safer than parseISO directly
-    // if you want to avoid timezone shifts to UTC for isToday/isTomorrow checks.
-    const dateParts = dateString.split('-').map(Number);
-    const localDateAtMidnight = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
-
-    if (isToday(localDateAtMidnight)) {
-      setDisplayDate("Today");
-    } else if (isTomorrow(localDateAtMidnight)) {
-      setDisplayDate("Tomorrow");
-    } else {
-      setDisplayDate(format(localDateAtMidnight, "PPP")); // e.g., "Jul 20, 2024"
-    }
-  }, [dateString]);
-
-  return (
-    <h3 className="text-xl font-medium mb-3 pb-2 border-b">
-      {displayDate}
-    </h3>
-  );
-}
-
 
 async function BookingsDisplay() {
   const allBookings = await getBookings();
@@ -179,4 +150,3 @@ export default function HomePage() {
     </AppShell>
   );
 }
-
