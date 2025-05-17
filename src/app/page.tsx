@@ -4,7 +4,7 @@ export const dynamic = 'force-dynamic'; // Ensures the page is re-rendered on ev
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BookingList } from "@/components/bookings/BookingList";
 import { getBookings } from "@/actions/bookingActions";
-import type { Booking } from "@/types/booking";
+import type { Booking, TrainClass } from "@/types/booking";
 import { AppShell } from "@/components/layout/AppShell";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,6 +23,8 @@ const groupBookingsByDate = (bookings: Booking[]): Record<string, Booking[]> => 
     return acc;
   }, {} as Record<string, Booking[]>);
 };
+
+const SL_CLASSES: TrainClass[] = ["SL", "UR"];
 
 async function BookingsDisplay() {
   const allBookings = await getBookings();
@@ -43,6 +45,33 @@ async function BookingsDisplay() {
   const completedBookingsByDate = groupBookingsByDate(completedBookingsRaw);
   const completedDates = Object.keys(completedBookingsByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
+  const renderBookingsForDate = (bookingsForDate: Booking[]) => {
+    const acBookings = bookingsForDate.filter(b => !SL_CLASSES.includes(b.classType));
+    const slBookings = bookingsForDate.filter(b => SL_CLASSES.includes(b.classType));
+
+    return (
+      <>
+        {acBookings.length > 0 && (
+          <div className="mt-4">
+            <h4 className="text-lg font-medium mb-2 text-primary">AC Bookings</h4>
+            <BookingList bookings={acBookings} />
+          </div>
+        )}
+        {slBookings.length > 0 && (
+          <div className="mt-4">
+            <h4 className="text-lg font-medium mb-2 text-accent">SL Bookings</h4>
+            <BookingList bookings={slBookings} />
+          </div>
+        )}
+        {acBookings.length === 0 && slBookings.length === 0 && bookingsForDate.length > 0 && (
+           // This case should ideally not be hit if bookingsForDate has items,
+           // but as a fallback, render all if somehow not categorized.
+          <BookingList bookings={bookingsForDate} />
+        )}
+      </>
+    );
+  };
+
   return (
     <Tabs defaultValue="pending" className="w-full">
       <TabsList className="grid w-full grid-cols-2 md:w-[400px]">
@@ -60,9 +89,9 @@ async function BookingsDisplay() {
           </Alert>
         ) : (
           pendingDates.map(date => (
-            <div key={date} className="mb-8">
+            <div key={`pending-${date}`} className="mb-8">
               <DateGroupHeading dateString={date} />
-              <BookingList bookings={pendingBookingsByDate[date]} />
+              {renderBookingsForDate(pendingBookingsByDate[date])}
             </div>
           ))
         )}
@@ -78,9 +107,9 @@ async function BookingsDisplay() {
           </Alert>
         ) : (
           completedDates.map(date => (
-            <div key={date} className="mb-8">
+            <div key={`completed-${date}`} className="mb-8">
               <DateGroupHeading dateString={date} />
-              <BookingList bookings={completedBookingsByDate[date]} />
+              {renderBookingsForDate(completedBookingsByDate[date])}
             </div>
           ))
         )}
@@ -97,21 +126,24 @@ function BookingsLoadingSkeleton() {
         <Skeleton className="h-10 w-1/2 md:w-[200px]" />
       </div>
       <Skeleton className="h-8 w-48 mb-4" /> {/* Title skeleton */}
-      {/* Skeleton for date group */}
+      
+      {/* Skeleton for one date group */}
       <div className="space-y-6">
         <Skeleton className="h-7 w-1/3 mb-3" /> {/* Date heading skeleton */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1, 2].map(i => ( // Show a couple of card skeletons per group
-            <CardSkeleton key={`group1-${i}`} />
-          ))}
+        {/* AC Bookings Skeleton */}
+        <div className="space-y-3">
+            <Skeleton className="h-6 w-1/4" /> {/* AC Bookings title skeleton */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <CardSkeleton />
+            </div>
         </div>
-      </div>
-       <div className="space-y-6 mt-6">
-        <Skeleton className="h-7 w-1/3 mb-3" /> {/* Date heading skeleton */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {[1].map(i => ( 
-            <CardSkeleton key={`group2-${i}`} />
-          ))}
+        {/* SL Bookings Skeleton */}
+        <div className="space-y-3 mt-4">
+            <Skeleton className="h-6 w-1/4" /> {/* SL Bookings title skeleton */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <CardSkeleton />
+                <CardSkeleton />
+            </div>
         </div>
       </div>
     </div>

@@ -18,12 +18,12 @@ export function AppShell({ children, showAddButton = false }: AppShellProps) {
             <span className="text-xl font-bold">TrainTrack</span>
           </Link>
           <nav className="flex items-center gap-4">
-            <Button variant="ghost" asChild>
+            {/* <Button variant="ghost" asChild>
               <Link href="/suggestions" className="flex items-center gap-1">
                 <Lightbulb className="h-4 w-4" />
                 Suggestions
               </Link>
-            </Button>
+            </Button> */}
           </nav>
         </div>
       </header>
@@ -41,6 +41,7 @@ export function AppShell({ children, showAddButton = false }: AppShellProps) {
       )}
        <footer className="py-6 text-center text-sm text-muted-foreground">
         © {new Date().getFullYear()} TrainTrack. All rights reserved.
+        <p className="mt-1 text-xs">Developed by Karthik Arwin</p>
       </footer>
     </div>
   );
