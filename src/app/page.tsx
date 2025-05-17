@@ -54,7 +54,7 @@ async function BookingsDisplay() {
       </TabsList>
 
       <TabsContent value="pending" className="mt-6">
-        <h2 className="text-2xl font-semibold mb-4">Pending Bookings (Grouped by Book By Date)</h2>
+        <h2 className="text-2xl font-semibold mb-4">Pending Bookings</h2>
         {pendingDates.length === 0 ? (
           <Alert className="mt-4">
             <AlertCircle className="h-4 w-4" />
@@ -65,7 +65,7 @@ async function BookingsDisplay() {
           pendingDates.map(date => (
             <div key={date} className="mb-8">
               <h3 className="text-xl font-medium mb-3 pb-2 border-b">
-                Book By: {format(new Date(date + 'T00:00:00'), "PPP")} 
+                {format(new Date(date + 'T00:00:00'), "PPP")} 
               </h3>
               <BookingList bookings={pendingBookingsByDate[date]} />
             </div>
@@ -74,7 +74,7 @@ async function BookingsDisplay() {
       </TabsContent>
 
       <TabsContent value="completed" className="mt-6">
-        <h2 className="text-2xl font-semibold mb-4">Completed Bookings (Grouped by Book By Date)</h2>
+        <h2 className="text-2xl font-semibold mb-4">Completed Bookings</h2>
         {completedDates.length === 0 ? (
           <Alert className="mt-4">
             <AlertCircle className="h-4 w-4" />
@@ -85,7 +85,7 @@ async function BookingsDisplay() {
           completedDates.map(date => (
             <div key={date} className="mb-8">
               <h3 className="text-xl font-medium mb-3 pb-2 border-b">
-                Booked/Finalized By (originally Book By): {format(new Date(date + 'T00:00:00'), "PPP")}
+                {format(new Date(date + 'T00:00:00'), "PPP")}
               </h3>
               <BookingList bookings={completedBookingsByDate[date]} />
             </div>

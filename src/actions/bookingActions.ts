@@ -16,6 +16,8 @@ const ServerBookingFormSchema = z.object({
   passengerDetails: z.string().min(1, "Passenger details are required"),
   bookingDate: z.string().min(1, "Booking date is required"), // Expects YYYY-MM-DD string
   classType: z.enum(ALL_TRAIN_CLASSES, { errorMap: () => ({ message: "Invalid train class selected." }) }),
+  trainPreference: z.string().optional(),
+  timePreference: z.string().optional(),
 });
 
 const toISOStringSafe = (value: any, fieldName: string, bookingId: string): string => {
@@ -58,6 +60,8 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     passengerDetails: data.passengerDetails as string,
     bookingDate: data.bookingDate as string,
     classType: data.classType as TrainClass,
+    trainPreference: data.trainPreference as string | undefined,
+    timePreference: data.timePreference as string | undefined,
     status: data.status as BookingStatus,
     createdAt: toISOStringSafe(data.createdAt, 'createdAt', id),
     updatedAt: toISOStringSafe(data.updatedAt, 'updatedAt', id),
@@ -84,12 +88,16 @@ export async function addBooking(formData: BookingFormData): Promise<{ success: 
       };
     }
 
-    const bookingDataForFirestore = {
+    const bookingDataForFirestore: Record<string, any> = {
       ...validationResult.data,
       status: "Requested" as BookingStatus,
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
+    // Remove undefined optional fields so they are not written to Firestore
+    if (validationResult.data.trainPreference === undefined) delete bookingDataForFirestore.trainPreference;
+    if (validationResult.data.timePreference === undefined) delete bookingDataForFirestore.timePreference;
+
 
     const docRef = await addDoc(collection(db, "bookings"), bookingDataForFirestore);
 
@@ -159,10 +167,18 @@ export async function updateBookingById(id: string, formData: BookingFormData): 
     }
 
     const docRef = doc(db, "bookings", id);
-    const bookingDataForFirestore = {
+    const bookingDataForFirestore: Record<string, any> = {
       ...validationResult.data,
       updatedAt: serverTimestamp(),
     };
+    // Remove undefined optional fields so they are not written to Firestore
+    // Or explicitly set them to null if you want to remove them from the document
+    if (validationResult.data.trainPreference === undefined) {
+       delete bookingDataForFirestore.trainPreference; // Or bookingDataForFirestore.trainPreference = null;
+    }
+    if (validationResult.data.timePreference === undefined) {
+       delete bookingDataForFirestore.timePreference; // Or bookingDataForFirestore.timePreference = null;
+    }
 
     await updateDoc(docRef, bookingDataForFirestore);
 
@@ -186,7 +202,6 @@ export async function updateBookingById(id: string, formData: BookingFormData): 
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     console.error(`[Firestore/Server Error] In updateBookingById (ID: ${id}):`, errorMessage);
-    // Simplified error message construction
     let specificMessage = "An unexpected server error occurred. Failed to update booking.";
     if (errorMessage.trim().length > 0) {
         specificMessage = errorMessage;
@@ -312,6 +327,8 @@ export async function getAllBookingsAsJsonString(): Promise<string> {
       destination: b.destination,
       journeyDate: b.journeyDate,
       classType: b.classType,
+      trainPreference: b.trainPreference,
+      timePreference: b.timePreference,
       status: b.status,
     }));
     return JSON.stringify(simplifiedBookings);

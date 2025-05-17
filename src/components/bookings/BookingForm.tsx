@@ -37,6 +37,8 @@ const bookingFormSchema = z.object({
   passengerDetails: z.string().min(5, { message: "Passenger details must be at least 5 characters." }),
   bookingDate: z.date({ required_error: "Booking date is required." }),
   classType: z.enum(ALL_TRAIN_CLASSES, { required_error: "Train class is required." }),
+  trainPreference: z.string().optional(),
+  timePreference: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof bookingFormSchema>;
@@ -57,11 +59,13 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
     defaultValues: {
       source: initialData?.source || "",
       destination: initialData?.destination || "",
-      journeyDate: initialData?.journeyDateObj, // Use pre-parsed Date object
+      journeyDate: initialData?.journeyDateObj,
       userName: initialData?.userName || "",
       passengerDetails: initialData?.passengerDetails || "",
-      bookingDate: initialData?.bookingDateObj, // Use pre-parsed Date object
+      bookingDate: initialData?.bookingDateObj,
       classType: initialData?.classType || undefined,
+      trainPreference: initialData?.trainPreference || "",
+      timePreference: initialData?.timePreference || "",
     },
   });
 
@@ -75,6 +79,8 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
         passengerDetails: initialData.passengerDetails,
         bookingDate: initialData.bookingDateObj,
         classType: initialData.classType,
+        trainPreference: initialData.trainPreference || "",
+        timePreference: initialData.timePreference || "",
       });
     }
   }, [initialData, form]);
@@ -86,6 +92,8 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
       journeyDate: format(values.journeyDate, "yyyy-MM-dd"),
       bookingDate: format(values.bookingDate, "yyyy-MM-dd"),
       classType: values.classType as TrainClass,
+      trainPreference: values.trainPreference || undefined, // Ensure empty string becomes undefined
+      timePreference: values.timePreference || undefined,   // Ensure empty string becomes undefined
     };
 
     const result = isEditMode && bookingId
@@ -98,7 +106,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
         description: `Request for ${result.booking.userName} from ${result.booking.source} to ${result.booking.destination} ${isEditMode ? 'updated' : 'saved'}.`,
       });
       router.push("/");
-      router.refresh(); // Ensure data is refreshed on the homepage
+      router.refresh(); 
     } else {
       let errorToastMessage = "An unexpected error occurred. Please try again.";
       if (result.errors) {
@@ -154,7 +162,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
               <FormItem>
                 <FormLabel>Source</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g., New York" {...field} />
+                  <Input placeholder="e.g., TEN" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -167,7 +175,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
               <FormItem>
                 <FormLabel>Destination</FormLabel>
                 <FormControl>
-                  <Input placeholder="e.g., Boston" {...field} />
+                  <Input placeholder="e.g., MS" {...field} />
                 </FormControl>
                 <FormMessage />
               </FormItem>
@@ -202,7 +210,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                       mode="single"
                       selected={field.value}
                       onSelect={field.onChange}
-                      disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) && !isEditMode } // Allow past dates in edit mode for viewing
+                      disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) && !isEditMode } 
                       initialFocus
                     />
                   </PopoverContent>
@@ -278,9 +286,9 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           name="userName"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>User's Name</FormLabel>
+              <FormLabel>Requested by</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., John Doe" {...field} />
+                <Input placeholder="e.g., Rajesh" {...field} />
               </FormControl>
               <FormMessage />
             </FormItem>
@@ -291,10 +299,10 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           name="passengerDetails"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Passenger Details</FormLabel>
+              <FormLabel>Passenger(s) Details</FormLabel>
               <FormControl>
                 <Textarea
-                  placeholder="e.g., John Doe (Adult), Jane Doe (Child, 10 yrs)"
+                  placeholder="e.g., Joseph (M, 32), Rose (F, 28)"
                   className="resize-y min-h-[100px]"
                   {...field}
                 />
@@ -306,6 +314,41 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             </FormItem>
           )}
         />
+
+        <FormField
+          control={form.control}
+          name="trainPreference"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Train Preference (Optional)</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g., Any express, specific train number" {...field} />
+              </FormControl>
+              <FormDescription>
+                Specify any preferred train(s) or types of trains.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
+        <FormField
+          control={form.control}
+          name="timePreference"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Time Preference (Optional)</FormLabel>
+              <FormControl>
+                <Input placeholder="e.g., Morning, after 6 PM, around noon" {...field} />
+              </FormControl>
+              <FormDescription>
+                Specify preferred departure or arrival times.
+              </FormDescription>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+
         <Button type="submit" className="w-full md:w-auto" disabled={isSubmitting}>
           {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
           {isSubmitting ? (isEditMode ? "Updating..." : "Saving Request...") : (isEditMode ? "Update Booking" : "Save Booking Request")}

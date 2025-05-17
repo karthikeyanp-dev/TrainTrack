@@ -3,9 +3,9 @@ export type BookingStatus = "Requested" | "Booked" | "Missed" | "Booking Failed"
 
 export const ALL_BOOKING_STATUSES: BookingStatus[] = ["Requested", "Booked", "Missed", "Booking Failed", "User Cancelled"];
 
-export type TrainClass = "SL" | "AC3" | "AC2" | "AC1" | "2S" | "EC" | "CC";
+export type TrainClass = "SL" | "3A" | "2A" | "1A" | "2S" | "EC" | "CC" | "UR";
 
-export const ALL_TRAIN_CLASSES: TrainClass[] = ["SL", "AC3", "AC2", "AC1", "2S", "EC", "CC"];
+export const ALL_TRAIN_CLASSES: TrainClass[] = ["SL", "3A", "2A", "1A", "2S", "EC", "CC", "UR"];
 
 export interface Booking {
   id: string;
@@ -15,7 +15,9 @@ export interface Booking {
   userName: string;
   passengerDetails: string; // Text area for passenger names, ages, etc.
   bookingDate: string; // ISO string YYYY-MM-DD (date by which it needs to be booked)
-  classType: TrainClass; // Added class type
+  classType: TrainClass;
+  trainPreference?: string; // Optional
+  timePreference?: string; // Optional
   status: BookingStatus;
   createdAt: string; // ISO string
   updatedAt: string; // ISO string

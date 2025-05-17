@@ -28,19 +28,18 @@ export default async function EditBookingPage({ params }: EditBookingPageProps) 
     );
   }
 
-  // Prepare initialData for the form. Dates need to be passed as strings if BookingForm expects them.
-  // The BookingForm's zod schema expects Date objects, so we convert them here.
    const initialData: BookingFormData & { journeyDateObj: Date; bookingDateObj: Date } = {
     source: booking.source,
     destination: booking.destination,
-    journeyDate: booking.journeyDate, // Keep as string for BookingFormData type
-    bookingDate: booking.bookingDate, // Keep as string for BookingFormData type
+    journeyDate: booking.journeyDate, 
+    bookingDate: booking.bookingDate, 
     userName: booking.userName,
     passengerDetails: booking.passengerDetails,
     classType: booking.classType,
-    // These are for initializing the form's Date objects
-    journeyDateObj: new Date(booking.journeyDate + 'T00:00:00'), // Ensure correct parsing
-    bookingDateObj: new Date(booking.bookingDate + 'T00:00:00'), // Ensure correct parsing
+    trainPreference: booking.trainPreference || "",
+    timePreference: booking.timePreference || "",
+    journeyDateObj: new Date(booking.journeyDate + 'T00:00:00'), 
+    bookingDateObj: new Date(booking.bookingDate + 'T00:00:00'), 
   };
 
 

@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "./StatusBadge";
-import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2 } from "lucide-react";
+import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateBookingStatus, deleteBooking } from "@/actions/bookingActions";
 import { useToast } from "@/hooks/use-toast";
@@ -120,27 +120,28 @@ export function BookingCard({ booking }: BookingCardProps) {
 Train Booking Details:
 ----------------------
 For: ${booking.userName}
-From: ${booking.source}
-To: ${booking.destination}
+From: ${booking.source.toUpperCase()}
+To: ${booking.destination.toUpperCase()}
 Journey Date: ${formatDate(booking.journeyDate)}
 Book By: ${formatDate(booking.bookingDate)}
 Class: ${booking.classType}
 Passengers: ${booking.passengerDetails}
+${booking.trainPreference ? `Train Preference: ${booking.trainPreference}` : ''}
+${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
 Status: ${booking.status}
 ----------------------
 Requested on: ${formatDate(booking.createdAt)}
 Last updated: ${formatDate(booking.updatedAt)}
-    `.trim();
+    `.trim().replace(/^\\n+|\\n+$/g, '').replace(/\\n\\n+/g, '\\n'); // Clean up extra newlines
 
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Booking: ${booking.source} to ${booking.destination}`,
+          title: `Booking: ${booking.source.toUpperCase()} to ${booking.destination.toUpperCase()}`,
           text: bookingDetailsText,
         });
         toast({ title: "Booking Shared", description: "Details sent successfully." });
       } catch (error) {
-        // Fallback to copy if share fails (e.g., user cancels)
         console.warn("Web Share API failed or was cancelled:", error);
         copyToClipboard(bookingDetailsText);
       }
@@ -164,9 +165,8 @@ Last updated: ${formatDate(booking.updatedAt)}
       if (dateString && dateString.match(/^\\d{4}-\\d{2}-\\d{2}$/)) {
         return format(new Date(dateString + "T00:00:00"), "PPP");
       }
-      // Attempt to parse ISO string which may or may not have T00:00:00
       const date = new Date(dateString);
-      if (isNaN(date.getTime())) return dateString; // Return original if invalid
+      if (isNaN(date.getTime())) return dateString; 
       return format(date, "PPP");
     } catch (e) {
       return dateString; 
@@ -179,13 +179,14 @@ Last updated: ${formatDate(booking.updatedAt)}
         <div className="flex justify-between items-start">
           <div>
             <CardTitle className="text-lg md:text-xl">
-              {booking.source} to {booking.destination}
+              {booking.source.toUpperCase()} to {booking.destination.toUpperCase()}
             </CardTitle>
-            <CardDescription>For {booking.userName}</CardDescription>
+            <hr></hr>
+            <CardDescription>For <b>{booking.userName}</b></CardDescription>
           </div>
           <div className="flex flex-col items-end gap-1.5">
             <StatusBadge status={booking.status} />
-            <span className="text-lg font-semibold text-primary">{booking.classType}</span>
+            <span className="text-3xl font-bold text-primary">{booking.classType}</span>
           </div>
         </div>
       </CardHeader>
@@ -202,6 +203,18 @@ Last updated: ${formatDate(booking.updatedAt)}
           <Users className="h-4 w-4 text-muted-foreground mt-0.5" />
           <span className="flex-1">Passengers: {booking.passengerDetails}</span>
         </div>
+        {booking.trainPreference && (
+          <div className="flex items-start gap-2">
+            <Train className="h-4 w-4 text-muted-foreground mt-0.5" />
+            <span className="flex-1">Train Pref: {booking.trainPreference}</span>
+          </div>
+        )}
+        {booking.timePreference && (
+          <div className="flex items-start gap-2">
+            <Clock className="h-4 w-4 text-muted-foreground mt-0.5" />
+            <span className="flex-1">Time Pref: {booking.timePreference}</span>
+          </div>
+        )}
         <div className="flex items-center gap-2">
           {getStatusIcon(booking.status)}
           <span>Created: {formatDate(booking.createdAt)}</span>
@@ -253,7 +266,7 @@ Last updated: ${formatDate(booking.updatedAt)}
                     <AlertDialogTitle>Are you sure?</AlertDialogTitle>
                     <AlertDialogDescription>
                     This action cannot be undone. This will permanently delete the booking
-                    request for {booking.userName} from {booking.source} to {booking.destination}.
+                    request for {booking.userName} from {booking.source.toUpperCase()} to {booking.destination.toUpperCase()}.
                     </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
