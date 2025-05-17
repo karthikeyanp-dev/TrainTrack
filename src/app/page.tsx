@@ -1,3 +1,4 @@
+
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BookingList } from "@/components/bookings/BookingList";
 import { getBookings } from "@/actions/bookingActions";
@@ -5,33 +6,39 @@ import type { Booking } from "@/types/booking";
 import { AppShell } from "@/components/layout/AppShell";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { format } from "date-fns";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle } from "lucide-react";
+
+// Helper function to group bookings by date
+const groupBookingsByDate = (bookings: Booking[]): Record<string, Booking[]> => {
+  return bookings.reduce((acc, booking) => {
+    const dateKey = booking.journeyDate; // journeyDate is 'YYYY-MM-DD'
+    if (!acc[dateKey]) {
+      acc[dateKey] = [];
+    }
+    acc[dateKey].push(booking);
+    return acc;
+  }, {} as Record<string, Booking[]>);
+};
 
 async function BookingsDisplay() {
   const allBookings = await getBookings();
   const today = new Date().toISOString().split("T")[0];
 
-  const pendingBookings = allBookings
-    .filter(booking => {
-      const isFutureOrToday = booking.journeyDate >= today;
-      const isPendingStatus = booking.status === "Requested" || booking.status === "Booking Failed";
-      return isFutureOrToday && isPendingStatus;
-    })
+  const pendingBookingsRaw = allBookings
+    .filter(booking => booking.status === "Requested" && booking.journeyDate >= today)
     .sort((a, b) => new Date(a.journeyDate).getTime() - new Date(b.journeyDate).getTime());
 
-  const completedBookings = allBookings
-    .filter(booking => {
-      const isPast = booking.journeyDate < today;
-      const isCompletedStatus = booking.status === "Booked" || booking.status === "Missed";
-      // If journeyDate is past and status was 'Requested', it implies 'Missed'.
-      // If journeyDate is past and status was 'Booking Failed', it stays 'Booking Failed'.
-      if (isPast && booking.status === "Requested") {
-        // This logic should ideally be handled by a backend process or when status is updated
-        // For UI display purposes, we can treat it as completed/missed here.
-         return true; // Effectively moves to completed as 'Missed'
-      }
-      return isCompletedStatus || (isPast && booking.status === "Booking Failed");
-    })
+  const completedBookingsRaw = allBookings
+    .filter(booking => booking.status !== "Requested") // "Booked", "Missed", "Booking Failed"
     .sort((a, b) => new Date(b.journeyDate).getTime() - new Date(a.journeyDate).getTime()); // Show recent completed first
+
+  const pendingBookingsByDate = groupBookingsByDate(pendingBookingsRaw);
+  const pendingDates = Object.keys(pendingBookingsByDate).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+  const completedBookingsByDate = groupBookingsByDate(completedBookingsRaw);
+  const completedDates = Object.keys(completedBookingsByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
   return (
     <Tabs defaultValue="pending" className="w-full">
@@ -39,19 +46,47 @@ async function BookingsDisplay() {
         <TabsTrigger value="pending">Pending</TabsTrigger>
         <TabsTrigger value="completed">Completed</TabsTrigger>
       </TabsList>
+
       <TabsContent value="pending" className="mt-6">
         <h2 className="text-2xl font-semibold mb-4">Pending Bookings</h2>
-        <BookingList 
-          bookings={pendingBookings} 
-          emptyStateMessage="No pending bookings. Add a new one!" 
-        />
+        {pendingDates.length === 0 ? (
+          <Alert className="mt-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>No Pending Bookings</AlertTitle>
+            <AlertDescription>No bookings are currently in 'Requested' status for upcoming dates. Add a new one!</AlertDescription>
+          </Alert>
+        ) : (
+          pendingDates.map(date => (
+            <div key={date} className="mb-8">
+              <h3 className="text-xl font-medium mb-3 pb-2 border-b">
+                {/* Append T00:00:00 to ensure date is parsed in local timezone context for formatting */}
+                {format(new Date(date + 'T00:00:00'), "PPP")} 
+              </h3>
+              <BookingList bookings={pendingBookingsByDate[date]} />
+            </div>
+          ))
+        )}
       </TabsContent>
+
       <TabsContent value="completed" className="mt-6">
         <h2 className="text-2xl font-semibold mb-4">Completed Bookings</h2>
-        <BookingList 
-          bookings={completedBookings} 
-          emptyStateMessage="No bookings have been completed yet." 
-        />
+        {completedDates.length === 0 ? (
+          <Alert className="mt-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>No Completed Bookings</AlertTitle>
+            <AlertDescription>No bookings have been marked as 'Booked', 'Missed', or 'Booking Failed' yet.</AlertDescription>
+          </Alert>
+        ) : (
+          completedDates.map(date => (
+            <div key={date} className="mb-8">
+              <h3 className="text-xl font-medium mb-3 pb-2 border-b">
+                {/* Append T00:00:00 to ensure date is parsed in local timezone context for formatting */}
+                {format(new Date(date + 'T00:00:00'), "PPP")}
+              </h3>
+              <BookingList bookings={completedBookingsByDate[date]} />
+            </div>
+          ))
+        )}
       </TabsContent>
     </Tabs>
   );
@@ -64,11 +99,23 @@ function BookingsLoadingSkeleton() {
         <Skeleton className="h-10 w-1/2 md:w-[200px]" />
         <Skeleton className="h-10 w-1/2 md:w-[200px]" />
       </div>
-      <Skeleton className="h-8 w-48" /> {/* Title skeleton */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {[1, 2, 3].map(i => (
-          <CardSkeleton key={i} />
-        ))}
+      <Skeleton className="h-8 w-48 mb-4" /> {/* Title skeleton */}
+      {/* Skeleton for date group */}
+      <div className="space-y-6">
+        <Skeleton className="h-7 w-1/3 mb-3" /> {/* Date heading skeleton */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1, 2].map(i => ( // Show a couple of card skeletons per group
+            <CardSkeleton key={`group1-${i}`} />
+          ))}
+        </div>
+      </div>
+       <div className="space-y-6 mt-6">
+        <Skeleton className="h-7 w-1/3 mb-3" /> {/* Date heading skeleton */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {[1].map(i => ( 
+            <CardSkeleton key={`group2-${i}`} />
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -96,7 +143,6 @@ function CardSkeleton() {
     </div>
   );
 }
-
 
 export default function HomePage() {
   return (

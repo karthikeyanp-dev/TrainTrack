@@ -1,22 +1,17 @@
+
 import type { Booking } from "@/types/booking";
 import { BookingCard } from "./BookingCard";
-import { AlertCircle } from "lucide-react";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface BookingListProps {
   bookings: Booking[];
-  emptyStateMessage?: string;
 }
 
-export function BookingList({ bookings, emptyStateMessage = "No bookings found." }: BookingListProps) {
+export function BookingList({ bookings }: BookingListProps) {
+  // If the parent component (BookingsDisplay) filters correctly, 
+  // 'bookings' should not be empty when this component is rendered for a date group.
+  // If it somehow is, rendering nothing is cleaner than an alert here.
   if (bookings.length === 0) {
-    return (
-      <Alert className="mt-4">
-        <AlertCircle className="h-4 w-4" />
-        <AlertTitle>Heads up!</AlertTitle>
-        <AlertDescription>{emptyStateMessage}</AlertDescription>
-      </Alert>
-    );
+    return null;
   }
 
   return (
