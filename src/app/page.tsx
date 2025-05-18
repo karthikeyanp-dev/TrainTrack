@@ -24,7 +24,7 @@ const groupBookingsByDate = (bookings: Booking[]): Record<string, Booking[]> => 
   }, {} as Record<string, Booking[]>);
 };
 
-const SL_CLASSES: TrainClass[] = ["SL", "UR"];
+const SL_CLASSES: TrainClass[] = ["SL", "UR", "2S"];
 
 async function BookingsDisplay() {
   const allBookings = await getBookings();
@@ -75,8 +75,8 @@ async function BookingsDisplay() {
   return (
     <Tabs defaultValue="pending" className="w-full">
       <TabsList className="grid w-full grid-cols-2 md:w-[400px]">
-        <TabsTrigger value="pending">Pending (by Book by Date)</TabsTrigger>
-        <TabsTrigger value="completed">Completed (by Book by Date)</TabsTrigger>
+        <TabsTrigger value="pending">Pending</TabsTrigger>
+        <TabsTrigger value="completed">Completed</TabsTrigger>
       </TabsList>
 
       <TabsContent value="pending" className="mt-6">
