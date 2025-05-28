@@ -7,13 +7,13 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "./StatusBadge";
-import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock } from "lucide-react";
+import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateBookingStatus, deleteBooking } from "@/actions/bookingActions";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
-import { useState, useEffect, useCallback } from "react"; // Added useEffect, useCallback
+import { useState, useEffect, useCallback } from "react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -60,24 +60,20 @@ export function BookingCard({ booking }: BookingCardProps) {
   const [clientFormattedCreatedAt, setClientFormattedCreatedAt] = useState<string | null>(null);
   const [clientFormattedUpdatedAt, setClientFormattedUpdatedAt] = useState<string | null>(null);
 
-  // Robust date formatting, memoized
   const formatDate = useCallback((dateString: string): string => {
     if (!dateString) return 'N/A';
     try {
-      // For YYYY-MM-DD strings (journeyDate, bookingDate)
       if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
         const [year, month, day] = dateString.split('-').map(Number);
-        // Create date at noon in local time to avoid DST/midnight issues for date-only display
         const localDate = new Date(year, month - 1, day, 12);
         return format(localDate, "PPP");
       }
-      // For full ISO strings (createdAt, updatedAt)
       const date = new Date(dateString);
       if (isNaN(date.getTime())) {
         console.warn(`[BookingCard] Invalid timestamp string: ${dateString}`);
         return 'Invalid Date';
       }
-      return format(date, "PPP"); // date-fns format will use local settings
+      return format(date, "PPP");
     } catch (error) {
       console.error(`[BookingCard] Error formatting date "${dateString}":`, error);
       return 'Error Date';
@@ -85,7 +81,6 @@ export function BookingCard({ booking }: BookingCardProps) {
   }, []);
 
   useEffect(() => {
-    // This effect runs only on the client, after hydration
     setClientFormattedCreatedAt(formatDate(booking.createdAt));
     setClientFormattedUpdatedAt(formatDate(booking.updatedAt));
   }, [booking.createdAt, booking.updatedAt, formatDate]);
@@ -167,6 +162,10 @@ export function BookingCard({ booking }: BookingCardProps) {
 
   const handleEdit = () => {
     router.push(`/bookings/edit/${booking.id}`);
+  };
+
+  const handleCopy = () => {
+    router.push(`/bookings/new?copyFrom=${booking.id}`);
   };
 
   const handleShare = async () => {
@@ -279,6 +278,17 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
             <div className="flex gap-1">
             <TooltipProvider>
                 <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" onClick={handleCopy} aria-label="Copy booking">
+                            <Copy className="h-4 w-4" />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Copy Booking</TooltipContent>
+                </Tooltip>
+            </TooltipProvider>
+
+            <TooltipProvider>
+                <Tooltip>
                 <TooltipTrigger asChild>
                     <Button variant="ghost" size="icon" onClick={handleEdit} aria-label="Edit booking">
                         <Edit3 className="h-4 w-4" />
@@ -380,5 +390,3 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
     </Card>
   );
 }
-
-    
