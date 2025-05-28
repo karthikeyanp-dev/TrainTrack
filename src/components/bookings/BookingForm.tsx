@@ -31,8 +31,8 @@ import { Separator } from "@/components/ui/separator";
 
 const passengerSchema = z.object({
   name: z.string().min(2, { message: "Passenger name must be at least 2 characters." }),
-  age: z.coerce.number().positive({ message: "Age must be a positive number." }).max(120, { message: "Age seems too high."}).optional().or(z.literal(undefined)), // Made age optional for consistent undefined handling
-  gender: z.enum(ALL_PASSENGER_GENDERS, { required_error: "Gender is required." }).optional().or(z.literal(undefined)),
+  age: z.coerce.number().positive({ message: "Age must be a positive number." }).max(120, { message: "Age seems too high."}).optional().or(z.literal(undefined)),
+  gender: z.enum(ALL_PASSENGER_GENDERS, { errorMap: () => ({ message: "Gender is required." }) }).optional().or(z.literal(undefined)),
 });
 
 const bookingFormSchema = z.object({
@@ -40,7 +40,10 @@ const bookingFormSchema = z.object({
   destination: z.string().min(2, { message: "Destination must be at least 2 characters." }),
   journeyDate: z.date({ required_error: "Journey date is required." }),
   userName: z.string().min(2, { message: "User name must be at least 2 characters." }),
-  passengers: z.array(passengerSchema).min(1, { message: "At least one passenger is required." }),
+  passengers: z.array(passengerSchema).min(1, { message: "At least one passenger is required." })
+    .refine(passengers => passengers.every(p => p.name && p.age !== undefined && p.gender), {
+      message: "All passenger details (name, age, gender) must be filled if a passenger entry is added.", // This message might not show directly on array, but per-field errors are better.
+    }),
   bookingDate: z.date({ required_error: "Booking date is required." }),
   classType: z.enum(ALL_TRAIN_CLASSES, { required_error: "Train class is required." }),
   trainPreference: z.string().optional(),
@@ -50,7 +53,7 @@ const bookingFormSchema = z.object({
 type FormValues = z.infer<typeof bookingFormSchema>;
 
 interface BookingFormProps {
-  initialData?: BookingFormData & { journeyDateObj?: Date; bookingDateObj?: Date; passengers?: Passenger[] };
+  initialData?: BookingFormData & { journeyDateObj?: Date; bookingDateObj?: Date; passengers?: Partial<Passenger>[] };
   bookingId?: string;
 }
 
@@ -62,7 +65,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
   const [bookingDatePopoverOpen, setBookingDatePopoverOpen] = useState(false);
   const isEditMode = !!bookingId;
 
-  const defaultPassengerValue = { name: "", age: undefined, gender: undefined as PassengerGender | undefined };
+  const defaultPassengerValue: Partial<Passenger> = { name: "", age: undefined, gender: undefined };
 
   const form = useForm<FormValues>({
     resolver: zodResolver(bookingFormSchema),
@@ -71,8 +74,12 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
       destination: initialData?.destination || "",
       journeyDate: initialData?.journeyDateObj,
       userName: initialData?.userName || "",
-      passengers: initialData?.passengers && initialData.passengers.length > 0 
-        ? initialData.passengers.map(p => ({...p, age: p.age === undefined || p.age === null ? undefined : Number(p.age), gender: p.gender || undefined })) 
+      passengers: initialData?.passengers && initialData.passengers.length > 0
+        ? initialData.passengers.map(p => ({
+            name: p.name || "",
+            age: p.age === undefined || p.age === null ? undefined : Number(p.age),
+            gender: p.gender || undefined,
+          }))
         : [defaultPassengerValue],
       bookingDate: initialData?.bookingDateObj,
       classType: initialData?.classType || undefined,
@@ -89,12 +96,16 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
   useEffect(() => {
     if (initialData) {
       form.reset({
-        source: initialData.source,
-        destination: initialData.destination,
+        source: initialData.source || "",
+        destination: initialData.destination || "",
         journeyDate: initialData.journeyDateObj,
-        userName: initialData.userName,
-        passengers: initialData.passengers && initialData.passengers.length > 0 
-          ? initialData.passengers.map(p => ({...p, age: p.age === undefined || p.age === null ? undefined : Number(p.age), gender: p.gender || undefined })) 
+        userName: initialData.userName || "",
+        passengers: initialData.passengers && initialData.passengers.length > 0
+          ? initialData.passengers.map(p => ({
+              name: p.name || "",
+              age: p.age === undefined || p.age === null ? undefined : Number(p.age),
+              gender: p.gender || undefined,
+            }))
           : [defaultPassengerValue],
         bookingDate: initialData.bookingDateObj,
         classType: initialData.classType,
@@ -112,24 +123,23 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
       journeyDate: format(values.journeyDate, "yyyy-MM-dd"),
       bookingDate: format(values.bookingDate, "yyyy-MM-dd"),
       classType: values.classType as TrainClass,
-      passengers: values.passengers.map(p => ({
-        name: p.name,
-        // Ensure age is a number if defined, otherwise it remains undefined (or you can choose to filter out passengers with no age)
-        age: p.age !== undefined && p.age !== null ? Number(p.age) : 0, // Default to 0 or handle as per business logic if age is truly optional in DB
-        gender: p.gender as PassengerGender, // Should be defined due to validation
-      })).filter(p => p.name && p.gender) as Passenger[], // Basic filter for valid passengers
+      passengers: values.passengers
+        .filter(p => p.name && p.age !== undefined && p.gender) // Filter out potentially empty/incomplete passengers
+        .map(p => ({
+          name: p.name!, // Assert non-null as filtered
+          age: Number(p.age!), // Assert non-null as filtered
+          gender: p.gender!, // Assert non-null as filtered
+      })) as Passenger[],
       trainPreference: values.trainPreference || undefined,
       timePreference: values.timePreference || undefined,
     };
+
+    if (formDataForAction.passengers.length === 0) {
+        form.setError("passengers", { type: "manual", message: "At least one complete passenger entry is required."});
+        setIsSubmitting(false);
+        return;
+    }
     
-    // Further ensure passengers being sent have valid age if required by backend/db logic
-    // This example assumes age 0 is acceptable if not specified, adjust if needed.
-    formDataForAction.passengers = formDataForAction.passengers.map(p => ({
-      ...p,
-      age: (p.age === undefined || p.age === null || isNaN(p.age)) ? 0 : Number(p.age), // Backend expects number
-    }));
-
-
     const result = isEditMode && bookingId
       ? await updateBookingById(bookingId, formDataForAction)
       : await addBooking(formDataForAction);
@@ -139,24 +149,22 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
         title: isEditMode ? "Booking Updated!" : "Booking Request Added!",
         description: `Request for ${result.booking.userName} from ${result.booking.source} to ${result.booking.destination} ${isEditMode ? 'updated' : 'saved'}.`,
       });
-      router.push("/");
-      router.refresh(); // Ensure UI updates with new data
+      router.push("/"); // Navigate to home, revalidatePath from server action should handle refresh
     } else {
       let errorToastMessage = "An unexpected error occurred. Please try again.";
       if (result.errors) {
-        const { formErrors, fieldErrors } = result.errors as any;
+        const { formErrors, fieldErrors } = result.errors as any; // ZodError["formErrors"]
 
         if (formErrors && formErrors.length > 0) {
           errorToastMessage = formErrors.join(" ");
         } else if (fieldErrors && Object.keys(fieldErrors).length > 0) {
           errorToastMessage = "Please check the form for specific errors highlighted below.";
-           // Handle passengers array errors
           if (fieldErrors.passengers && Array.isArray(fieldErrors.passengers)) {
             fieldErrors.passengers.forEach((passengerError: any, index: number) => {
-              if (passengerError) { // passengerError could be null for valid passengers in array
-                Object.keys(passengerError).forEach(key => {
+              if (passengerError) {
+                (Object.keys(passengerError) as Array<keyof Passenger>).forEach(key => {
                     if (passengerError[key]?._errors) {
-                         form.setError(`passengers.${index}.${key as keyof Passenger}` as any, {
+                         form.setError(`passengers.${index}.${key}`, {
                             type: 'server',
                             message: passengerError[key]._errors.join(', ')
                         });
@@ -164,17 +172,15 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                 });
               }
             });
-          } else if (typeof fieldErrors.passengers === 'object' && fieldErrors.passengers?._errors) { // Top-level error on passengers array
+          } else if (typeof fieldErrors.passengers === 'object' && fieldErrors.passengers?._errors) {
              form.setError('passengers', { type: 'server', message: fieldErrors.passengers._errors.join(', ') });
           }
 
-
-          // Handle other field errors
-          (Object.keys(fieldErrors) as Array<keyof FormValues>).forEach((fieldName) => {
-            if (fieldName !== 'passengers') { // Already handled passengers above
-              const messages = fieldErrors[fieldName]?._errors;
+          (Object.keys(fieldErrors) as Array<keyof FormValues | 'passengers'>).forEach((fieldName) => {
+            if (fieldName !== 'passengers') {
+              const messages = fieldErrors[fieldName as keyof FormValues]?._errors;
               if (messages && messages.length > 0) {
-                form.setError(fieldName, {
+                form.setError(fieldName as keyof FormValues, {
                   type: "server",
                   message: messages.join(", "),
                 });
@@ -183,7 +189,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           });
         }
 
-        if (formErrors && formErrors.length > 0) { // General form errors from server
+        if (formErrors && formErrors.length > 0) {
            form.setError("root.serverError", { type: "server", message: formErrors.join(", ") });
         }
       }
@@ -274,7 +280,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                         field.onChange(date);
                         setJourneyDatePopoverOpen(false);
                       }}
-                      disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) && !isEditMode }
+                      disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) && !isEditMode } // Allow past dates in edit mode for viewing
                       initialFocus
                     />
                   </PopoverContent>
@@ -312,7 +318,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                         field.onChange(date);
                         setBookingDatePopoverOpen(false);
                       }}
-                      disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) && !isEditMode}
+                      disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) && !isEditMode} // Allow past dates in edit mode for viewing
                       initialFocus
                     />
                   </PopoverContent>
@@ -363,8 +369,8 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
         />
 
         <div>
-          <FormLabel className="flex items-center gap-2 mb-4 text-lg font-medium">
-            <Users className="h-5 w-5" /> Passenger Details
+          <FormLabel className="flex items-center gap-2 mb-4 text-lg font-semibold">
+            <Users className="h-6 w-6" /> Passenger Details
           </FormLabel>
           {fields.map((item, index) => (
             <div key={item.id} className="space-y-4 p-4 mb-4 border rounded-md relative shadow-sm bg-card">
@@ -401,12 +407,12 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                     <FormItem>
                       <FormLabel>Age</FormLabel>
                       <FormControl>
-                        <Input 
-                          type="number" 
-                          placeholder="e.g., 30" 
-                          {...field} 
+                        <Input
+                          type="number"
+                          placeholder="e.g., 30"
+                          {...field}
                           value={field.value ?? ''}
-                          onChange={e => field.onChange(e.target.value === '' ? undefined : +e.target.value)} 
+                          onChange={e => field.onChange(e.target.value === '' ? undefined : +e.target.value)}
                         />
                       </FormControl>
                       <FormMessage />
@@ -453,7 +459,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
               {form.formState.errors.passengers.message}
             </FormMessage>
           )}
-           {form.formState.errors.passengers?.root && ( 
+           {form.formState.errors.passengers?.root && (
              <FormMessage className="mt-2">
                 {form.formState.errors.passengers.root.message}
              </FormMessage>
@@ -503,3 +509,5 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
     </Form>
   );
 }
+
+    
