@@ -66,16 +66,22 @@ export function BookingCard({ booking }: BookingCardProps) {
     if (!dateString) return 'N/A';
     try {
       if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        const [year, month, day] = dateString.split('-').map(Number);
-        const localDate = new Date(year, month - 1, day, 12); 
-        return format(localDate, "PPP");
+        // For YYYY-MM-DD strings, ensure they are treated as local dates.
+        // Appending T00:00:00 or T12:00:00 makes it local to the environment.
+        // For display like "PPP", the time component doesn't matter as much as getting the date right.
+        const date = new Date(dateString + 'T12:00:00');
+        if (isNaN(date.getTime())) {
+          console.warn(`[BookingCard] Invalid date-only string: ${dateString}`);
+          return 'Invalid Date';
+        }
+        return format(date, "PPP");
       }
-      const date = new Date(dateString);
+      const date = new Date(dateString); // Handles ISO strings with timezones
       if (isNaN(date.getTime())) {
         console.warn(`[BookingCard] Invalid timestamp string: ${dateString}`);
         return 'Invalid Date';
       }
-      return format(date, "PPP"); 
+      return format(date, "PPP");
     } catch (error) {
       console.error(`[BookingCard] Error formatting date "${dateString}":`, error);
       return 'Error Date';
@@ -174,16 +180,22 @@ export function BookingCard({ booking }: BookingCardProps) {
 
   const handleShare = async () => {
     const passengerDetailsText = booking.passengers.map((p, index) => `${index + 1}. ${p.name} ${p.age} ${p.gender.toUpperCase()}`).join('\n');
-    const journeyDateFormatted = clientFormattedJourneyDate || formatDate(booking.journeyDate);
-    const bookingDateFormatted = clientFormattedBookingDate || formatDate(booking.bookingDate);
+    const journeyDateFormatted = clientFormattedJourneyDate || "N/A";
+    const bookingDateFormatted = clientFormattedBookingDate || "N/A";
     
+    const journeyDateForDay = booking.journeyDate.match(/^\d{4}-\d{2}-\d{2}$/) 
+                              ? new Date(booking.journeyDate + 'T12:00:00')
+                              : new Date(booking.journeyDate);
+
+    const dayOfWeek = !isNaN(journeyDateForDay.getTime()) ? format(journeyDateForDay, "EEEE") : "N/A";
+
     const bookingDetailsText = `
 Train Booking Details:
 ----------------------
 From: ${booking.source.toUpperCase()}
 To: ${booking.destination.toUpperCase()}
 Journey Date: ${journeyDateFormatted}
-Day of Journey: ${format(new Date(booking.journeyDate + 'T12:00:00'), "EEEE")} 
+Day of Journey: ${dayOfWeek} 
 Book By: ${bookingDateFormatted}
 Class: ${booking.classType}
 Passengers:
@@ -248,7 +260,7 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-muted-foreground" />
-            <span className="font-medium">Passengers:</span>
+            <span className="font-semibold">Passengers:</span>
           </div>
           {booking.passengers.map((passenger, index) => (
             <div key={index} className="ml-6 text-sm">
