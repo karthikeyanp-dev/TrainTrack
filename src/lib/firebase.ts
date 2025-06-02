@@ -4,10 +4,14 @@ import { getFirestore, type Firestore } from "firebase/firestore";
 // import { getAuth } from "firebase/auth"; // If you need auth later
 // import { getStorage } from "firebase/storage"; // If you need storage later
 
+// These environment variables determine which Firebase project your app connects to.
+// To use a different Firebase project (e.g., for testing/development vs. production),
+// set these variables accordingly in your environment (e.g., in a .env.local file).
+// The NEXT_PUBLIC_FIREBASE_PROJECT_ID is particularly crucial for selecting the correct Firestore database.
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID, // Determines the Firestore database
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
@@ -31,13 +35,13 @@ const missingKeys = requiredConfigKeys.filter(key => !firebaseConfig[key]);
 
 if (missingKeys.length > 0) {
   console.error(
-    `Firebase configuration is missing or incomplete. Please check your .env file. Missing keys: ${missingKeys.join(", ")}. Ensure all NEXT_PUBLIC_FIREBASE_ variables are set.`
+    `Firebase configuration is missing or incomplete. Please check your .env file or .env.local for overrides. Missing keys: ${missingKeys.join(", ")}. Ensure all NEXT_PUBLIC_FIREBASE_ variables are set.`
   );
   // Firebase will not be initialized, db will remain null.
 } else {
   if (!getApps().length) {
     try {
-      console.log("Initializing Firebase app...");
+      console.log(`Initializing Firebase app for project: ${firebaseConfig.projectId}...`);
       app = initializeApp(firebaseConfig);
       db = getFirestore(app);
       console.log("Firebase initialized successfully and Firestore instance obtained.");
@@ -48,8 +52,16 @@ if (missingKeys.length > 0) {
       db = null;
     }
   } else {
-    console.log("Firebase app already exists. Getting instance...");
     app = getApps()[0];
+    // Ensure the existing app is for the intended project ID, especially if .env variables changed.
+    // However, Next.js typically requires a server restart for .env changes to take full effect,
+    // which would lead to a new initialization if the projectId changed.
+    // For simplicity, we'll log the project ID it's currently using.
+    console.log(`Using existing Firebase app instance. Configured Project ID for this instance: ${app.options.projectId}. Target Project ID from env: ${firebaseConfig.projectId}`);
+    if (app.options.projectId !== firebaseConfig.projectId) {
+        console.warn(`Mismatch between existing Firebase app's project ID (${app.options.projectId}) and target project ID in environment variables (${firebaseConfig.projectId}). A server restart might be needed for changes to environment variables to fully apply.`);
+    }
+    
     if (app) {
       try {
         db = getFirestore(app);
