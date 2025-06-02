@@ -63,17 +63,23 @@ export function BookingCard({ booking }: BookingCardProps) {
   const formatDate = useCallback((dateString: string): string => {
     if (!dateString) return 'N/A';
     try {
+      // Check if the dateString is already in "YYYY-MM-DD" format.
+      // If so, parse it carefully to avoid timezone shifts from direct `new Date(string)` constructor.
       if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
         const [year, month, day] = dateString.split('-').map(Number);
-        const localDate = new Date(year, month - 1, day, 12);
+        // Construct as UTC to represent the calendar day, then format.
+        // Or, if it needs to be local, construct as new Date(year, monthIndex, day, 12) to avoid midnight issues.
+        // For "PPP" format, local interpretation is usually desired for a "calendar day"
+        const localDate = new Date(year, month - 1, day, 12); // Noon to avoid timezone shifting date
         return format(localDate, "PPP");
       }
+      // For full ISO strings or other recognized formats
       const date = new Date(dateString);
       if (isNaN(date.getTime())) {
         console.warn(`[BookingCard] Invalid timestamp string: ${dateString}`);
         return 'Invalid Date';
       }
-      return format(date, "PPP");
+      return format(date, "PPP"); // e.g., May 18, 2024
     } catch (error) {
       console.error(`[BookingCard] Error formatting date "${dateString}":`, error);
       return 'Error Date';
@@ -81,6 +87,7 @@ export function BookingCard({ booking }: BookingCardProps) {
   }, []);
 
   useEffect(() => {
+    // Client-side formatting to avoid hydration mismatch
     setClientFormattedCreatedAt(formatDate(booking.createdAt));
     setClientFormattedUpdatedAt(formatDate(booking.updatedAt));
   }, [booking.createdAt, booking.updatedAt, formatDate]);
@@ -169,7 +176,7 @@ export function BookingCard({ booking }: BookingCardProps) {
   };
 
   const handleShare = async () => {
-    const passengerDetailsText = booking.passengers.map(p => `${p.name} ${p.age} ${p.gender.toUpperCase()}`).join('\n');
+    const passengerDetailsText = booking.passengers.map((p, index) => `${index + 1}. ${p.name} ${p.age} ${p.gender.toUpperCase()}`).join('\n');
     const journeyDateFormatted = formatDate(booking.journeyDate);
     const bookingDateFormatted = formatDate(booking.bookingDate);
     
@@ -267,13 +274,13 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
         )}
         <div className="flex items-center gap-2">
           {getStatusIcon(booking.status)}
-          <span>Created: {clientFormattedCreatedAt || "..."}</span>
+          <span>Created: {clientFormattedCreatedAt}</span>
         </div>
       </CardContent>
       <CardFooter className="flex flex-col items-stretch gap-3 pt-4 border-t">
         <div className="flex justify-between items-center">
             <div className="text-xs text-muted-foreground">
-            Last updated: {clientFormattedUpdatedAt || "..."}
+            Last updated: {clientFormattedUpdatedAt}
             </div>
             <div className="flex gap-1">
             <TooltipProvider>
