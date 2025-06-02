@@ -149,7 +149,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
         title: isEditMode ? "Booking Updated!" : "Booking Request Added!",
         description: `Request for ${result.booking.userName} from ${result.booking.source} to ${result.booking.destination} ${isEditMode ? 'updated' : 'saved'}.`,
       });
-      router.push("/"); // Navigate to home, revalidatePath from server action should handle refresh
+      router.push("/"); 
     } else {
       let errorToastMessage = "An unexpected error occurred. Please try again.";
       if (result.errors) {
@@ -500,11 +500,21 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             </FormItem>
           )}
         />
-
-        <Button type="submit" className="w-full md:w-auto" disabled={isSubmitting}>
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          {isSubmitting ? (isEditMode ? "Updating..." : "Saving Request...") : (isEditMode ? "Update Booking" : "Save Booking Request")}
-        </Button>
+        <div className="flex flex-wrap gap-4">
+          <Button type="submit" className="w-full sm:w-auto" disabled={isSubmitting}>
+            {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {isSubmitting ? (isEditMode ? "Updating..." : "Saving Request...") : (isEditMode ? "Update Booking" : "Save Booking Request")}
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => router.back()}
+            className="w-full sm:w-auto"
+            disabled={isSubmitting}
+          >
+            Cancel
+          </Button>
+        </div>
       </form>
     </Form>
   );
