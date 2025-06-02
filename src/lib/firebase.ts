@@ -5,23 +5,25 @@ import { getFirestore, type Firestore } from "firebase/firestore";
 // import { getStorage } from "firebase/storage"; // If you need storage later
 
 // These environment variables determine which Firebase project your app connects to.
-// To use a different Firebase project (e.g., for testing/development vs. production),
-// set these variables accordingly in your environment (e.g., in a .env.local file).
-// The NEXT_PUBLIC_FIREBASE_PROJECT_ID is particularly crucial for selecting the correct Firestore database.
+// The NEXT_PUBLIC_FIREBASE_PROJECT_ID is crucial for selecting the correct Firebase project.
+// The NEXT_PUBLIC_FIREBASE_DATABASE_ID (optional) allows specifying a named Firestore database
+// instance within that project (e.g., for testing). If not provided, it connects to the '(default)' database.
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID, // Determines the Firestore database
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
   storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
   messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID, // Optional
 };
 
+const targetDatabaseId = process.env.NEXT_PUBLIC_FIREBASE_DATABASE_ID || "(default)";
+
 let app: FirebaseApp | undefined = undefined;
 let db: Firestore | null = null;
 
-// Check if all firebase config values are present
+// Check if all required firebase config values are present
 const requiredConfigKeys: (keyof typeof firebaseConfig)[] = [
   "apiKey",
   "authDomain",
@@ -43,20 +45,16 @@ if (missingKeys.length > 0) {
     try {
       console.log(`Initializing Firebase app for project: ${firebaseConfig.projectId}...`);
       app = initializeApp(firebaseConfig);
-      db = getFirestore(app);
-      console.log("Firebase initialized successfully and Firestore instance obtained.");
+      console.log(`Attempting to connect to Firestore database ID: '${targetDatabaseId}' within project '${firebaseConfig.projectId}'.`);
+      db = getFirestore(app, targetDatabaseId);
+      console.log(`Firebase initialized successfully. Firestore instance obtained for database ID: '${targetDatabaseId}'.`);
     } catch (error) {
-      console.error("Firebase initialization failed:", error);
-      // app might be partially initialized or undefined, db remains null
-      app = undefined; // Ensure app is undefined on error
+      console.error(`Firebase initialization or Firestore connection to database ID '${targetDatabaseId}' failed:`, error);
+      app = undefined;
       db = null;
     }
   } else {
     app = getApps()[0];
-    // Ensure the existing app is for the intended project ID, especially if .env variables changed.
-    // However, Next.js typically requires a server restart for .env changes to take full effect,
-    // which would lead to a new initialization if the projectId changed.
-    // For simplicity, we'll log the project ID it's currently using.
     console.log(`Using existing Firebase app instance. Configured Project ID for this instance: ${app.options.projectId}. Target Project ID from env: ${firebaseConfig.projectId}`);
     if (app.options.projectId !== firebaseConfig.projectId) {
         console.warn(`Mismatch between existing Firebase app's project ID (${app.options.projectId}) and target project ID in environment variables (${firebaseConfig.projectId}). A server restart might be needed for changes to environment variables to fully apply.`);
@@ -64,16 +62,16 @@ if (missingKeys.length > 0) {
     
     if (app) {
       try {
-        db = getFirestore(app);
-        console.log("Firestore instance obtained from existing Firebase app.");
+        console.log(`Attempting to connect to Firestore database ID: '${targetDatabaseId}' using existing app.`);
+        db = getFirestore(app, targetDatabaseId);
+        console.log(`Firestore instance obtained for database ID: '${targetDatabaseId}' from existing Firebase app.`);
       } catch (error) {
-        console.error("Failed to get Firestore from existing Firebase app:", error);
-        db = null; // Ensure db is null on error
+        console.error(`Failed to get Firestore for database ID '${targetDatabaseId}' from existing Firebase app:`, error);
+        db = null;
       }
     } else {
-      // This case should ideally not happen if getApps().length > 0
       console.error("Firebase getApps() returned an array, but the first element was not a valid app instance.");
-      db = null; // Ensure db is null
+      db = null;
     }
   }
 }
