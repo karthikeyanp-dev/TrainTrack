@@ -59,27 +59,23 @@ export function BookingCard({ booking }: BookingCardProps) {
 
   const [clientFormattedCreatedAt, setClientFormattedCreatedAt] = useState<string | null>(null);
   const [clientFormattedUpdatedAt, setClientFormattedUpdatedAt] = useState<string | null>(null);
+  const [clientFormattedJourneyDate, setClientFormattedJourneyDate] = useState<string | null>(null);
+  const [clientFormattedBookingDate, setClientFormattedBookingDate] = useState<string | null>(null);
 
   const formatDate = useCallback((dateString: string): string => {
     if (!dateString) return 'N/A';
     try {
-      // Check if the dateString is already in "YYYY-MM-DD" format.
-      // If so, parse it carefully to avoid timezone shifts from direct `new Date(string)` constructor.
       if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
         const [year, month, day] = dateString.split('-').map(Number);
-        // Construct as UTC to represent the calendar day, then format.
-        // Or, if it needs to be local, construct as new Date(year, monthIndex, day, 12) to avoid midnight issues.
-        // For "PPP" format, local interpretation is usually desired for a "calendar day"
-        const localDate = new Date(year, month - 1, day, 12); // Noon to avoid timezone shifting date
+        const localDate = new Date(year, month - 1, day, 12); 
         return format(localDate, "PPP");
       }
-      // For full ISO strings or other recognized formats
       const date = new Date(dateString);
       if (isNaN(date.getTime())) {
         console.warn(`[BookingCard] Invalid timestamp string: ${dateString}`);
         return 'Invalid Date';
       }
-      return format(date, "PPP"); // e.g., May 18, 2024
+      return format(date, "PPP"); 
     } catch (error) {
       console.error(`[BookingCard] Error formatting date "${dateString}":`, error);
       return 'Error Date';
@@ -87,10 +83,11 @@ export function BookingCard({ booking }: BookingCardProps) {
   }, []);
 
   useEffect(() => {
-    // Client-side formatting to avoid hydration mismatch
     setClientFormattedCreatedAt(formatDate(booking.createdAt));
     setClientFormattedUpdatedAt(formatDate(booking.updatedAt));
-  }, [booking.createdAt, booking.updatedAt, formatDate]);
+    setClientFormattedJourneyDate(formatDate(booking.journeyDate));
+    setClientFormattedBookingDate(formatDate(booking.bookingDate));
+  }, [booking.createdAt, booking.updatedAt, booking.journeyDate, booking.bookingDate, formatDate]);
 
 
   const statusUpdateMutation = useMutation({
@@ -177,8 +174,8 @@ export function BookingCard({ booking }: BookingCardProps) {
 
   const handleShare = async () => {
     const passengerDetailsText = booking.passengers.map((p, index) => `${index + 1}. ${p.name} ${p.age} ${p.gender.toUpperCase()}`).join('\n');
-    const journeyDateFormatted = formatDate(booking.journeyDate);
-    const bookingDateFormatted = formatDate(booking.bookingDate);
+    const journeyDateFormatted = clientFormattedJourneyDate || formatDate(booking.journeyDate);
+    const bookingDateFormatted = clientFormattedBookingDate || formatDate(booking.bookingDate);
     
     const bookingDetailsText = `
 Train Booking Details:
@@ -241,11 +238,11 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
       <CardContent className="space-y-3 text-sm flex-grow">
         <div className="flex items-center gap-2">
           <CalendarDays className="h-4 w-4 text-muted-foreground" />
-          <span>Journey: {formatDate(booking.journeyDate)}</span>
+          <span><span className="font-semibold">Journey:</span> {clientFormattedJourneyDate || "..."}</span>
         </div>
         <div className="flex items-center gap-2">
           <CalendarDays className="h-4 w-4 text-muted-foreground" />
-          <span>Book by: {formatDate(booking.bookingDate)}</span>
+          <span><span className="font-semibold">Book by:</span> {clientFormattedBookingDate || "..."}</span>
         </div>
 
         <div className="space-y-1">
@@ -263,24 +260,24 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
         {booking.trainPreference && (
           <div className="flex items-start gap-2">
             <Train className="h-4 w-4 text-muted-foreground mt-0.5" />
-            <span className="flex-1">Train Pref: {booking.trainPreference}</span>
+            <span className="flex-1"><span className="font-semibold">Train Pref:</span> {booking.trainPreference}</span>
           </div>
         )}
         {booking.timePreference && (
           <div className="flex items-start gap-2">
             <Clock className="h-4 w-4 text-muted-foreground mt-0.5" />
-            <span className="flex-1">Time Pref: {booking.timePreference}</span>
+            <span className="flex-1"><span className="font-semibold">Time Pref:</span> {booking.timePreference}</span>
           </div>
         )}
         <div className="flex items-center gap-2">
           {getStatusIcon(booking.status)}
-          <span>Created: {clientFormattedCreatedAt}</span>
+          <span><span className="font-semibold">Created:</span> {clientFormattedCreatedAt || "..."}</span>
         </div>
       </CardContent>
       <CardFooter className="flex flex-col items-stretch gap-3 pt-4 border-t">
         <div className="flex justify-between items-center">
             <div className="text-xs text-muted-foreground">
-            Last updated: {clientFormattedUpdatedAt}
+            <span className="font-semibold">Last updated:</span> {clientFormattedUpdatedAt || "..."}
             </div>
             <div className="flex gap-1">
             <TooltipProvider>
@@ -397,3 +394,4 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
     </Card>
   );
 }
+
