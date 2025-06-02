@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { TrainFront, Lightbulb, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 
 interface AppShellProps {
   children: ReactNode;
@@ -17,13 +18,14 @@ export function AppShell({ children, showAddButton = false }: AppShellProps) {
             <TrainFront className="h-7 w-7 text-primary" />
             <span className="text-xl font-bold">TrainTrack</span>
           </Link>
-          <nav className="flex items-center gap-4">
+          <nav className="flex items-center gap-2">
             {/* <Button variant="ghost" asChild>
               <Link href="/suggestions" className="flex items-center gap-1">
                 <Lightbulb className="h-4 w-4" />
                 Suggestions
               </Link>
             </Button> */}
+            <ThemeSwitcher />
           </nav>
         </div>
       </header>

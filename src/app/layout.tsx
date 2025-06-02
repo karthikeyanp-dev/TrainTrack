@@ -3,6 +3,7 @@ import { Open_Sans } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
 import type { ReactNode } from 'react';
+import { ThemeProvider } from 'next-themes';
 
 const openSans = Open_Sans({
   subsets: ['latin'],
@@ -24,9 +25,16 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body className={`${openSans.variable} font-sans antialiased`}>
-        <section id="main" className='max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8'>
-          <Providers>{children}</Providers>
-        </section>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="system"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <section id="main" className='max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8'>
+            <Providers>{children}</Providers>
+          </section>
+        </ThemeProvider>
       </body>
     </html>
   );
