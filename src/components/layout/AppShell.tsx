@@ -1,10 +1,10 @@
 
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import Link from "next/link";
-import { TrainFront, Plus } from "lucide-react";
+import { TrainFront, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
-import { SearchBarClient } from "./SearchBarClient"; // Added import
+import { SearchBarClient } from "./SearchBarClient";
 
 interface AppShellProps {
   children: ReactNode;
@@ -12,6 +12,12 @@ interface AppShellProps {
 }
 
 export function AppShell({ children, showAddButton = false }: AppShellProps) {
+  const searchBarFallback = (
+    <Button variant="ghost" size="icon" disabled aria-label="Loading search">
+      <Search className="h-5 w-5 opacity-50" />
+    </Button>
+  );
+
   return (
     <div className="flex min-h-screen flex-col">
       <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -21,7 +27,9 @@ export function AppShell({ children, showAddButton = false }: AppShellProps) {
             <span className="text-xl font-bold">TrainTrack</span>
           </Link>
           <nav className="flex items-center gap-1 sm:gap-2">
-            <SearchBarClient /> 
+            <Suspense fallback={searchBarFallback}>
+              <SearchBarClient />
+            </Suspense>
             <ThemeSwitcher />
           </nav>
         </div>
