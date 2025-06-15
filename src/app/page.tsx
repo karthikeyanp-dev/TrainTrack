@@ -1,5 +1,5 @@
 
-export const dynamic = 'force-dynamic'; // Ensures the page is re-rendered on every request
+export const dynamic = 'force-dynamic'; 
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { BookingList } from "@/components/bookings/BookingList";
@@ -9,13 +9,12 @@ import { AppShell } from "@/components/layout/AppShell";
 import { Suspense } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Search } from "lucide-react";
 import { DateGroupHeading } from "@/components/bookings/DateGroupHeading";
 
-// Helper function to group bookings by date
 const groupBookingsByDate = (bookings: Booking[]): Record<string, Booking[]> => {
   return bookings.reduce((acc, booking) => {
-    const dateKey = booking.bookingDate; // Group by bookingDate
+    const dateKey = booking.bookingDate; 
     if (!acc[dateKey]) {
       acc[dateKey] = [];
     }
@@ -26,15 +25,31 @@ const groupBookingsByDate = (bookings: Booking[]): Record<string, Booking[]> => 
 
 const SL_CLASSES: TrainClass[] = ["SL", "UR", "2S"];
 
-async function BookingsDisplay() {
-  const allBookings = await getBookings();
+async function BookingsDisplay({ searchQuery }: { searchQuery?: string }) {
+  let allBookings = await getBookings();
 
-  // Filter for pending: status is "Requested"
+  if (searchQuery && searchQuery.trim() !== "") {
+    const lowercasedQuery = searchQuery.trim().toLowerCase();
+    allBookings = allBookings.filter(booking => {
+      const passengerMatch = booking.passengers.some(p =>
+        p.name.toLowerCase().includes(lowercasedQuery)
+      );
+      return (
+        passengerMatch ||
+        booking.userName.toLowerCase().includes(lowercasedQuery) ||
+        booking.source.toLowerCase().includes(lowercasedQuery) ||
+        booking.destination.toLowerCase().includes(lowercasedQuery) ||
+        booking.classType.toLowerCase().includes(lowercasedQuery) ||
+        (booking.trainPreference && booking.trainPreference.toLowerCase().includes(lowercasedQuery)) ||
+        (booking.timePreference && booking.timePreference.toLowerCase().includes(lowercasedQuery))
+      );
+    });
+  }
+
   const pendingBookingsRaw = allBookings
     .filter(booking => booking.status === "Requested")
     .sort((a, b) => new Date(a.journeyDate).getTime() - new Date(b.journeyDate).getTime());
 
-  // Filter for completed: status is NOT "Requested"
   const completedBookingsRaw = allBookings
     .filter(booking => booking.status !== "Requested")
     .sort((a, b) => new Date(b.journeyDate).getTime() - new Date(a.journeyDate).getTime());
@@ -64,13 +79,19 @@ async function BookingsDisplay() {
           </div>
         )}
         {acBookings.length === 0 && slBookings.length === 0 && bookingsForDate.length > 0 && (
-           // This case should ideally not be hit if bookingsForDate has items,
-           // but as a fallback, render all if somehow not categorized.
           <BookingList bookings={bookingsForDate} />
         )}
       </>
     );
   };
+  
+  const noPendingMessage = searchQuery 
+    ? "No pending bookings found matching your search."
+    : "No bookings are currently in 'Requested' status. Add a new one!";
+  const noCompletedMessage = searchQuery
+    ? "No completed bookings found matching your search."
+    : "No bookings have been marked as 'Booked', 'Missed', 'Booking Failed', or 'User Cancelled' yet.";
+
 
   return (
     <Tabs defaultValue="pending" className="w-full">
@@ -83,9 +104,9 @@ async function BookingsDisplay() {
         <h2 className="text-2xl font-semibold mb-4">Pending Bookings</h2>
         {pendingDates.length === 0 ? (
           <Alert className="mt-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>No Pending Bookings</AlertTitle>
-            <AlertDescription>No bookings are currently in 'Requested' status. Add a new one!</AlertDescription>
+            {searchQuery ? <Search className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+            <AlertTitle>{searchQuery ? "Search Results" : "No Pending Bookings"}</AlertTitle>
+            <AlertDescription>{noPendingMessage}</AlertDescription>
           </Alert>
         ) : (
           pendingDates.map(date => (
@@ -101,9 +122,9 @@ async function BookingsDisplay() {
         <h2 className="text-2xl font-semibold mb-4">Completed Bookings</h2>
         {completedDates.length === 0 ? (
           <Alert className="mt-4">
-            <AlertCircle className="h-4 w-4" />
-            <AlertTitle>No Completed Bookings</AlertTitle>
-            <AlertDescription>No bookings have been marked as 'Booked', 'Missed', 'Booking Failed', or 'User Cancelled' yet.</AlertDescription>
+            {searchQuery ? <Search className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+            <AlertTitle>{searchQuery ? "Search Results" : "No Completed Bookings"}</AlertTitle>
+            <AlertDescription>{noCompletedMessage}</AlertDescription>
           </Alert>
         ) : (
           completedDates.map(date => (
@@ -125,21 +146,18 @@ function BookingsLoadingSkeleton() {
         <Skeleton className="h-10 w-1/2 md:w-[200px]" />
         <Skeleton className="h-10 w-1/2 md:w-[200px]" />
       </div>
-      <Skeleton className="h-8 w-48 mb-4" /> {/* Title skeleton */}
+      <Skeleton className="h-8 w-48 mb-4" />
       
-      {/* Skeleton for one date group */}
       <div className="space-y-6">
-        <Skeleton className="h-7 w-1/3 mb-3" /> {/* Date heading skeleton */}
-        {/* AC Bookings Skeleton */}
+        <Skeleton className="h-7 w-1/3 mb-3" /> 
         <div className="space-y-3">
-            <Skeleton className="h-6 w-1/4" /> {/* AC Bookings title skeleton */}
+            <Skeleton className="h-6 w-1/4" />
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <CardSkeleton />
             </div>
         </div>
-        {/* SL Bookings Skeleton */}
         <div className="space-y-3 mt-4">
-            <Skeleton className="h-6 w-1/4" /> {/* SL Bookings title skeleton */}
+            <Skeleton className="h-6 w-1/4" />
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 <CardSkeleton />
                 <CardSkeleton />
@@ -173,11 +191,13 @@ function CardSkeleton() {
   );
 }
 
-export default function HomePage() {
+export default function HomePage({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined }}) {
+  const searchQuery = typeof searchParams?.search === 'string' ? searchParams.search : undefined;
+  
   return (
     <AppShell showAddButton={true}>
       <Suspense fallback={<BookingsLoadingSkeleton />}>
-        <BookingsDisplay />
+        <BookingsDisplay searchQuery={searchQuery} />
       </Suspense>
     </AppShell>
   );
