@@ -67,14 +67,14 @@ export function SearchBarClient() {
   }
 
   return (
-    <div className="flex items-center gap-1 sm:gap-2">
-      <form onSubmit={handleSearchSubmit} className="flex items-center gap-1 sm:gap-2">
+    <div className="flex items-center flex-grow gap-1 sm:flex-grow-0 sm:w-auto sm:gap-2">
+      <form onSubmit={handleSearchSubmit} className="flex items-center flex-grow gap-1 sm:gap-2">
         <Input
           type="search"
           placeholder="Search..."
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          className="h-9 w-32 sm:w-40 md:w-56"
+          className="h-9 w-full sm:w-40 md:w-56"
           autoFocus
         />
         <Button type="submit" variant="ghost" size="icon" aria-label="Submit search">
@@ -87,3 +87,4 @@ export function SearchBarClient() {
     </div>
   );
 }
+
