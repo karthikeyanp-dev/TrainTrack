@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect, type FormEvent } from 'react';
@@ -10,19 +9,19 @@ import { Search, X } from 'lucide-react';
 export function SearchBarClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const currentSearchQuery = searchParams.get('search');
 
-  const [isExpanded, setIsExpanded] = useState(!!currentSearchQuery);
-  const [inputValue, setInputValue] = useState(currentSearchQuery || '');
+  // Initialize state to be consistent on server and client to avoid hydration errors.
+  // The state will be synced with the URL search query in the useEffect hook.
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [inputValue, setInputValue] = useState('');
 
   useEffect(() => {
+    const currentSearchQuery = searchParams.get('search');
     setInputValue(currentSearchQuery || '');
     if (currentSearchQuery) {
       setIsExpanded(true);
     }
-    // We don't want to collapse if currentSearchQuery becomes null
-    // due to other navigation, only on explicit user action.
-  }, [currentSearchQuery]);
+  }, [searchParams]);
 
   const handleSearchSubmit = (e?: FormEvent<HTMLFormElement>) => {
     e?.preventDefault();
@@ -31,29 +30,24 @@ export function SearchBarClient() {
       router.push(`/?search=${encodeURIComponent(trimmedValue)}`);
     } else {
       router.push('/');
-      // setIsExpanded(false); // Optional: collapse on empty search submit
-    }
-  };
-
-  const toggleExpansion = () => {
-    const nextIsExpanded = !isExpanded;
-    setIsExpanded(nextIsExpanded);
-
-    if (!nextIsExpanded && currentSearchQuery) {
-      // If collapsing and a search query was active, clear it
-      router.push('/');
-      setInputValue('');
-    } else if (nextIsExpanded && currentSearchQuery) {
-      // If expanding and there's a query, ensure input is populated
-      setInputValue(currentSearchQuery);
     }
   };
   
   const clearSearchAndCollapse = () => {
     setInputValue('');
     setIsExpanded(false);
-    if (currentSearchQuery) {
+    if (searchParams.get('search')) {
         router.push('/');
+    }
+  };
+
+  const toggleExpansion = () => {
+    const nextState = !isExpanded;
+    setIsExpanded(nextState);
+    
+    // If we are collapsing the bar by clicking the search icon, clear any active search
+    if (!nextState) {
+        clearSearchAndCollapse();
     }
   };
 
@@ -87,4 +81,3 @@ export function SearchBarClient() {
     </div>
   );
 }
-
