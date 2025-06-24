@@ -6,7 +6,7 @@ import { ALL_TRAIN_CLASSES, ALL_PASSENGER_GENDERS } from "@/types/booking";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, Timestamp, type DocumentSnapshot, type DocumentData } from "firebase/firestore";
+import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, Timestamp, type DocumentSnapshot, type DocumentData, limit, startAfter } from "firebase/firestore";
 
 const PassengerSchema = z.object({
   name: z.string().min(1, "Passenger name is required."),
@@ -323,6 +323,56 @@ export async function updateBookingStatus(id: string, status: BookingStatus): Pr
   }
 }
 
+export async function getBookingsPaginated({
+  lastCreatedAt,
+  limitCount,
+}: {
+  lastCreatedAt: string | null;
+  limitCount: number;
+}): Promise<{ bookings: Booking[]; nextCursor: string | null; hasMore: boolean }> {
+  try {
+    if (!db) {
+      console.error("[Firestore Error] In getBookingsPaginated: Firestore db instance is not available.");
+      return { bookings: [], nextCursor: null, hasMore: false };
+    }
+    const bookingsCollection = collection(db, "bookings");
+    
+    let q;
+    const baseQuery = [orderBy("createdAt", "desc"), limit(limitCount)];
+
+    if (lastCreatedAt) {
+      const lastTimestamp = Timestamp.fromDate(new Date(lastCreatedAt));
+      q = query(bookingsCollection, ...baseQuery, startAfter(lastTimestamp));
+    } else {
+      q = query(bookingsCollection, ...baseQuery);
+    }
+    
+    const querySnapshot = await getDocs(q);
+    
+    const bookings = querySnapshot.docs.map(doc => {
+      try {
+        return mapDocToBooking(doc, doc.id);
+      } catch (mapError) {
+        console.error(`[Mapping Error] Failed to map document ${doc.id}:`, mapError instanceof Error ? mapError.message : String(mapError));
+        return null;
+      }
+    }).filter(booking => booking !== null) as Booking[];
+    
+    const lastVisibleDoc = querySnapshot.docs[querySnapshot.docs.length - 1];
+    const nextCursor = lastVisibleDoc ? toISOStringSafe(lastVisibleDoc.data().createdAt, 'createdAt', lastVisibleDoc.id) : null;
+
+    return {
+      bookings,
+      nextCursor,
+      hasMore: bookings.length === limitCount,
+    };
+  } catch (error) {
+    console.error("[Firestore Error] In getBookingsPaginated:", error instanceof Error ? error.message : String(error));
+    return { bookings: [], nextCursor: null, hasMore: false };
+  }
+}
+
+
 export async function getAllBookingsAsJsonString(): Promise<string> {
   try {
     const currentBookings = await getBookings();
@@ -342,6 +392,3 @@ export async function getAllBookingsAsJsonString(): Promise<string> {
     return JSON.stringify([]);
   }
 }
-
-
-    
