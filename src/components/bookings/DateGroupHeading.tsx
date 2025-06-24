@@ -18,11 +18,11 @@ export function DateGroupHeading({ dateString }: DateGroupHeadingProps) {
     const localDateAtMidnight = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
 
     if (isToday(localDateAtMidnight)) {
-      setDisplayDate("Today");
+      setDisplayDate(`Today (${format(localDateAtMidnight, "EEEE")})`);
     } else if (isTomorrow(localDateAtMidnight)) {
-      setDisplayDate("Tomorrow");
+      setDisplayDate(`Tomorrow (${format(localDateAtMidnight, "EEEE")})`);
     } else {
-      setDisplayDate(format(localDateAtMidnight, "PPP")); // e.g., "Jul 20, 2024"
+      setDisplayDate(format(localDateAtMidnight, "PPP (EEEE)")); // e.g., "Jul 20, 2024 (Saturday)"
     }
   }, [dateString]);
 
