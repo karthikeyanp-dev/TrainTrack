@@ -18,6 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { CalendarIcon, Loader2, UserPlus, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -425,20 +426,24 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Gender</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value ?? undefined} >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select gender" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
+                      <FormControl>
+                        <RadioGroup
+                          onValueChange={field.onChange}
+                          value={field.value ?? undefined}
+                          className="flex items-center space-x-4 pt-2"
+                        >
                           {ALL_PASSENGER_GENDERS.map((gender) => (
-                            <SelectItem key={gender} value={gender}>
-                              {gender === 'M' ? 'Male' : gender === 'F' ? 'Female' : 'Other'}
-                            </SelectItem>
+                            <FormItem key={gender} className="flex items-center space-x-2 space-y-0">
+                              <FormControl>
+                                <RadioGroupItem value={gender} id={`${field.name}-${gender}`} />
+                              </FormControl>
+                              <FormLabel htmlFor={`${field.name}-${gender}`} className="font-normal cursor-pointer">
+                                {gender === 'M' ? 'Male' : gender === 'F' ? 'Female' : 'Other'}
+                              </FormLabel>
+                            </FormItem>
                           ))}
-                        </SelectContent>
-                      </Select>
+                        </RadioGroup>
+                      </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
@@ -519,5 +524,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
     </Form>
   );
 }
+
+    
 
     
