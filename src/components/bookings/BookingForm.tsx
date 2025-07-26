@@ -66,8 +66,6 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
   const [bookingDatePopoverOpen, setBookingDatePopoverOpen] = useState(false);
   const isEditMode = !!bookingId;
 
-  const defaultPassengerValue: Partial<Passenger> = { name: "", age: undefined, gender: undefined };
-
   const form = useForm<FormValues>({
     resolver: zodResolver(bookingFormSchema),
     defaultValues: {
@@ -81,7 +79,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             age: p.age === undefined || p.age === null ? undefined : Number(p.age),
             gender: p.gender || undefined,
           }))
-        : [defaultPassengerValue],
+        : [{ name: "", age: undefined, gender: undefined }],
       bookingDate: initialData?.bookingDateObj,
       classType: initialData?.classType || undefined,
       trainPreference: initialData?.trainPreference || "",
@@ -107,7 +105,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
               age: p.age === undefined || p.age === null ? undefined : Number(p.age),
               gender: p.gender || undefined,
             }))
-          : [defaultPassengerValue],
+          : [{ name: "", age: undefined, gender: undefined }],
         bookingDate: initialData.bookingDateObj,
         classType: initialData.classType,
         trainPreference: initialData.trainPreference || "",
