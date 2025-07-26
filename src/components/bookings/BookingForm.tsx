@@ -524,5 +524,3 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
     </Form>
   );
 }
-
-    
