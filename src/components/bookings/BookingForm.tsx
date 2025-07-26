@@ -73,7 +73,13 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
       destination: initialData?.destination || "",
       journeyDate: initialData?.journeyDateObj,
       userName: initialData?.userName || "",
-      passengers: [{ name: "", age: undefined, gender: undefined }],
+      passengers: initialData?.passengers && initialData.passengers.length > 0
+          ? initialData.passengers.map(p => ({
+              name: p.name || "",
+              age: p.age === undefined || p.age === null ? undefined : Number(p.age),
+              gender: p.gender || undefined,
+            }))
+          : [{ name: "", age: undefined, gender: undefined }],
       bookingDate: initialData?.bookingDateObj,
       classType: initialData?.classType || undefined,
       trainPreference: initialData?.trainPreference || "",
@@ -85,28 +91,6 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
     control: form.control,
     name: "passengers",
   });
-
-  useEffect(() => {
-    if (initialData) {
-      form.reset({
-        source: initialData.source || "",
-        destination: initialData.destination || "",
-        journeyDate: initialData.journeyDateObj,
-        userName: initialData.userName || "",
-        passengers: initialData.passengers && initialData.passengers.length > 0
-          ? initialData.passengers.map(p => ({
-              name: p.name || "",
-              age: p.age === undefined || p.age === null ? undefined : Number(p.age),
-              gender: p.gender || undefined,
-            }))
-          : [{ name: "", age: undefined, gender: undefined }],
-        bookingDate: initialData.bookingDateObj,
-        classType: initialData.classType,
-        trainPreference: initialData.trainPreference || "",
-        timePreference: initialData.timePreference || "",
-      });
-    }
-  }, [initialData, form.reset]);
 
   const handleSwap = () => {
     const sourceValue = form.getValues("source");
