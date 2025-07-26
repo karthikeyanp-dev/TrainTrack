@@ -27,7 +27,7 @@ import type { BookingFormData, Passenger, PassengerGender, TrainClass } from "@/
 import { ALL_TRAIN_CLASSES, ALL_PASSENGER_GENDERS } from "@/types/booking";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Separator } from "@/components/ui/separator";
 
 const passengerSchema = z.object({
@@ -43,7 +43,7 @@ const bookingFormSchema = z.object({
   userName: z.string().min(2, { message: "User name must be at least 2 characters." }),
   passengers: z.array(passengerSchema).min(1, { message: "At least one passenger is required." })
     .refine(passengers => passengers.every(p => p.name && p.age !== undefined && p.gender), {
-      message: "All passenger details (name, age, gender) must be filled if a passenger entry is added.", // This message might not show directly on array, but per-field errors are better.
+      message: "All passenger details (name, age, gender) must be filled if a passenger entry is added.",
     }),
   bookingDate: z.date({ required_error: "Booking date is required." }),
   classType: z.enum(ALL_TRAIN_CLASSES, { required_error: "Train class is required." }),
@@ -108,11 +108,11 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
       bookingDate: format(values.bookingDate, "yyyy-MM-dd"),
       classType: values.classType as TrainClass,
       passengers: values.passengers
-        .filter(p => p.name && p.age !== undefined && p.gender) // Filter out potentially empty/incomplete passengers
+        .filter(p => p.name && p.age !== undefined && p.gender)
         .map(p => ({
-          name: p.name!, // Assert non-null as filtered
-          age: Number(p.age!), // Assert non-null as filtered
-          gender: p.gender!, // Assert non-null as filtered
+          name: p.name!,
+          age: Number(p.age!),
+          gender: p.gender!,
       })) as Passenger[],
       trainPreference: values.trainPreference || undefined,
       timePreference: values.timePreference || undefined,
@@ -137,7 +137,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
     } else {
       let errorToastMessage = "An unexpected error occurred. Please try again.";
       if (result.errors) {
-        const { formErrors, fieldErrors } = result.errors as any; // ZodError["formErrors"]
+        const { formErrors, fieldErrors } = result.errors as any;
 
         if (formErrors && formErrors.length > 0) {
           errorToastMessage = formErrors.join(" ");
@@ -274,7 +274,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                         field.onChange(date);
                         setJourneyDatePopoverOpen(false);
                       }}
-                      disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) && !isEditMode } // Allow past dates in edit mode for viewing
+                      disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) && !isEditMode }
                       initialFocus
                     />
                   </PopoverContent>
@@ -312,7 +312,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                         field.onChange(date);
                         setBookingDatePopoverOpen(false);
                       }}
-                      disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) && !isEditMode} // Allow past dates in edit mode for viewing
+                      disabled={(date) => date < new Date(new Date().setHours(0,0,0,0)) && !isEditMode}
                       initialFocus
                     />
                   </PopoverContent>
@@ -454,7 +454,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           <Button
             type="button"
             variant="outline"
-            onClick={() => append({ name: "", age: undefined, gender: undefined })}
+            onClick={() => append({ name: "", age: undefined, gender: undefined }, { shouldFocus: false })}
             className="mt-2"
           >
             <UserPlus className="mr-2 h-4 w-4" /> Add Passenger
@@ -524,3 +524,5 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
     </Form>
   );
 }
+
+    
