@@ -73,13 +73,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
       destination: initialData?.destination || "",
       journeyDate: initialData?.journeyDateObj,
       userName: initialData?.userName || "",
-      passengers: initialData?.passengers && initialData.passengers.length > 0
-        ? initialData.passengers.map(p => ({
-            name: p.name || "",
-            age: p.age === undefined || p.age === null ? undefined : Number(p.age),
-            gender: p.gender || undefined,
-          }))
-        : [{ name: "", age: undefined, gender: undefined }],
+      passengers: [{ name: "", age: undefined, gender: undefined }],
       bookingDate: initialData?.bookingDateObj,
       classType: initialData?.classType || undefined,
       trainPreference: initialData?.trainPreference || "",
@@ -112,7 +106,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
         timePreference: initialData.timePreference || "",
       });
     }
-  }, [initialData, form]);
+  }, [initialData, form.reset]);
 
   const handleSwap = () => {
     const sourceValue = form.getValues("source");
@@ -546,7 +540,3 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
     </Form>
   );
 }
-
-    
-
-    
