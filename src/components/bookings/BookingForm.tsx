@@ -32,7 +32,7 @@ import { Separator } from "@/components/ui/separator";
 
 const passengerSchema = z.object({
   name: z.string().min(2, { message: "Passenger name must be at least 2 characters." }),
-  age: z.coerce.number().positive({ message: "Age must be a positive number." }).max(120, { message: "Age seems too high."}).optional().or(z.literal(undefined)),
+  age: z.coerce.number().min(1, "Age must be at least 1.").max(150, { message: "Age must be 150 or less."}).optional().or(z.literal(undefined)),
   gender: z.enum(ALL_PASSENGER_GENDERS, { errorMap: () => ({ message: "Gender is required." }) }).optional().or(z.literal(undefined)),
 });
 
@@ -426,11 +426,18 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                       <FormLabel>Age</FormLabel>
                       <FormControl>
                         <Input
-                          type="number"
+                          type="text"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
                           placeholder="e.g., 30"
                           {...field}
                           value={field.value ?? ''}
-                          onChange={e => field.onChange(e.target.value === '' ? undefined : +e.target.value)}
+                          onChange={e => {
+                            const value = e.target.value;
+                            if (value === '' || /^[0-9]+$/.test(value)) {
+                                field.onChange(value === '' ? undefined : +value);
+                            }
+                          }}
                         />
                       </FormControl>
                       <FormMessage />
