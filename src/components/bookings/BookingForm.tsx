@@ -478,7 +478,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           <Button
             type="button"
             variant="outline"
-            onClick={() => append(defaultPassengerValue)}
+            onClick={() => append({ name: "", age: undefined, gender: undefined })}
             className="mt-2"
           >
             <UserPlus className="mr-2 h-4 w-4" /> Add Passenger
@@ -548,5 +548,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
     </Form>
   );
 }
+
+    
 
     
