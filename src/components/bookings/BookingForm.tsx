@@ -19,7 +19,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { CalendarIcon, Loader2, UserPlus, Users, X } from "lucide-react";
+import { ArrowRightLeft, CalendarIcon, Loader2, UserPlus, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { addBooking, updateBookingById } from "@/actions/bookingActions";
@@ -115,6 +115,13 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
       });
     }
   }, [initialData, form]);
+
+  const handleSwap = () => {
+    const sourceValue = form.getValues("source");
+    const destinationValue = form.getValues("destination");
+    form.setValue("source", destinationValue);
+    form.setValue("destination", sourceValue);
+  };
 
   async function onSubmit(values: FormValues) {
     setIsSubmitting(true);
@@ -212,43 +219,53 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             {form.formState.errors.root.serverError.message}
           </FormMessage>
         )}
-        <div className="grid md:grid-cols-2 gap-6">
-          <FormField
-            control={form.control}
-            name="source"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Source</FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="e.g., TEN"
-                    {...field}
-                    onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                    value={field.value || ''}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <FormField
-            control={form.control}
-            name="destination"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Destination</FormLabel>
-                <FormControl>
-                  <Input
-                    placeholder="e.g., MS"
-                    {...field}
-                    onChange={(e) => field.onChange(e.target.value.toUpperCase())}
-                    value={field.value || ''}
-                  />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+        <div className="flex flex-col md:flex-row items-center gap-2 md:gap-4">
+            <FormField
+              control={form.control}
+              name="source"
+              render={({ field }) => (
+                <FormItem className="w-full">
+                  <FormLabel>Source</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="e.g., TEN"
+                      {...field}
+                      onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                      value={field.value || ''}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={handleSwap}
+              className="mt-1 md:mt-5 self-center"
+              aria-label="Swap source and destination"
+            >
+              <ArrowRightLeft className="h-4 w-4" />
+            </Button>
+            <FormField
+              control={form.control}
+              name="destination"
+              render={({ field }) => (
+                <FormItem className="w-full">
+                  <FormLabel>Destination</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="e.g., MS"
+                      {...field}
+                      onChange={(e) => field.onChange(e.target.value.toUpperCase())}
+                      value={field.value || ''}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
         </div>
 
         <div className="grid md:grid-cols-2 gap-6">
@@ -524,7 +541,3 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
     </Form>
   );
 }
-
-    
-
-    
