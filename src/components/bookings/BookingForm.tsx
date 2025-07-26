@@ -454,7 +454,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           <Button
             type="button"
             variant="outline"
-            onClick={() => append({ name: "", age: undefined, gender: undefined }, { shouldFocus: false })}
+            onClick={() => append({ name: "", age: undefined, gender: undefined }, { shouldFocus: true })}
             className="mt-2"
           >
             <UserPlus className="mr-2 h-4 w-4" /> Add Passenger
