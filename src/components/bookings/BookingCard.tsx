@@ -197,6 +197,7 @@ To: ${booking.destination.toUpperCase()}
 Journey Date: ${journeyDateFormatted}
 Day of Journey: ${dayOfWeek} 
 Book By: ${bookingDateFormatted}
+Type: ${booking.bookingType}
 Class: ${booking.classType}
 Passengers:
 ${passengerDetailsText}
@@ -229,6 +230,8 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
       console.error("Failed to copy to clipboard:", err);
     });
   };
+  
+  const displayClass = `${booking.bookingType === 'Tatkal' ? 'T' : 'R'}-${booking.classType}`;
 
   return (
     <Card className="w-full shadow-md hover:shadow-lg transition-shadow duration-200 flex flex-col">
@@ -243,7 +246,7 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
           </div>
           <div className="flex flex-col items-end gap-1.5">
             <StatusBadge status={booking.status} />
-            <span className="text-3xl font-semibold text-primary">{booking.classType}</span>
+            <span className="text-3xl font-semibold text-primary">{displayClass}</span>
           </div>
         </div>
       </CardHeader>
@@ -406,4 +409,3 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
     </Card>
   );
 }
-

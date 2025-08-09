@@ -23,8 +23,8 @@ import { ArrowRightLeft, CalendarIcon, Loader2, UserPlus, Users, X } from "lucid
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { addBooking, updateBookingById } from "@/actions/bookingActions";
-import type { BookingFormData, Passenger, PassengerGender, TrainClass } from "@/types/booking";
-import { ALL_TRAIN_CLASSES, ALL_PASSENGER_GENDERS } from "@/types/booking";
+import type { BookingFormData, Passenger, PassengerGender, TrainClass, BookingType } from "@/types/booking";
+import { ALL_TRAIN_CLASSES, ALL_PASSENGER_GENDERS, ALL_BOOKING_TYPES } from "@/types/booking";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -37,6 +37,7 @@ const passengerSchema = z.object({
 });
 
 const bookingFormSchema = z.object({
+  bookingType: z.enum(ALL_BOOKING_TYPES, { required_error: "Booking type is required." }),
   source: z.string().min(2, { message: "Source must be at least 2 characters." }),
   destination: z.string().min(2, { message: "Destination must be at least 2 characters." }),
   journeyDate: z.date({ required_error: "Journey date is required." }),
@@ -70,12 +71,9 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
     resolver: zodResolver(bookingFormSchema),
     defaultValues: initialData
       ? {
-          source: initialData.source,
-          destination: initialData.destination,
+          ...initialData,
           journeyDate: initialData.journeyDateObj,
           bookingDate: initialData.bookingDateObj,
-          userName: initialData.userName,
-          classType: initialData.classType,
           trainPreference: initialData.trainPreference || "",
           timePreference: initialData.timePreference || "",
           passengers: initialData.passengers?.map(p => ({
@@ -85,6 +83,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           })),
         }
       : {
+          bookingType: "Regular",
           source: "",
           destination: "",
           userName: "",
@@ -203,6 +202,34 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             {form.formState.errors.root.serverError.message}
           </FormMessage>
         )}
+
+        <FormField
+          control={form.control}
+          name="bookingType"
+          render={({ field }) => (
+            <FormItem className="space-y-3">
+              <FormLabel>Type</FormLabel>
+              <FormControl>
+                <RadioGroup
+                  onValueChange={field.onChange}
+                  defaultValue={field.value}
+                  className="flex flex-col space-y-1 md:flex-row md:space-y-0 md:space-x-4"
+                >
+                  {ALL_BOOKING_TYPES.map((type) => (
+                     <FormItem key={type} className="flex items-center space-x-3 space-y-0">
+                        <FormControl>
+                          <RadioGroupItem value={type} />
+                        </FormControl>
+                        <FormLabel className="font-normal">{type}</FormLabel>
+                      </FormItem>
+                  ))}
+                </RadioGroup>
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        
         <div className="flex flex-col md:flex-row items-center gap-2 md:gap-4">
             <FormField
               control={form.control}

@@ -1,8 +1,8 @@
 
 "use server";
 
-import type { Booking, BookingFormData, BookingStatus, Passenger, PassengerGender, TrainClass } from "@/types/booking";
-import { ALL_TRAIN_CLASSES, ALL_PASSENGER_GENDERS } from "@/types/booking";
+import type { Booking, BookingFormData, BookingStatus, Passenger, PassengerGender, TrainClass, BookingType } from "@/types/booking";
+import { ALL_TRAIN_CLASSES, ALL_PASSENGER_GENDERS, ALL_BOOKING_TYPES } from "@/types/booking";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/firebase";
@@ -15,6 +15,7 @@ const PassengerSchema = z.object({
 });
 
 const ServerBookingFormSchema = z.object({
+  bookingType: z.enum(ALL_BOOKING_TYPES, { required_error: "Booking type is required." }),
   source: z.string().min(1, "Source is required"),
   destination: z.string().min(1, "Destination is required"),
   journeyDate: z.string().min(1, "Journey date is required"), // Expects YYYY-MM-DD string
@@ -66,6 +67,7 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     passengers: Array.isArray(data.passengers) ? data.passengers as Passenger[] : [], // Default to empty array if not present or not an array
     bookingDate: data.bookingDate as string,
     classType: data.classType as TrainClass,
+    bookingType: (data.bookingType as BookingType) || 'Regular', // Default to 'Regular' if not present
     trainPreference: data.trainPreference as string | undefined,
     timePreference: data.timePreference as string | undefined,
     status: data.status as BookingStatus,
@@ -381,6 +383,7 @@ export async function getAllBookingsAsJsonString(): Promise<string> {
       destination: b.destination,
       journeyDate: b.journeyDate,
       classType: b.classType,
+      bookingType: b.bookingType,
       passengers: b.passengers.map(p => `${p.name} ${p.age} ${p.gender}`).join(', '), // Simplified passenger string for JSON
       trainPreference: b.trainPreference,
       timePreference: b.timePreference,

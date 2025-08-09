@@ -31,6 +31,7 @@ export default async function NewBookingPage({ searchParams }: NewBookingPagePro
         userName: bookingToCopy.userName,
         passengers: bookingToCopy.passengers.map(p => ({ ...p })), // Create a new array of passenger objects
         classType: bookingToCopy.classType,
+        bookingType: bookingToCopy.bookingType,
         trainPreference: bookingToCopy.trainPreference || "",
         timePreference: bookingToCopy.timePreference || "",
       };
