@@ -83,7 +83,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           })),
         }
       : {
-          bookingType: "Regular",
+          bookingType: "Tatkal",
           source: "",
           destination: "",
           userName: "",

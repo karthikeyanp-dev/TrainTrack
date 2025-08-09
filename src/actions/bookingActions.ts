@@ -67,7 +67,7 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     passengers: Array.isArray(data.passengers) ? data.passengers as Passenger[] : [], // Default to empty array if not present or not an array
     bookingDate: data.bookingDate as string,
     classType: data.classType as TrainClass,
-    bookingType: (data.bookingType as BookingType) || 'Regular', // Default to 'Regular' if not present
+    bookingType: (data.bookingType as BookingType) || 'Tatkal', // Default to 'Tatkal' if not present
     trainPreference: data.trainPreference as string | undefined,
     timePreference: data.timePreference as string | undefined,
     status: data.status as BookingStatus,
