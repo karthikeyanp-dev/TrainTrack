@@ -418,8 +418,8 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                           value={field.value ?? ''}
                           onChange={e => {
                             const value = e.target.value;
-                            if (value === '' || /^[0-9]+$/.test(value)) {
-                                field.onChange(value === '' ? undefined : +value);
+                            if (value === '' || /^[0-9]*$/.test(value)) {
+                                field.onChange(value === '' ? undefined : value);
                             }
                           }}
                         />
