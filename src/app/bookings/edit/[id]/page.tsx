@@ -34,7 +34,7 @@ export default async function EditBookingPage({ params }: EditBookingPageProps) 
     journeyDate: booking.journeyDate,
     bookingDate: booking.bookingDate,
     userName: booking.userName,
-    passengers: booking.passengers,
+    passengers: booking.passengers.map(p => ({ ...p })), // Create a new array of new passenger objects
     classType: booking.classType,
     trainPreference: booking.trainPreference || "",
     timePreference: booking.timePreference || "",
