@@ -32,6 +32,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 
 
 interface BookingCardProps {
@@ -246,7 +247,12 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
           </div>
           <div className="flex flex-col items-end gap-1.5">
             <StatusBadge status={booking.status} />
-            <span className="text-3xl font-semibold text-primary">{displayClass}</span>
+            <span className={cn(
+              "text-3xl font-semibold",
+              booking.bookingType === 'Tatkal' ? "text-primary" : "text-orange-500"
+            )}>
+              {displayClass}
+            </span>
           </div>
         </div>
       </CardHeader>
@@ -409,3 +415,5 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
     </Card>
   );
 }
+
+    
