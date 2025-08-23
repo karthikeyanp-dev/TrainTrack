@@ -4,14 +4,17 @@ export const dynamic = 'force-dynamic';
 import { AppShell } from "@/components/layout/AppShell";
 import { Suspense } from "react";
 import { BookingsLoadingSkeleton } from "@/components/bookings/BookingsLoadingSkeleton";
-import { getBookings, getBookingsPaginated } from "@/actions/bookingActions";
+import { getBookings, getDistinctBookingDates } from "@/actions/bookingActions";
 import { BookingsView } from "@/components/bookings/BookingsView";
 import type { Booking } from "@/types/booking";
 
+const DATES_PER_PAGE = 10;
+
 async function BookingDataFetcher({ searchQuery }: { searchQuery?: string }) {
+  const allBookings = await getBookings();
+  
   if (searchQuery && searchQuery.trim() !== "") {
     const lowercasedQuery = searchQuery.trim().toLowerCase();
-    const allBookings = await getBookings();
     
     const filteredBookings = allBookings.filter(booking => {
       const passengerMatch = booking.passengers.some(p =>
@@ -28,12 +31,12 @@ async function BookingDataFetcher({ searchQuery }: { searchQuery?: string }) {
       );
     });
 
-    return <BookingsView initialBookings={filteredBookings} searchQuery={searchQuery} />;
+    return <BookingsView allBookings={filteredBookings} allBookingDates={[]} searchQuery={searchQuery} />;
 
   } else {
-    // Initial load for infinite scroll
-    const { bookings, nextCursor, hasMore } = await getBookingsPaginated({ lastCreatedAt: null, limitCount: 20 });
-    return <BookingsView initialBookings={bookings} initialCursor={nextCursor} initialHasMore={hasMore} />;
+    // Initial load for date-based infinite scroll
+    const allBookingDates = await getDistinctBookingDates();
+    return <BookingsView allBookings={allBookings} allBookingDates={allBookingDates} />;
   }
 }
 

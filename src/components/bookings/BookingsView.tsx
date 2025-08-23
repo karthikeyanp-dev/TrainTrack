@@ -3,7 +3,6 @@
 
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { useInView } from 'react-intersection-observer';
-import { getBookingsPaginated } from '@/actions/bookingActions';
 import type { Booking, TrainClass } from '@/types/booking';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -12,11 +11,12 @@ import { DateGroupHeading } from "@/components/bookings/DateGroupHeading";
 import { BookingList } from "@/components/bookings/BookingList";
 
 interface BookingsViewProps {
-  initialBookings: Booking[];
-  initialCursor?: string | null;
-  initialHasMore?: boolean;
+  allBookings: Booking[];
+  allBookingDates: string[];
   searchQuery?: string;
 }
+
+const DATES_PER_PAGE = 10;
 
 const groupBookingsByDate = (bookings: Booking[]): Record<string, Booking[]> => {
   return bookings.reduce((acc, booking) => {
@@ -31,50 +31,60 @@ const groupBookingsByDate = (bookings: Booking[]): Record<string, Booking[]> => 
 
 const SL_CLASSES: TrainClass[] = ["SL", "UR", "2S"];
 
-export function BookingsView({ initialBookings, initialCursor = null, initialHasMore = false, searchQuery }: BookingsViewProps) {
-    const [bookings, setBookings] = useState<Booking[]>(initialBookings);
-    const [cursor, setCursor] = useState<string | null>(initialCursor);
-    const [hasMore, setHasMore] = useState<boolean>(initialHasMore);
+export function BookingsView({ allBookings, allBookingDates, searchQuery }: BookingsViewProps) {
+    const [page, setPage] = useState(1);
     const [isLoading, setIsLoading] = useState<boolean>(false);
 
     const { ref, inView } = useInView({
         threshold: 0,
-        triggerOnce: false, // Continue triggering as user scrolls
+        triggerOnce: false,
     });
+    
+    const visibleDates = useMemo(() => {
+        return allBookingDates.slice(0, page * DATES_PER_PAGE);
+    }, [allBookingDates, page]);
 
-    const loadMoreBookings = async () => {
-        if (isLoading || !hasMore || !cursor || searchQuery) return;
+    const hasMore = visibleDates.length < allBookingDates.length;
+
+    const loadMoreDates = () => {
+        if (isLoading || !hasMore || searchQuery) return;
         setIsLoading(true);
-        const { bookings: newBookings, nextCursor, hasMore: newHasMore } = await getBookingsPaginated({
-            lastCreatedAt: cursor,
-            limitCount: 20, // Fetch 20 more items
-        });
-        setBookings(prev => [...prev, ...newBookings]);
-        setCursor(nextCursor);
-        setHasMore(newHasMore);
-        setIsLoading(false);
+        // Simulate network latency for a better UX
+        setTimeout(() => {
+            setPage(prevPage => prevPage + 1);
+            setIsLoading(false);
+        }, 500); 
     };
 
     useEffect(() => {
-        if (inView) {
-            loadMoreBookings();
+        if (inView && !isLoading) {
+            loadMoreDates();
         }
-    }, [inView]);
+    }, [inView, isLoading]);
     
-    // Reset state if initial bookings change (e.g., due to a new search)
+    // When a search query is cleared, reset pagination
     useEffect(() => {
-        setBookings(initialBookings);
-        setCursor(initialCursor);
-        setHasMore(initialHasMore);
-    }, [initialBookings, initialCursor, initialHasMore]);
+        if (!searchQuery) {
+            setPage(1);
+        }
+    }, [searchQuery]);
+
+
+    const bookingsToDisplay = useMemo(() => {
+        if (searchQuery) {
+            return allBookings; // In search mode, all filtered bookings are passed in
+        }
+        const visibleDateSet = new Set(visibleDates);
+        return allBookings.filter(booking => visibleDateSet.has(booking.bookingDate));
+    }, [allBookings, visibleDates, searchQuery]);
 
 
     const { pendingDates, pendingBookingsByDate, completedDates, completedBookingsByDate } = useMemo(() => {
-        const pendingBookingsRaw = bookings
+        const pendingBookingsRaw = bookingsToDisplay
             .filter(booking => booking.status === "Requested")
             .sort((a, b) => new Date(a.journeyDate).getTime() - new Date(b.journeyDate).getTime());
 
-        const completedBookingsRaw = bookings
+        const completedBookingsRaw = bookingsToDisplay
             .filter(booking => booking.status !== "Requested")
             .sort((a, b) => new Date(b.journeyDate).getTime() - new Date(a.journeyDate).getTime());
 
@@ -85,7 +95,7 @@ export function BookingsView({ initialBookings, initialCursor = null, initialHas
         const completedDates = Object.keys(completedBookingsByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
         
         return { pendingDates, pendingBookingsByDate, completedDates, completedBookingsByDate };
-    }, [bookings]);
+    }, [bookingsToDisplay]);
 
     const renderBookingsForDate = (bookingsForDate: Booking[]) => {
         const acBookings = bookingsForDate.filter(b => !SL_CLASSES.includes(b.classType));
@@ -169,7 +179,7 @@ export function BookingsView({ initialBookings, initialCursor = null, initialHas
                     {isLoading && <Loader2 className="h-8 w-8 animate-spin text-primary" />}
                 </div>
             )}
-            {!searchQuery && !hasMore && bookings.length > 0 && (
+            {!searchQuery && !hasMore && allBookingDates.length > 0 && (
                 <div className="text-center text-muted-foreground p-4">
                     You've reached the end of the list.
                 </div>

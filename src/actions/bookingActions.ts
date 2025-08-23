@@ -325,52 +325,22 @@ export async function updateBookingStatus(id: string, status: BookingStatus): Pr
   }
 }
 
-export async function getBookingsPaginated({
-  lastCreatedAt,
-  limitCount,
-}: {
-  lastCreatedAt: string | null;
-  limitCount: number;
-}): Promise<{ bookings: Booking[]; nextCursor: string | null; hasMore: boolean }> {
+export async function getDistinctBookingDates(): Promise<string[]> {
   try {
-    if (!db) {
-      console.error("[Firestore Error] In getBookingsPaginated: Firestore db instance is not available.");
-      return { bookings: [], nextCursor: null, hasMore: false };
-    }
-    const bookingsCollection = collection(db, "bookings");
-    
-    let q;
-    const baseQuery = [orderBy("createdAt", "desc"), limit(limitCount)];
-
-    if (lastCreatedAt) {
-      const lastTimestamp = Timestamp.fromDate(new Date(lastCreatedAt));
-      q = query(bookingsCollection, ...baseQuery, startAfter(lastTimestamp));
-    } else {
-      q = query(bookingsCollection, ...baseQuery);
-    }
-    
-    const querySnapshot = await getDocs(q);
-    
-    const bookings = querySnapshot.docs.map(doc => {
-      try {
-        return mapDocToBooking(doc, doc.id);
-      } catch (mapError) {
-        console.error(`[Mapping Error] Failed to map document ${doc.id}:`, mapError instanceof Error ? mapError.message : String(mapError));
-        return null;
+    const allBookings = await getBookings();
+    const dateSet = new Set<string>();
+    allBookings.forEach(booking => {
+      // Assuming bookingDate is in YYYY-MM-DD format
+      if (booking.bookingDate) {
+        dateSet.add(booking.bookingDate);
       }
-    }).filter(booking => booking !== null) as Booking[];
+    });
     
-    const lastVisibleDoc = querySnapshot.docs[querySnapshot.docs.length - 1];
-    const nextCursor = lastVisibleDoc ? toISOStringSafe(lastVisibleDoc.data().createdAt, 'createdAt', lastVisibleDoc.id) : null;
-
-    return {
-      bookings,
-      nextCursor,
-      hasMore: bookings.length === limitCount,
-    };
+    const sortedDates = Array.from(dateSet).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+    return sortedDates;
   } catch (error) {
-    console.error("[Firestore Error] In getBookingsPaginated:", error instanceof Error ? error.message : String(error));
-    return { bookings: [], nextCursor: null, hasMore: false };
+    console.error("[Firestore Error] In getDistinctBookingDates:", error instanceof Error ? error.message : String(error));
+    return [];
   }
 }
 
