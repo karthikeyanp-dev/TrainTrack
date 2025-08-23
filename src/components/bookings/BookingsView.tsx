@@ -86,7 +86,7 @@ export function BookingsView({ allBookings, allBookingDates, searchQuery }: Book
 
         const completedBookingsRaw = bookingsToDisplay
             .filter(booking => booking.status !== "Requested")
-            .sort((a, b) => new Date(b.journeyDate).getTime() - new Date(a).journeyDate).getTime());
+            .sort((a, b) => new Date(b.journeyDate).getTime() - new Date(a.journeyDate).getTime());
 
         const pendingBookingsByDate = groupBookingsByDate(pendingBookingsRaw);
         const pendingDates = Object.keys(pendingBookingsByDate).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
