@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
 
 const passengerSchema = z.object({
   name: z.string().min(2, { message: "Passenger name must be at least 2 characters." }),
@@ -49,7 +50,7 @@ const bookingFormSchema = z.object({
   bookingDate: z.date({ required_error: "Booking date is required." }),
   classType: z.enum(ALL_TRAIN_CLASSES, { required_error: "Train class is required." }),
   trainPreference: z.string().optional(),
-  timePreference: z.string().optional(),
+  remarks: z.string().optional(),
 });
 
 type FormValues = z.infer<typeof bookingFormSchema>;
@@ -75,7 +76,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           journeyDate: initialData.journeyDateObj,
           bookingDate: initialData.bookingDateObj,
           trainPreference: initialData.trainPreference || "",
-          timePreference: initialData.timePreference || "",
+          remarks: initialData.remarks || "",
           passengers: initialData.passengers?.map(p => ({
             name: p.name || "",
             age: p.age,
@@ -88,7 +89,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           destination: "",
           userName: "",
           trainPreference: "",
-          timePreference: "",
+          remarks: "",
           passengers: [{ name: "", age: undefined, gender: undefined }],
         },
   });
@@ -122,7 +123,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           gender: p.gender!,
       })) as Passenger[],
       trainPreference: values.trainPreference || undefined,
-      timePreference: values.timePreference || undefined,
+      remarks: values.remarks || undefined,
     };
 
     if (formDataForAction.passengers.length === 0) {
@@ -526,15 +527,15 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
 
         <FormField
           control={form.control}
-          name="timePreference"
+          name="remarks"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Time Preference (Optional)</FormLabel>
+              <FormLabel>Remarks (Optional)</FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Morning, after 6 PM, around noon" {...field} value={field.value || ''} />
+                <Textarea placeholder="e.g., Morning, after 6 PM, around noon" {...field} value={field.value || ''} />
               </FormControl>
               <FormDescription>
-                Specify preferred departure or arrival times.
+                Specify any additional notes or preferences.
               </FormDescription>
               <FormMessage />
             </FormItem>
@@ -559,3 +560,5 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
     </Form>
   );
 }
+
+    

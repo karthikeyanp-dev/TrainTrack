@@ -32,10 +32,12 @@ export interface Booking {
   classType: TrainClass;
   bookingType: BookingType;
   trainPreference?: string; // Optional
-  timePreference?: string; // Optional
+  remarks?: string; // Optional
   status: BookingStatus;
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
 }
 
 export type BookingFormData = Omit<Booking, "id" | "createdAt" | "updatedAt" | "status">;
+
+    

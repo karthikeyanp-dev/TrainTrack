@@ -27,7 +27,7 @@ async function BookingDataFetcher({ searchQuery }: { searchQuery?: string }) {
         booking.destination.toLowerCase().includes(lowercasedQuery) ||
         booking.classType.toLowerCase().includes(lowercasedQuery) ||
         (booking.trainPreference && booking.trainPreference.toLowerCase().includes(lowercasedQuery)) ||
-        (booking.timePreference && booking.timePreference.toLowerCase().includes(lowercasedQuery))
+        (booking.remarks && booking.remarks.toLowerCase().includes(lowercasedQuery))
       );
     });
 
@@ -51,3 +51,5 @@ export default function HomePage({ searchParams }: { searchParams?: { [key: stri
     </AppShell>
   );
 }
+
+    

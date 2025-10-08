@@ -38,7 +38,7 @@ export default async function EditBookingPage({ params }: EditBookingPageProps) 
     classType: booking.classType,
     bookingType: booking.bookingType,
     trainPreference: booking.trainPreference || "",
-    timePreference: booking.timePreference || "",
+    remarks: booking.remarks || "",
     journeyDateObj: new Date(booking.journeyDate + 'T00:00:00'),
     bookingDateObj: new Date(booking.bookingDate + 'T00:00:00'),
   };
@@ -60,3 +60,5 @@ export default async function EditBookingPage({ params }: EditBookingPageProps) 
     </AppShell>
   );
 }
+
+    

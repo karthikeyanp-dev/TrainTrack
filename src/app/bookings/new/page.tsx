@@ -33,7 +33,7 @@ export default async function NewBookingPage({ searchParams }: NewBookingPagePro
         classType: bookingToCopy.classType,
         bookingType: bookingToCopy.bookingType,
         trainPreference: bookingToCopy.trainPreference || "",
-        timePreference: bookingToCopy.timePreference || "",
+        remarks: bookingToCopy.remarks || "",
       };
     } else {
       copyError = `Could not find booking with ID "${copyFromId}" to copy. Please fill out the form manually.`;
@@ -63,3 +63,5 @@ export default async function NewBookingPage({ searchParams }: NewBookingPagePro
     </AppShell>
   );
 }
+
+    

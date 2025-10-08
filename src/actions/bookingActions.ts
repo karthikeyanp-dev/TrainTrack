@@ -24,7 +24,7 @@ const ServerBookingFormSchema = z.object({
   bookingDate: z.string().min(1, "Booking date is required"), // Expects YYYY-MM-DD string
   classType: z.enum(ALL_TRAIN_CLASSES, { errorMap: () => ({ message: "Invalid train class selected." }) }),
   trainPreference: z.string().optional(),
-  timePreference: z.string().optional(),
+  remarks: z.string().optional(),
 });
 
 const toISOStringSafe = (value: any, fieldName: string, bookingId: string): string => {
@@ -69,7 +69,7 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     classType: data.classType as TrainClass,
     bookingType: (data.bookingType as BookingType) || 'Tatkal', // Default to 'Tatkal' if not present
     trainPreference: data.trainPreference as string | undefined,
-    timePreference: data.timePreference as string | undefined,
+    remarks: (data.remarks || data.timePreference) as string | undefined, // Backward compatibility
     status: data.status as BookingStatus,
     createdAt: toISOStringSafe(data.createdAt, 'createdAt', id),
     updatedAt: toISOStringSafe(data.updatedAt, 'updatedAt', id),
@@ -103,7 +103,7 @@ export async function addBooking(formData: BookingFormData): Promise<{ success: 
       updatedAt: serverTimestamp(),
     };
     if (validationResult.data.trainPreference === undefined) delete bookingDataForFirestore.trainPreference;
-    if (validationResult.data.timePreference === undefined) delete bookingDataForFirestore.timePreference;
+    if (validationResult.data.remarks === undefined) delete bookingDataForFirestore.remarks;
 
     const docRef = await addDoc(collection(db, "bookings"), bookingDataForFirestore);
 
@@ -182,8 +182,8 @@ export async function updateBookingById(id: string, formData: BookingFormData): 
     if (validationResult.data.trainPreference === undefined) {
        delete bookingDataForFirestore.trainPreference;
     }
-    if (validationResult.data.timePreference === undefined) {
-       delete bookingDataForFirestore.timePreference;
+    if (validationResult.data.remarks === undefined) {
+       delete bookingDataForFirestore.remarks;
     }
 
     await updateDoc(docRef, bookingDataForFirestore);
@@ -356,7 +356,7 @@ export async function getAllBookingsAsJsonString(): Promise<string> {
       bookingType: b.bookingType,
       passengers: b.passengers.map(p => `${p.name} ${p.age} ${p.gender}`).join(', '), // Simplified passenger string for JSON
       trainPreference: b.trainPreference,
-      timePreference: b.timePreference,
+      remarks: b.remarks,
       status: b.status,
     }));
     return JSON.stringify(simplifiedBookings);
@@ -365,3 +365,5 @@ export async function getAllBookingsAsJsonString(): Promise<string> {
     return JSON.stringify([]);
   }
 }
+
+    

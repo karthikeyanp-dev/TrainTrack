@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "./StatusBadge";
-import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy } from "lucide-react";
+import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateBookingStatus, deleteBooking } from "@/actions/bookingActions";
 import { useToast } from "@/hooks/use-toast";
@@ -203,7 +203,7 @@ Class: ${booking.classType}
 Passengers:
 ${passengerDetailsText}
 ${booking.trainPreference ? `Train Preference: ${booking.trainPreference}` : ''}
-${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
+${booking.remarks ? `Remarks: ${booking.remarks}` : ''}
 ----------------------
     `.trim().replace(/^\n+|\n+$/g, '').replace(/\n\n+/g, '\n');
 
@@ -284,10 +284,10 @@ ${booking.timePreference ? `Time Preference: ${booking.timePreference}` : ''}
             <span className="flex-1"><span className="font-semibold">Train Pref:</span> {booking.trainPreference}</span>
           </div>
         )}
-        {booking.timePreference && (
+        {booking.remarks && (
           <div className="flex items-start gap-2">
-            <Clock className="h-4 w-4 text-muted-foreground mt-0.5" />
-            <span className="flex-1"><span className="font-semibold">Time Pref:</span> {booking.timePreference}</span>
+            <MessageSquare className="h-4 w-4 text-muted-foreground mt-0.5" />
+            <span className="flex-1"><span className="font-semibold">Remarks:</span> {booking.remarks}</span>
           </div>
         )}
         <div className="flex items-center gap-2">
