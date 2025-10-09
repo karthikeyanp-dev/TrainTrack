@@ -295,8 +295,8 @@ export async function getPendingBookings(): Promise<Booking[]> {
       }
     }).filter(booking => booking !== null) as Booking[];
     
-    // Sort by bookingDate in descending order (most recent first)
-    bookings.sort((a, b) => new Date(b.bookingDate).getTime() - new Date(a.bookingDate).getTime());
+    // Sort by journeyDate in ascending order (nearest date first)
+    bookings.sort((a, b) => new Date(a.journeyDate).getTime() - new Date(b.journeyDate).getTime());
 
     return bookings;
   } catch (error) {
@@ -400,5 +400,3 @@ export async function getAllBookingsAsJsonString(): Promise<string> {
     return JSON.stringify([]);
   }
 }
-
-    
