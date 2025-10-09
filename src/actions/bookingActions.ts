@@ -278,10 +278,11 @@ export async function getPendingBookings(): Promise<Booking[]> {
       return [];
     }
     const bookingsCollection = collection(db, "bookings");
+    // This query previously caused an error because it requires a composite index.
+    // We fetch based on status and sort in the application code to avoid this.
     const q = query(
       bookingsCollection,
-      where("status", "==", "Requested"),
-      orderBy("bookingDate", "desc")
+      where("status", "==", "Requested")
     );
     const querySnapshot = await getDocs(q);
 
@@ -293,6 +294,9 @@ export async function getPendingBookings(): Promise<Booking[]> {
         return null;
       }
     }).filter(booking => booking !== null) as Booking[];
+    
+    // Sort by bookingDate in descending order (most recent first)
+    bookings.sort((a, b) => new Date(b.bookingDate).getTime() - new Date(a.bookingDate).getTime());
 
     return bookings;
   } catch (error) {
