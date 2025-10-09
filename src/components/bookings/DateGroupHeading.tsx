@@ -6,9 +6,10 @@ import { format, isToday, isTomorrow } from "date-fns";
 
 interface DateGroupHeadingProps {
   dateString: string;
+  isJourneyDate?: boolean;
 }
 
-export function DateGroupHeading({ dateString }: DateGroupHeadingProps) {
+export function DateGroupHeading({ dateString, isJourneyDate = false }: DateGroupHeadingProps) {
   const [displayDate, setDisplayDate] = useState("..."); // Initial placeholder
 
   useEffect(() => {
@@ -17,14 +18,19 @@ export function DateGroupHeading({ dateString }: DateGroupHeadingProps) {
     const dateParts = dateString.split('-').map(Number);
     const localDateAtMidnight = new Date(dateParts[0], dateParts[1] - 1, dateParts[2]);
 
+    let dateText: string;
     if (isToday(localDateAtMidnight)) {
-      setDisplayDate(`Today (${format(localDateAtMidnight, "EEEE")})`);
+      dateText = `Today (${format(localDateAtMidnight, "EEEE")})`;
     } else if (isTomorrow(localDateAtMidnight)) {
-      setDisplayDate(`Tomorrow (${format(localDateAtMidnight, "EEEE")})`);
+      dateText = `Tomorrow (${format(localDateAtMidnight, "EEEE")})`;
     } else {
-      setDisplayDate(format(localDateAtMidnight, "PPP (EEEE)")); // e.g., "Jul 20, 2024 (Saturday)"
+      dateText = format(localDateAtMidnight, "PPP (EEEE)"); // e.g., "Jul 20, 2024 (Saturday)"
     }
-  }, [dateString]);
+    
+    const prefix = isJourneyDate ? "Journey Date: " : "";
+    setDisplayDate(`${prefix}${dateText}`);
+
+  }, [dateString, isJourneyDate]);
 
   return (
     <h3 className="text-xl font-medium pb-2 border-b">

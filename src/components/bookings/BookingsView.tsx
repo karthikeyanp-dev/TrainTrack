@@ -19,13 +19,13 @@ interface BookingsViewProps {
 
 const DATES_PER_PAGE = 10;
 
-const groupBookingsByDate = (bookings: Booking[]): Record<string, Booking[]> => {
+const groupBookingsByDate = (bookings: Booking[], dateKey: 'bookingDate' | 'journeyDate'): Record<string, Booking[]> => {
   return bookings.reduce((acc, booking) => {
-    const dateKey = booking.bookingDate; 
-    if (!acc[dateKey]) {
-      acc[dateKey] = [];
+    const key = booking[dateKey];
+    if (!acc[key]) {
+      acc[key] = [];
     }
-    acc[dateKey].push(booking);
+    acc[key].push(booking);
     return acc;
   }, {} as Record<string, Booking[]>);
 };
@@ -75,11 +75,10 @@ export function BookingsView({ allBookings, allBookingDates, searchQuery }: Book
         const sourceBookings = allBookings;
 
         // --- Pending Bookings Logic ---
-        const pendingBookingsRaw = sourceBookings
-            .filter(b => b.status === 'Requested')
-            .sort((a, b) => new Date(a.journeyDate).getTime() - new Date(b.journeyDate).getTime());
-        
-        const pendingBookingsByDate = groupBookingsByDate(pendingBookingsRaw);
+        const pendingBookingsRaw = sourceBookings.filter(b => b.status === 'Requested');
+        // Group by journeyDate for the "Pending" tab
+        const pendingBookingsByDate = groupBookingsByDate(pendingBookingsRaw, 'journeyDate');
+        // Sort the journey dates in descending order (furthest date first)
         const pendingDates = Object.keys(pendingBookingsByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
 
@@ -92,7 +91,8 @@ export function BookingsView({ allBookings, allBookingDates, searchQuery }: Book
             });
             
         const completedBookingsByDate = groupBookingsByDate(
-            completedBookingsToDisplay.sort((a, b) => new Date(b.journeyDate).getTime() - new Date(a.journeyDate).getTime())
+             completedBookingsToDisplay.sort((a, b) => new Date(b.journeyDate).getTime() - new Date(a.journeyDate).getTime()),
+             'bookingDate'
         );
         const completedDates = Object.keys(completedBookingsByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
@@ -153,7 +153,7 @@ export function BookingsView({ allBookings, allBookingDates, searchQuery }: Book
                     {pendingDates.map(date => (
                     <AccordionItem value={date} key={`pending-${date}`} className="border-b-0">
                         <AccordionTrigger className="p-0 hover:no-underline">
-                        <DateGroupHeading dateString={date} />
+                        <DateGroupHeading dateString={date} isJourneyDate={true}/>
                         </AccordionTrigger>
                         <AccordionContent>
                         {renderBookingsForDate(pendingBookingsByDate[date])}
