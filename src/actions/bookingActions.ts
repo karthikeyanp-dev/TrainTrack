@@ -6,7 +6,7 @@ import { ALL_TRAIN_CLASSES, ALL_PASSENGER_GENDERS, ALL_BOOKING_TYPES } from "@/t
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, Timestamp, type DocumentSnapshot, type DocumentData, limit, startAfter } from "firebase/firestore";
+import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, Timestamp, type DocumentSnapshot, type DocumentData, limit, startAfter, where } from "firebase/firestore";
 
 const PassengerSchema = z.object({
   name: z.string().min(1, "Passenger name is required."),
@@ -271,6 +271,37 @@ export async function getBookings(): Promise<Booking[]> {
   }
 }
 
+export async function getPendingBookings(): Promise<Booking[]> {
+  try {
+    if (!db) {
+      console.error("[Firestore Error] In getPendingBookings: Firestore db instance is not available.");
+      return [];
+    }
+    const bookingsCollection = collection(db, "bookings");
+    const q = query(
+      bookingsCollection,
+      where("status", "==", "Requested"),
+      orderBy("bookingDate", "desc")
+    );
+    const querySnapshot = await getDocs(q);
+
+    const bookings = querySnapshot.docs.map(doc => {
+      try {
+        return mapDocToBooking(doc, doc.id);
+      } catch (mapError) {
+        console.error(`[Mapping Error] Failed to map document ${doc.id}:`, mapError instanceof Error ? mapError.message : String(mapError));
+        return null;
+      }
+    }).filter(booking => booking !== null) as Booking[];
+
+    return bookings;
+  } catch (error) {
+    console.error("[Firestore Error] In getPendingBookings:", error instanceof Error ? error.message : String(error));
+    return [];
+  }
+}
+
+
 export async function getBookingById(id: string): Promise<Booking | null> {
   try {
     if (!db) {
@@ -365,5 +396,3 @@ export async function getAllBookingsAsJsonString(): Promise<string> {
     return JSON.stringify([]);
   }
 }
-
-    
