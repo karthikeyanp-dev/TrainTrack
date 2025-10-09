@@ -400,3 +400,5 @@ export async function getAllBookingsAsJsonString(): Promise<string> {
     return JSON.stringify([]);
   }
 }
+
+    
