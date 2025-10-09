@@ -7,20 +7,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "./StatusBadge";
-import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, MoreVertical } from "lucide-react";
+import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateBookingStatus, deleteBooking } from "@/actions/bookingActions";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -296,42 +290,57 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}
         </div>
       </CardContent>
       <CardFooter className="flex flex-col items-stretch gap-3 pt-4 border-t">
-        <div className="flex justify-between items-center">
-            <div className="text-xs text-muted-foreground">
-              <div><span className="font-semibold">Created:</span> {clientFormattedCreatedAt || "..."}</div>
-              <div><span className="font-semibold">Last updated:</span> {clientFormattedUpdatedAt || "..."}</div>
-            </div>
-             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
-                  <MoreVertical className="h-4 w-4" />
-                  <span className="sr-only">More options</span>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleCopy}>
-                  <Copy className="mr-2 h-4 w-4" />
-                  <span>Duplicate</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleEdit}>
-                  <Edit3 className="mr-2 h-4 w-4" />
-                  <span>Edit</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleShare}>
-                  <Share2 className="mr-2 h-4 w-4" />
-                  <span>Share</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={() => setShowDeleteDialog(true)}
-                  className="text-destructive focus:text-destructive"
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  <span>Delete</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+        {/* Created and Last Updated side by side */}
+        <div className="flex gap-2">
+          <div className="flex-1 text-xs text-muted-foreground">
+            <div className="font-semibold mb-1">Created</div>
+            <div>{clientFormattedCreatedAt || "..."}</div>
+          </div>
+          <div className="flex-1 text-xs text-muted-foreground text-right">
+            <div className="font-semibold mb-1">Last Updated</div>
+            <div>{clientFormattedUpdatedAt || "..."}</div>
+          </div>
         </div>
+        
+        {/* Action buttons with icons only for mobile compatibility */}
+         <div className="flex gap-1">
+           <Button 
+             variant="outline" 
+             size="sm" 
+             onClick={handleCopy}
+             className="flex-1 aspect-square p-2"
+             title="Duplicate"
+           >
+             <Copy className="h-4 w-4" />
+           </Button>
+           <Button 
+             variant="outline" 
+             size="sm" 
+             onClick={handleEdit}
+             className="flex-1 aspect-square p-2"
+             title="Edit"
+           >
+             <Edit3 className="h-4 w-4" />
+           </Button>
+           <Button 
+             variant="outline" 
+             size="sm" 
+             onClick={handleShare}
+             className="flex-1 aspect-square p-2"
+             title="Share"
+           >
+             <Share2 className="h-4 w-4" />
+           </Button>
+           <Button 
+             variant="outline" 
+             size="sm" 
+             onClick={() => setShowDeleteDialog(true)}
+             className="flex-1 aspect-square p-2 text-destructive hover:text-destructive"
+             title="Delete"
+           >
+             <Trash2 className="h-4 w-4" />
+           </Button>
+         </div>
         <div className="flex flex-col gap-1.5">
            <Label htmlFor={`status-select-${booking.id}`} className="text-xs font-medium text-muted-foreground">Update Booking Status:</Label>
             <Select

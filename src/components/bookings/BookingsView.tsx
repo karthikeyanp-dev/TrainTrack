@@ -78,7 +78,7 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
         // --- Pending Bookings Logic (now uses pre-fetched pendingBookings prop) ---
         const pendingSource = searchQuery ? pendingBookings.filter(b => b.status === 'Requested') : pendingBookings;
         const pendingBookingsByDate = groupBookingsByDate(pendingSource, 'bookingDate');
-        const pendingDates = Object.keys(pendingBookingsByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+        const pendingDates = Object.keys(pendingBookingsByDate).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
 
 
         // --- Completed Bookings Logic ---

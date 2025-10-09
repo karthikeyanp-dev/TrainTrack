@@ -51,8 +51,9 @@ async function BookingDataFetcher({ searchQuery }: { searchQuery?: string }) {
   }
 }
 
-export default function HomePage({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined }}) {
-  const searchQuery = typeof searchParams?.search === 'string' ? searchParams.search : undefined;
+export default async function HomePage({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined }}) {
+  const resolvedSearchParams = await searchParams;
+  const searchQuery = typeof resolvedSearchParams?.search === 'string' ? resolvedSearchParams.search : undefined;
   
   return (
     <AppShell showAddButton={true}>
