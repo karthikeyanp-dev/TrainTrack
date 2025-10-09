@@ -9,6 +9,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Search, Loader2 } from "lucide-react";
 import { DateGroupHeading } from "@/components/bookings/DateGroupHeading";
 import { BookingList } from "@/components/bookings/BookingList";
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 interface BookingsViewProps {
   allBookings: Booking[];
@@ -72,7 +73,7 @@ export function BookingsView({ allBookings, allBookingDates, searchQuery }: Book
 
     const { pendingBookings, completedBookingsByDate, completedDates } = useMemo(() => {
         // For search, filter all bookings. Otherwise, use pagination logic.
-        const sourceBookings = searchQuery ? allBookings : allBookings;
+        const sourceBookings = allBookings;
 
         const pendingBookings = sourceBookings
             .filter(b => b.status === 'Requested')
@@ -158,12 +159,18 @@ export function BookingsView({ allBookings, allBookingDates, searchQuery }: Book
                     <AlertDescription>{noCompletedMessage}</AlertDescription>
                 </Alert>
                 ) : (
-                completedDates.map(date => (
-                    <div key={`completed-${date}`} className="mb-8">
-                    <DateGroupHeading dateString={date} />
-                    {renderBookingsForDate(completedBookingsByDate[date])}
-                    </div>
-                ))
+                <Accordion type="multiple" className="w-full space-y-4">
+                  {completedDates.map(date => (
+                    <AccordionItem value={date} key={`completed-${date}`} className="border-b-0">
+                      <AccordionTrigger className="p-0 hover:no-underline">
+                        <DateGroupHeading dateString={date} />
+                      </AccordionTrigger>
+                      <AccordionContent>
+                        {renderBookingsForDate(completedBookingsByDate[date])}
+                      </AccordionContent>
+                    </AccordionItem>
+                  ))}
+                </Accordion>
                 )}
             </TabsContent>
             </Tabs>

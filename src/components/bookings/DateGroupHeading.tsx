@@ -27,7 +27,7 @@ export function DateGroupHeading({ dateString }: DateGroupHeadingProps) {
   }, [dateString]);
 
   return (
-    <h3 className="text-xl font-medium mb-3 pb-2 border-b">
+    <h3 className="text-xl font-medium pb-2 border-b">
       {displayDate}
     </h3>
   );
