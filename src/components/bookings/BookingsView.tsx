@@ -70,32 +70,30 @@ export function BookingsView({ allBookings, allBookingDates, searchQuery }: Book
     }, [searchQuery]);
 
 
-    const bookingsToDisplay = useMemo(() => {
-        if (searchQuery) {
-            return allBookings; // In search mode, all filtered bookings are passed in
-        }
-        const visibleDateSet = new Set(visibleDates);
-        return allBookings.filter(booking => visibleDateSet.has(booking.bookingDate));
-    }, [allBookings, visibleDates, searchQuery]);
+    const { pendingBookings, completedBookingsByDate, completedDates } = useMemo(() => {
+        // For search, filter all bookings. Otherwise, use pagination logic.
+        const sourceBookings = searchQuery ? allBookings : allBookings;
 
-
-    const { pendingDates, pendingBookingsByDate, completedDates, completedBookingsByDate } = useMemo(() => {
-        const pendingBookingsRaw = bookingsToDisplay
-            .filter(booking => booking.status === "Requested")
+        const pendingBookings = sourceBookings
+            .filter(b => b.status === 'Requested')
             .sort((a, b) => new Date(a.journeyDate).getTime() - new Date(b.journeyDate).getTime());
 
-        const completedBookingsRaw = bookingsToDisplay
-            .filter(booking => booking.status !== "Requested")
-            .sort((a, b) => new Date(b.journeyDate).getTime() - new Date(a.journeyDate).getTime());
-
-        const pendingBookingsByDate = groupBookingsByDate(pendingBookingsRaw);
-        const pendingDates = Object.keys(pendingBookingsByDate).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
-
-        const completedBookingsByDate = groupBookingsByDate(completedBookingsRaw);
+        // Completed bookings for display, respecting pagination for non-search views
+        const completedBookingsToDisplay = searchQuery 
+            ? sourceBookings.filter(b => b.status !== 'Requested')
+            : sourceBookings.filter(b => {
+                const visibleDateSet = new Set(visibleDates);
+                return b.status !== 'Requested' && visibleDateSet.has(b.bookingDate);
+            });
+            
+        const completedBookingsByDate = groupBookingsByDate(
+            completedBookingsToDisplay.sort((a, b) => new Date(b.journeyDate).getTime() - new Date(a.journeyDate).getTime())
+        );
         const completedDates = Object.keys(completedBookingsByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-        
-        return { pendingDates, pendingBookingsByDate, completedDates, completedBookingsByDate };
-    }, [bookingsToDisplay]);
+
+        return { pendingBookings, completedBookingsByDate, completedDates };
+    }, [allBookings, visibleDates, searchQuery]);
+
 
     const renderBookingsForDate = (bookingsForDate: Booking[]) => {
         const acBookings = bookingsForDate.filter(b => !SL_CLASSES.includes(b.classType));
@@ -139,19 +137,15 @@ export function BookingsView({ allBookings, allBookingDates, searchQuery }: Book
 
             <TabsContent value="pending" className="mt-6">
                 <h2 className="text-2xl font-semibold mb-4">Pending Bookings</h2>
-                {pendingDates.length === 0 ? (
+                {pendingBookings.length === 0 ? (
                 <Alert className="mt-4">
                     {searchQuery ? <Search className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
                     <AlertTitle>{searchQuery ? "Search Results" : "No Pending Bookings"}</AlertTitle>
                     <AlertDescription>{noPendingMessage}</AlertDescription>
                 </Alert>
                 ) : (
-                pendingDates.map(date => (
-                    <div key={`pending-${date}`} className="mb-8">
-                    <DateGroupHeading dateString={date} />
-                    {renderBookingsForDate(pendingBookingsByDate[date])}
-                    </div>
-                ))
+                    // In pending, we just render the list directly, not grouped by date
+                    <BookingList bookings={pendingBookings} />
                 )}
             </TabsContent>
 
