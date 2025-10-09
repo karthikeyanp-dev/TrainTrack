@@ -148,17 +148,17 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
                     <AlertDescription>{noPendingMessage}</AlertDescription>
                 </Alert>
                 ) : (
-                <Accordion type="multiple" className="w-full space-y-4">
-                    {pendingDates.map(date => (
+                <Accordion type="multiple" className="w-full space-y-4" defaultValue={pendingDates.length > 0 ? [pendingDates[0]] : []}>
+                  {pendingDates.map(date => (
                     <AccordionItem value={date} key={`pending-${date}`} className="border-b-0">
-                        <AccordionTrigger className="p-0 hover:no-underline">
+                      <AccordionTrigger className="p-0 hover:no-underline">
                         <DateGroupHeading dateString={date} />
-                        </AccordionTrigger>
-                        <AccordionContent>
+                      </AccordionTrigger>
+                      <AccordionContent>
                         {renderBookingsForDate(pendingBookingsByDate[date])}
-                        </AccordionContent>
+                      </AccordionContent>
                     </AccordionItem>
-                    ))}
+                  ))}
                 </Accordion>
                 )}
             </TabsContent>
@@ -172,7 +172,7 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
                     <AlertDescription>{noCompletedMessage}</AlertDescription>
                 </Alert>
                 ) : (
-                <Accordion type="multiple" className="w-full space-y-4">
+                <Accordion type="multiple" className="w-full space-y-4" defaultValue={completedDates.length > 0 ? [completedDates[0]] : []}>
                   {completedDates.map(date => (
                     <AccordionItem value={date} key={`completed-${date}`} className="border-b-0">
                       <AccordionTrigger className="p-0 hover:no-underline">

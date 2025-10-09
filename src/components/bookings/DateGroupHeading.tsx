@@ -24,7 +24,8 @@ export function DateGroupHeading({ dateString, isJourneyDate = false }: DateGrou
     } else if (isTomorrow(localDateAtMidnight)) {
       dateText = `Tomorrow (${format(localDateAtMidnight, "EEEE")})`;
     } else {
-      dateText = format(localDateAtMidnight, "PPP (EEEE)"); // e.g., "Jul 20, 2024 (Saturday)"
+      // Change format to short month name (e.g., "Jan 20, 2024") and weekday in parentheses
+      dateText = format(localDateAtMidnight, "MMM d, yyyy (EEEE)");
     }
     
     const prefix = isJourneyDate ? "Journey Date: " : "";
