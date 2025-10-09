@@ -33,7 +33,11 @@ import { Textarea } from "@/components/ui/textarea";
 
 const passengerSchema = z.object({
   name: z.string().min(2, { message: "Passenger name must be at least 2 characters." }),
-  age: z.coerce.number().min(1, "Age must be at least 1.").max(150, { message: "Age must be 150 or less."}).optional().or(z.literal(undefined)),
+  age: z.union([
+    z.string().min(1).pipe(z.coerce.number().min(1, "Age must be at least 1.").max(150, { message: "Age must be 150 or less."})),
+    z.literal(""),
+    z.literal(undefined)
+  ]).optional(),
   gender: z.enum(ALL_PASSENGER_GENDERS, { errorMap: () => ({ message: "Gender is required." }) }).optional().or(z.literal(undefined)),
 });
 
@@ -44,7 +48,7 @@ const bookingFormSchema = z.object({
   journeyDate: z.date({ required_error: "Journey date is required." }),
   userName: z.string().min(2, { message: "User name must be at least 2 characters." }),
   passengers: z.array(passengerSchema).min(1, { message: "At least one passenger is required." })
-    .refine(passengers => passengers.every(p => p.name && p.age !== undefined && p.gender), {
+    .refine(passengers => passengers.every(p => p.name && p.age !== undefined && p.age !== "" && p.gender), {
       message: "All passenger details (name, age, gender) must be filled if a passenger entry is added.",
     }),
   bookingDate: z.date({ required_error: "Booking date is required." }),
@@ -116,7 +120,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
       bookingDate: format(values.bookingDate, "yyyy-MM-dd"),
       classType: values.classType as TrainClass,
       passengers: values.passengers
-        .filter(p => p.name && p.age !== undefined && p.gender)
+        .filter(p => p.name && p.age !== undefined && p.age !== "" && p.gender)
         .map(p => ({
           name: p.name!,
           age: Number(p.age!),
@@ -447,7 +451,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                           onChange={e => {
                             const value = e.target.value;
                             if (value === '' || /^[0-9]*$/.test(value)) {
-                                field.onChange(value === '' ? undefined : value);
+                                field.onChange(value === '' ? '' : value);
                             }
                           }}
                         />
