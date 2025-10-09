@@ -451,7 +451,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                           onChange={e => {
                             const value = e.target.value;
                             if (value === '' || /^[0-9]*$/.test(value)) {
-                                field.onChange(value === '' ? '' : value);
+                                field.onChange(value);
                             }
                           }}
                         />
@@ -494,7 +494,16 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           <Button
             type="button"
             variant="outline"
-            onClick={() => append({ name: "", age: undefined, gender: undefined })}
+            onClick={() => {
+              const newIndex = fields.length;
+              append({ name: "", age: "", gender: undefined });
+              // Explicitly clear the form values for the new passenger
+              setTimeout(() => {
+                form.setValue(`passengers.${newIndex}.name`, "");
+                form.setValue(`passengers.${newIndex}.age`, "");
+                form.resetField(`passengers.${newIndex}.gender`);
+              }, 0);
+            }}
             className="mt-2"
           >
             <UserPlus className="mr-2 h-4 w-4" /> Add Passenger
