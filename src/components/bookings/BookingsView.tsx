@@ -71,15 +71,19 @@ export function BookingsView({ allBookings, allBookingDates, searchQuery }: Book
     }, [searchQuery]);
 
 
-    const { pendingBookings, completedBookingsByDate, completedDates } = useMemo(() => {
-        // For search, filter all bookings. Otherwise, use pagination logic.
+    const { pendingBookingsByDate, pendingDates, completedBookingsByDate, completedDates } = useMemo(() => {
         const sourceBookings = allBookings;
 
-        const pendingBookings = sourceBookings
+        // --- Pending Bookings Logic ---
+        const pendingBookingsRaw = sourceBookings
             .filter(b => b.status === 'Requested')
             .sort((a, b) => new Date(a.journeyDate).getTime() - new Date(b.journeyDate).getTime());
+        
+        const pendingBookingsByDate = groupBookingsByDate(pendingBookingsRaw);
+        const pendingDates = Object.keys(pendingBookingsByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
-        // Completed bookings for display, respecting pagination for non-search views
+
+        // --- Completed Bookings Logic ---
         const completedBookingsToDisplay = searchQuery 
             ? sourceBookings.filter(b => b.status !== 'Requested')
             : sourceBookings.filter(b => {
@@ -92,7 +96,7 @@ export function BookingsView({ allBookings, allBookingDates, searchQuery }: Book
         );
         const completedDates = Object.keys(completedBookingsByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
-        return { pendingBookings, completedBookingsByDate, completedDates };
+        return { pendingBookingsByDate, pendingDates, completedBookingsByDate, completedDates };
     }, [allBookings, visibleDates, searchQuery]);
 
 
@@ -138,15 +142,25 @@ export function BookingsView({ allBookings, allBookingDates, searchQuery }: Book
 
             <TabsContent value="pending" className="mt-6">
                 <h2 className="text-2xl font-semibold mb-4">Pending Bookings</h2>
-                {pendingBookings.length === 0 ? (
+                {pendingDates.length === 0 ? (
                 <Alert className="mt-4">
                     {searchQuery ? <Search className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
                     <AlertTitle>{searchQuery ? "Search Results" : "No Pending Bookings"}</AlertTitle>
                     <AlertDescription>{noPendingMessage}</AlertDescription>
                 </Alert>
                 ) : (
-                    // In pending, we just render the list directly, not grouped by date
-                    <BookingList bookings={pendingBookings} />
+                <Accordion type="multiple" className="w-full space-y-4">
+                    {pendingDates.map(date => (
+                    <AccordionItem value={date} key={`pending-${date}`} className="border-b-0">
+                        <AccordionTrigger className="p-0 hover:no-underline">
+                        <DateGroupHeading dateString={date} />
+                        </AccordionTrigger>
+                        <AccordionContent>
+                        {renderBookingsForDate(pendingBookingsByDate[date])}
+                        </AccordionContent>
+                    </AccordionItem>
+                    ))}
+                </Accordion>
                 )}
             </TabsContent>
 
