@@ -6,7 +6,7 @@ import { ALL_TRAIN_CLASSES, ALL_PASSENGER_GENDERS, ALL_BOOKING_TYPES } from "@/t
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/firebase";
-import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, Timestamp, type DocumentSnapshot, type DocumentData, limit, startAfter, where } from "firebase/firestore";
+import { collection, addDoc, getDocs, doc, getDoc, updateDoc, deleteDoc, serverTimestamp, query, orderBy, Timestamp, type DocumentSnapshot, type DocumentData, limit, startAfter, where, deleteField } from "firebase/firestore";
 
 const PassengerSchema = z.object({
   name: z.string().min(1, "Passenger name is required."),
@@ -180,10 +180,11 @@ export async function updateBookingById(id: string, formData: BookingFormData): 
       updatedAt: serverTimestamp(),
     };
     if (validationResult.data.trainPreference === undefined) {
-       delete bookingDataForFirestore.trainPreference;
+       bookingDataForFirestore.trainPreference = deleteField();
     }
     if (validationResult.data.remarks === undefined) {
-       delete bookingDataForFirestore.remarks;
+       bookingDataForFirestore.remarks = deleteField();
+       bookingDataForFirestore.timePreference = deleteField();
     }
 
     await updateDoc(docRef, bookingDataForFirestore);

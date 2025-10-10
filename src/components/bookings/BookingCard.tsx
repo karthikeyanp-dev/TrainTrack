@@ -284,10 +284,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}
             <span className="flex-1"><span className="font-semibold">Remarks:</span> {booking.remarks}</span>
           </div>
         )}
-        <div className="flex items-center gap-2">
-          {getStatusIcon(booking.status)}
-          <span><span className="font-semibold">Status:</span> {booking.status}</span>
-        </div>
+        {/* Status section removed */}
       </CardContent>
       <CardFooter className="flex flex-col items-stretch gap-3 pt-4 border-t">
         {/* Created and Last Updated side by side */}
