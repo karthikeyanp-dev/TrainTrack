@@ -11,8 +11,8 @@ export const ALL_TRAIN_CLASSES: TrainClass[] = ["SL", "3A", "2A", "1A", "2S", "E
 export type PassengerGender = "M" | "F" | "O";
 export const ALL_PASSENGER_GENDERS: PassengerGender[] = ["M", "F", "O"];
 
-export type BookingType = "Tatkal" | "Regular";
-export const ALL_BOOKING_TYPES: BookingType[] = ["Tatkal", "Regular"];
+export type BookingType = "Tatkal" | "General";
+export const ALL_BOOKING_TYPES: BookingType[] = ["Tatkal", "General"];
 
 
 export interface Passenger {

@@ -226,7 +226,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}
     });
   };
   
-  const displayClass = `${booking.bookingType === 'Tatkal' ? 'T' : 'R'}-${booking.classType}`;
+  const displayClass = `${booking.bookingType === 'Tatkal' ? 'T' : 'G'}-${booking.classType}`;
 
   return (
     <Card className="w-full shadow-md hover:shadow-lg transition-shadow duration-200 flex flex-col">
@@ -243,7 +243,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}
             <StatusBadge status={booking.status} />
             <span className={cn(
               "text-3xl font-semibold",
-              booking.bookingType === 'Tatkal' ? "text-primary" : "text-orange-500"
+              booking.bookingType === 'Tatkal' ? "text-primary" : "text-gray-400"
             )}>
               {displayClass}
             </span>

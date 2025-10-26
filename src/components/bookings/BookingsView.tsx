@@ -99,26 +99,44 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
     }, [allBookings, pendingBookings, visibleDates, searchQuery]);
 
 
-    const renderBookingsForDate = (bookingsForDate: Booking[]) => {
-        const acBookings = bookingsForDate.filter(b => !SL_CLASSES.includes(b.classType));
-        const slBookings = bookingsForDate.filter(b => SL_CLASSES.includes(b.classType));
+  const renderBookingsForDate = (bookingsForDate: Booking[]) => {
+    // Separate General (includes legacy 'Regular') and Tatkal bookings
+    const generalBookings = bookingsForDate.filter(b => (['General', 'Regular'] as const).includes(b.bookingType as any));
+        const tatkalBookings = bookingsForDate.filter(b => b.bookingType === 'Tatkal');
+        
+        // For General, separate by AC/SL classes
+        const generalAcBookings = generalBookings.filter(b => !SL_CLASSES.includes(b.classType));
+        const generalSlBookings = generalBookings.filter(b => SL_CLASSES.includes(b.classType));
+        
+        // For Tatkal, separate by AC/SL classes
+        const tatkalAcBookings = tatkalBookings.filter(b => !SL_CLASSES.includes(b.classType));
+        const tatkalSlBookings = tatkalBookings.filter(b => SL_CLASSES.includes(b.classType));
 
         return (
           <>
-            {acBookings.length > 0 && (
+            {generalAcBookings.length > 0 && (
               <div className="mt-4">
-                <h4 className="text-lg font-medium mb-2 text-primary">AC Bookings</h4>
-                <BookingList bookings={acBookings} />
+                <h4 className="text-lg font-medium mb-2 text-green-600 dark:text-green-400">General - AC Bookings</h4>
+                <BookingList bookings={generalAcBookings} />
               </div>
             )}
-            {slBookings.length > 0 && (
+            {generalSlBookings.length > 0 && (
               <div className="mt-4">
-                <h4 className="text-lg font-medium mb-2 text-accent">SL Bookings</h4>
-                <BookingList bookings={slBookings} />
+                <h4 className="text-lg font-medium mb-2 text-green-600 dark:text-green-400">General - SL Bookings</h4>
+                <BookingList bookings={generalSlBookings} />
               </div>
             )}
-            {acBookings.length === 0 && slBookings.length === 0 && bookingsForDate.length > 0 && (
-              <BookingList bookings={bookingsForDate} />
+            {tatkalAcBookings.length > 0 && (
+              <div className="mt-4">
+                <h4 className="text-lg font-medium mb-2 text-primary">Tatkal - AC Bookings</h4>
+                <BookingList bookings={tatkalAcBookings} />
+              </div>
+            )}
+            {tatkalSlBookings.length > 0 && (
+              <div className="mt-4">
+                <h4 className="text-lg font-medium mb-2 text-accent">Tatkal - SL Bookings</h4>
+                <BookingList bookings={tatkalSlBookings} />
+              </div>
             )}
           </>
         );
