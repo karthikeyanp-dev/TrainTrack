@@ -101,7 +101,7 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
 
   const renderBookingsForDate = (bookingsForDate: Booking[]) => {
     // Separate General (includes legacy 'Regular') and Tatkal bookings
-    const generalBookings = bookingsForDate.filter(b => (['General', 'Regular'] as const).includes(b.bookingType as any));
+        const generalBookings = bookingsForDate.filter(b => ['General', 'Regular'].includes(String(b.bookingType)));
         const tatkalBookings = bookingsForDate.filter(b => b.bookingType === 'Tatkal');
         
         // For General, separate by AC/SL classes
