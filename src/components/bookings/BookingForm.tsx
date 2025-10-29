@@ -115,9 +115,12 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
     setIsSubmitting(true);
 
     const formDataForAction: BookingFormData = {
-      ...values,
+      bookingType: values.bookingType,
+      source: values.source,
+      destination: values.destination,
       journeyDate: format(values.journeyDate, "yyyy-MM-dd"),
       bookingDate: format(values.bookingDate, "yyyy-MM-dd"),
+      userName: values.userName,
       classType: values.classType as TrainClass,
       passengers: values.passengers
         .filter(p => p.name && p.age !== undefined && p.age !== "" && p.gender)
@@ -126,8 +129,8 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           age: Number(p.age!),
           gender: p.gender!,
       })) as Passenger[],
-      trainPreference: values.trainPreference || undefined,
-      remarks: values.remarks || undefined,
+      ...(values.trainPreference && values.trainPreference.trim() !== "" && { trainPreference: values.trainPreference }),
+      ...(values.remarks && values.remarks.trim() !== "" && { remarks: values.remarks }),
     };
 
     if (formDataForAction.passengers.length === 0) {
@@ -319,6 +322,9 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                     />
                   </PopoverContent>
                 </Popover>
+                {field.value && (
+                  <p className="text-xs text-muted-foreground">{format(field.value, "EEEE")}</p>
+                )}
                 <FormMessage />
               </FormItem>
             )}
@@ -357,6 +363,9 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                     />
                   </PopoverContent>
                 </Popover>
+                {field.value && (
+                  <p className="text-xs text-muted-foreground">{format(field.value, "EEEE")}</p>
+                )}
                 <FormMessage />
               </FormItem>
             )}

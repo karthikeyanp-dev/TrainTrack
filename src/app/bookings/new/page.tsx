@@ -15,7 +15,8 @@ export default async function NewBookingPage({ searchParams }: NewBookingPagePro
   let initialDataForForm: (BookingFormData & { journeyDateObj?: Date; bookingDateObj?: Date; passengers?: Passenger[] }) | undefined = undefined;
   let copyError: string | null = null;
 
-  const copyFromId = searchParams?.copyFrom as string | undefined;
+  const awaitedSearchParams = await searchParams;
+  const copyFromId = awaitedSearchParams?.copyFrom as string | undefined;
 
   if (copyFromId) {
     const bookingToCopy = await getBookingById(copyFromId);

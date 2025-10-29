@@ -234,7 +234,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}
         <div className="flex justify-between items-start">
           <div>
             <CardTitle className="text-lg md:text-xl">
-              {booking.source.toUpperCase()} to {booking.destination.toUpperCase()}
+              {booking.source.toUpperCase()} <span className="text-sm text-gray-400">to</span><br></br> {booking.destination.toUpperCase()}
             </CardTitle>
             <hr></hr>
             <CardDescription>For <b>{booking.userName}</b></CardDescription>
@@ -243,7 +243,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}
             <StatusBadge status={booking.status} />
             <span className={cn(
               "text-3xl font-semibold",
-              booking.bookingType === 'Tatkal' ? "text-primary" : "text-gray-400"
+              booking.bookingType === 'Tatkal' ? "text-primary" : "text-amber-700 dark:text-amber-600"
             )}>
               {displayClass}
             </span>

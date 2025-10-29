@@ -116,13 +116,13 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
           <>
             {generalAcBookings.length > 0 && (
               <div className="mt-4">
-                <h4 className="text-lg font-medium mb-2 text-gray-600 dark:text-gray-400">General - AC Bookings</h4>
+                <h4 className="text-lg font-medium mb-2 text-amber-700 dark:text-amber-600">General - AC Bookings</h4>
                 <BookingList bookings={generalAcBookings} />
               </div>
             )}
             {generalSlBookings.length > 0 && (
               <div className="mt-4">
-                <h4 className="text-lg font-medium mb-2 text-gray-600 dark:text-gray-400">General - SL Bookings</h4>
+                <h4 className="text-lg font-medium mb-2 text-amber-700 dark:text-amber-600">General - SL Bookings</h4>
                 <BookingList bookings={generalSlBookings} />
               </div>
             )}

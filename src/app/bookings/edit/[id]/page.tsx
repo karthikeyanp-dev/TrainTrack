@@ -12,7 +12,8 @@ interface EditBookingPageProps {
 }
 
 export default async function EditBookingPage({ params }: EditBookingPageProps) {
-  const booking = await getBookingById(params.id);
+  const { id } = await params;
+  const booking = await getBookingById(id);
 
   if (!booking) {
     return (
