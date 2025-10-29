@@ -63,20 +63,20 @@ export function BookingCard({ booking }: BookingCardProps) {
       if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
         // For YYYY-MM-DD strings, ensure they are treated as local dates.
         // Appending T00:00:00 or T12:00:00 makes it local to the environment.
-        // For display like "PPP", the time component doesn't matter as much as getting the date right.
+        // For display like "MMM dd, yyyy (EEE)", the time component doesn't matter as much as getting the date right.
         const date = new Date(dateString + 'T12:00:00');
         if (isNaN(date.getTime())) {
           console.warn(`[BookingCard] Invalid date-only string: ${dateString}`);
           return 'Invalid Date';
         }
-        return format(date, "PPP");
+        return format(date, "MMM dd, yyyy (EEE)");
       }
       const date = new Date(dateString); // Handles ISO strings with timezones
       if (isNaN(date.getTime())) {
         console.warn(`[BookingCard] Invalid timestamp string: ${dateString}`);
         return 'Invalid Date';
       }
-      return format(date, "PPP");
+      return format(date, "MMM dd, yyyy (EEE)");
     } catch (error) {
       console.error(`[BookingCard] Error formatting date "${dateString}":`, error);
       return 'Error Date';
@@ -177,25 +177,21 @@ export function BookingCard({ booking }: BookingCardProps) {
     const passengerDetailsText = booking.passengers.map((p, index) => `${index + 1}. ${p.name} ${p.age} ${p.gender.toUpperCase()}`).join('\n');
     const journeyDateFormatted = clientFormattedJourneyDate || "N/A";
     const bookingDateFormatted = clientFormattedBookingDate || "N/A";
-    
-    const journeyDateForDay = booking.journeyDate.match(/^\d{4}-\d{2}-\d{2}$/) 
-                              ? new Date(booking.journeyDate + 'T12:00:00')
-                              : new Date(booking.journeyDate);
-
-    const dayOfWeek = !isNaN(journeyDateForDay.getTime()) ? format(journeyDateForDay, "EEEE") : "N/A";
-
     const bookingDetailsText = `
 Train Booking Details:
 ----------------------
 From: ${booking.source.toUpperCase()}
 To: ${booking.destination.toUpperCase()}
+-
 Journey Date: ${journeyDateFormatted}
-Day of Journey: ${dayOfWeek} 
 Book By: ${bookingDateFormatted}
+-
 Type: ${booking.bookingType}
 Class: ${booking.classType}
+-
 Passengers:
 ${passengerDetailsText}
+-
 ${booking.trainPreference ? `Train Preference: ${booking.trainPreference}` : ''}
 ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}
 ----------------------
