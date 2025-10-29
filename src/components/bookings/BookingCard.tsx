@@ -234,7 +234,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}
         <div className="flex justify-between items-start">
           <div>
             <CardTitle className="text-lg md:text-xl">
-              {booking.source.toUpperCase()} <span className="text-sm text-gray-400">to</span><br></br> {booking.destination.toUpperCase()}
+              {booking.source.toUpperCase()} <span className="text-sm text-gray-400">to</span> {booking.destination.toUpperCase()}
             </CardTitle>
             <hr></hr>
             <CardDescription>For <b>{booking.userName}</b></CardDescription>
