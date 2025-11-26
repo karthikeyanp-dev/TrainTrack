@@ -21,6 +21,13 @@ export interface Passenger {
   gender: PassengerGender;
 }
 
+export interface PreparedAccount {
+  username: string;
+  password: string;
+  isMasterAdded: boolean;
+  isWalletLoaded: boolean;
+}
+
 export interface Booking {
   id: string;
   source: string;
@@ -36,8 +43,9 @@ export interface Booking {
   status: BookingStatus;
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
+  preparedAccounts?: PreparedAccount[]; // Optional array of prepared accounts for booking requirements
 }
 
-export type BookingFormData = Omit<Booking, "id" | "createdAt" | "updatedAt" | "status">;
+export type BookingFormData = Omit<Booking, "id" | "createdAt" | "updatedAt" | "status" | "preparedAccounts">;
 
     

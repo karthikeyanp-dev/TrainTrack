@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "./StatusBadge";
-import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare } from "lucide-react";
+import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateBookingStatus, deleteBooking } from "@/actions/bookingActions";
 import { useToast } from "@/hooks/use-toast";
@@ -25,8 +25,15 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
+import { BookingRequirementsSheet } from "./BookingRequirementsSheet";
 
 
 interface BookingCardProps {
@@ -177,6 +184,17 @@ export function BookingCard({ booking }: BookingCardProps) {
     const passengerDetailsText = booking.passengers.map((p, index) => `${index + 1}. ${p.name} ${p.age} ${p.gender.toUpperCase()}`).join('\n');
     const journeyDateFormatted = clientFormattedJourneyDate || "N/A";
     const bookingDateFormatted = clientFormattedBookingDate || "N/A";
+    
+    // Build prepared accounts section if exists
+    let preparedAccountsText = '';
+    if (booking.preparedAccounts && booking.preparedAccounts.length > 0) {
+      const accountsDetails = booking.preparedAccounts.map((acc, index) => 
+        `${index + 1}. User: ${acc.username} | Pass: ${acc.password} | 
+          Master: ${acc.isMasterAdded ? '✅' : '❌'} | Wallet: ${acc.isWalletLoaded ? '✅' : '❌'}`
+      ).join('\n');
+      preparedAccountsText = `\n-\nPrepared Accounts:\n${accountsDetails}`;
+    }
+
     const bookingDetailsText = `
 Train Booking Details:
 ----------------------
@@ -193,7 +211,7 @@ Passengers:
 ${passengerDetailsText}
 -
 ${booking.trainPreference ? `Train Preference: ${booking.trainPreference}` : ''}
-${booking.remarks ? `Remarks: ${booking.remarks}` : ''}
+${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
 ----------------------
     `.trim().replace(/^\n+|\n+$/g, '').replace(/\n\n+/g, '\n');
 
@@ -204,22 +222,59 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}
           text: bookingDetailsText,
         });
         toast({ title: "Booking Shared", description: "Details sent successfully." });
-      } catch (error) {
-        console.warn("Web Share API failed or was cancelled:", error);
-        copyToClipboard(bookingDetailsText);
+      } catch (error: any) {
+        // Only fallback to clipboard if it's not a user cancellation
+        if (error?.name === 'AbortError') {
+          // User cancelled the share dialog - do nothing
+          console.log("Share cancelled by user");
+        } else {
+          console.warn("Web Share API failed:", error);
+          copyToClipboard(bookingDetailsText);
+        }
       }
     } else {
       copyToClipboard(bookingDetailsText);
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      toast({ title: "Copied to Clipboard", description: "Booking details copied." });
-    }).catch(err => {
+  const copyToClipboard = async (text: string) => {
+    // Check if clipboard API is available (requires HTTPS or localhost)
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        toast({ title: "Copied to Clipboard", description: "Booking details copied." });
+      } catch (err) {
+        console.error("Failed to copy to clipboard:", err);
+        fallbackCopyToClipboard(text);
+      }
+    } else {
+      fallbackCopyToClipboard(text);
+    }
+  };
+
+  const fallbackCopyToClipboard = (text: string) => {
+    // Fallback for browsers/contexts where clipboard API is not available
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-999999px";
+      textArea.style.top = "-999999px";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const successful = document.execCommand("copy");
+      document.body.removeChild(textArea);
+      
+      if (successful) {
+        toast({ title: "Copied to Clipboard", description: "Booking details copied." });
+      } else {
+        toast({ title: "Copy Failed", description: "Could not copy details to clipboard.", variant: "destructive" });
+      }
+    } catch (err) {
+      console.error("Fallback copy failed:", err);
       toast({ title: "Copy Failed", description: "Could not copy details to clipboard.", variant: "destructive" });
-      console.error("Failed to copy to clipboard:", err);
-    });
+    }
   };
   
   const displayClass = `${booking.bookingType === 'Tatkal' ? 'T' : 'G'}-${booking.classType}`;
@@ -280,6 +335,68 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}
             <span className="flex-1"><span className="font-semibold">Remarks:</span> {booking.remarks}</span>
           </div>
         )}
+
+        {/* Prepared Accounts Accordion */}
+        {booking.preparedAccounts && booking.preparedAccounts.length > 0 && (
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="accounts" className="border-none">
+              <AccordionTrigger className="py-2 text-sm hover:no-underline">
+                <span className="flex items-center gap-2">
+                  <span className="font-semibold">Prepared Accounts</span>
+                  <span className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full">
+                    {booking.preparedAccounts.length}
+                  </span>
+                </span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-2 pt-1">
+                  {booking.preparedAccounts.map((account, index) => (
+                    <div
+                      key={index}
+                      className="bg-muted/50 rounded-md p-2 text-xs space-y-1"
+                    >
+                      <div className="flex justify-between items-center">
+                        <span className="font-medium text-muted-foreground">
+                          Account #{index + 1}
+                        </span>
+                        <div className="flex gap-2">
+                          <span className={cn(
+                            "flex items-center gap-1 px-1.5 py-0.5 rounded text-xs",
+                            account.isMasterAdded 
+                              ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" 
+                              : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+                          )}>
+                            {account.isMasterAdded ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                            Master
+                          </span>
+                          <span className={cn(
+                            "flex items-center gap-1 px-1.5 py-0.5 rounded text-xs",
+                            account.isWalletLoaded 
+                              ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" 
+                              : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
+                          )}>
+                            {account.isWalletLoaded ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                            Wallet
+                          </span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-muted-foreground">User:</span>{" "}
+                          <span className="font-medium">{account.username}</span>
+                        </div>
+                        <div>
+                          <span className="text-muted-foreground">Pass:</span>{" "}
+                          <span className="font-medium font-mono">{account.password}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        )}
         {/* Status section removed */}
       </CardContent>
       <CardFooter className="flex flex-col items-stretch gap-3 pt-4 border-t">
@@ -297,6 +414,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}
         
         {/* Action buttons with icons only for mobile compatibility */}
          <div className="flex gap-1">
+           <BookingRequirementsSheet booking={booking} />
            <Button 
              variant="outline" 
              size="sm" 

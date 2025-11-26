@@ -1,7 +1,7 @@
 
 "use server";
 
-import type { Booking, BookingFormData, BookingStatus, Passenger, PassengerGender, TrainClass, BookingType } from "@/types/booking";
+import type { Booking, BookingFormData, BookingStatus, Passenger, PassengerGender, TrainClass, BookingType, PreparedAccount } from "@/types/booking";
 import { ALL_TRAIN_CLASSES, ALL_PASSENGER_GENDERS, ALL_BOOKING_TYPES } from "@/types/booking";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
@@ -12,6 +12,13 @@ const PassengerSchema = z.object({
   name: z.string().min(1, "Passenger name is required."),
   age: z.number().int().positive("Passenger age must be a positive integer."),
   gender: z.enum(ALL_PASSENGER_GENDERS, { errorMap: () => ({ message: "Invalid gender selected."}) }),
+});
+
+const PreparedAccountSchema = z.object({
+  username: z.string().min(1, "Username is required."),
+  password: z.string().min(1, "Password is required."),
+  isMasterAdded: z.boolean(),
+  isWalletLoaded: z.boolean(),
 });
 
 const ServerBookingFormSchema = z.object({
@@ -73,6 +80,7 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     status: data.status as BookingStatus,
     createdAt: toISOStringSafe(data.createdAt, 'createdAt', id),
     updatedAt: toISOStringSafe(data.updatedAt, 'updatedAt', id),
+    preparedAccounts: Array.isArray(data.preparedAccounts) ? data.preparedAccounts as PreparedAccount[] : undefined,
   };
 };
 
@@ -399,5 +407,67 @@ export async function getAllBookingsAsJsonString(): Promise<string> {
   } catch (error) {
     console.error("[Error] In getAllBookingsAsJsonString:", error instanceof Error ? error.message : String(error));
     return JSON.stringify([]);
+  }
+}
+
+export async function updateBookingRequirements(
+  id: string,
+  preparedAccounts: PreparedAccount[]
+): Promise<{ success: boolean; error?: string; booking?: Booking }> {
+  // Validate input
+  const validationResult = z.array(PreparedAccountSchema).safeParse(preparedAccounts);
+  if (!validationResult.success) {
+    console.error("[Server Validation Failed] In updateBookingRequirements:", validationResult.error.flatten());
+    return { 
+      success: false, 
+      error: "Invalid account data provided." 
+    };
+  }
+
+  try {
+    if (!db) {
+      console.error("[Firestore Error] In updateBookingRequirements: Firestore db instance is not available.");
+      return { 
+        success: false, 
+        error: "Firestore database is not configured correctly." 
+      };
+    }
+
+    const docRef = doc(db, "bookings", id);
+    
+    // If no accounts, delete the field; otherwise update with new array
+    const updateData: Record<string, any> = {
+      updatedAt: serverTimestamp(),
+    };
+    
+    if (validationResult.data.length === 0) {
+      updateData.preparedAccounts = deleteField();
+    } else {
+      updateData.preparedAccounts = validationResult.data;
+    }
+
+    await updateDoc(docRef, updateData);
+
+    try {
+      revalidatePath("/");
+      revalidatePath("/suggestions");
+    } catch (revalidationError) {
+      console.warn(`[Revalidation Warning] Failed to revalidate paths after updating booking requirements ${id}:`, revalidationError instanceof Error ? revalidationError.message : String(revalidationError));
+    }
+
+    const updatedDocSnap = await getDoc(docRef);
+    if (updatedDocSnap.exists()) {
+      const updatedBooking = mapDocToBooking(updatedDocSnap, updatedDocSnap.id);
+      return { success: true, booking: updatedBooking };
+    }
+    
+    return { success: false, error: "Failed to retrieve booking after update." };
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    console.error(`[Firestore/Server Error] In updateBookingRequirements (ID: ${id}):`, errorMessage);
+    return { 
+      success: false, 
+      error: `Failed to update booking requirements: ${errorMessage}` 
+    };
   }
 }
