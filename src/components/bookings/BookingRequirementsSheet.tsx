@@ -30,7 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { ClipboardList, Plus, Trash2 } from "lucide-react";
+import { ClipboardList, Plus, Trash2, LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
 const PreparedAccountSchema = z.object({
@@ -48,12 +48,14 @@ type FormValues = z.infer<typeof FormSchema>;
 
 interface BookingRequirementsSheetProps {
   booking: Booking;
+  iconComponent?: LucideIcon;
 }
 
-export function BookingRequirementsSheet({ booking }: BookingRequirementsSheetProps) {
+export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequirementsSheetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const IconComponent = iconComponent || ClipboardList;
 
   const form = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
@@ -130,7 +132,7 @@ export function BookingRequirementsSheet({ booking }: BookingRequirementsSheetPr
           className="flex-1 aspect-square p-2 relative"
           title="Booking Requirements"
         >
-          <ClipboardList className="h-4 w-4" />
+          <IconComponent className="h-4 w-4" />
           {accountCount > 0 && (
             <span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs rounded-full h-4 w-4 flex items-center justify-center">
               {accountCount}

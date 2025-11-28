@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "./StatusBadge";
-import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X } from "lucide-react";
+import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X, CreditCard } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateBookingStatus, deleteBooking } from "@/actions/bookingActions";
 import { useToast } from "@/hooks/use-toast";
@@ -192,7 +192,7 @@ export function BookingCard({ booking }: BookingCardProps) {
         `${index + 1}. User: ${acc.username} | Pass: ${acc.password} | 
           Master: ${acc.isMasterAdded ? '✅' : '❌'} | Wallet: ${acc.isWalletLoaded ? '✅' : '❌'}`
       ).join('\n');
-      preparedAccountsText = `\n-\nPrepared Accounts:\n${accountsDetails}`;
+      preparedAccountsText = `\n-\nID(s) for Booking:\n${accountsDetails}`;
     }
 
     const bookingDetailsText = `
@@ -342,7 +342,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             <AccordionItem value="accounts" className="border-none">
               <AccordionTrigger className="py-2 text-sm hover:no-underline">
                 <span className="flex items-center gap-2">
-                  <span className="font-semibold">Prepared Accounts</span>
+                  <span className="font-semibold">ID(s) for Booking</span>
                   <span className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full">
                     {booking.preparedAccounts.length}
                   </span>
@@ -414,7 +414,6 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
         
         {/* Action buttons with icons only for mobile compatibility */}
          <div className="flex gap-1">
-           <BookingRequirementsSheet booking={booking} />
            <Button 
              variant="outline" 
              size="sm" 
@@ -442,6 +441,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
            >
              <Share2 className="h-4 w-4" />
            </Button>
+           <BookingRequirementsSheet booking={booking} iconComponent={CreditCard} />
            <Button 
              variant="outline" 
              size="sm" 
