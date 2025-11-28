@@ -124,7 +124,7 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
   const accountCount = booking.preparedAccounts?.length || 0;
 
   return (
-    <Sheet open={isOpen} onOpenChange={handleOpenChange}>
+    <Sheet open={isOpen} onOpenChange={handleOpenChange} modal={false}>
       <SheetTrigger asChild>
         <Button
           variant="outline"
@@ -140,7 +140,7 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
           )}
         </Button>
       </SheetTrigger>
-      <SheetContent side="bottom" className="h-[85vh] flex flex-col">
+      <SheetContent side="bottom" className="h-[85vh] flex flex-col" onOpenAutoFocus={(e) => e.preventDefault()}>
         <SheetHeader>
           <SheetTitle>Booking Requirements</SheetTitle>
           <SheetDescription>
@@ -184,7 +184,7 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
                             <FormItem>
                               <FormLabel>Username</FormLabel>
                               <FormControl>
-                                <Input placeholder="Enter username" {...field} />
+                                <Input placeholder="Enter username" {...field} autoComplete="off" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -198,7 +198,7 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
                             <FormItem>
                               <FormLabel>Password</FormLabel>
                               <FormControl>
-                                <Input placeholder="Enter password" {...field} />
+                                <Input placeholder="Enter password" {...field} autoComplete="off" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -217,7 +217,7 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
                                     onCheckedChange={field.onChange}
                                   />
                                 </FormControl>
-                                <FormLabel className="text-sm font-normal cursor-pointer">
+                                <FormLabel className="text-sm font-normal cursor-pointer" onClick={() => field.onChange(!field.value)}>
                                   Master Added
                                 </FormLabel>
                               </FormItem>
@@ -235,7 +235,7 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
                                     onCheckedChange={field.onChange}
                                   />
                                 </FormControl>
-                                <FormLabel className="text-sm font-normal cursor-pointer">
+                                <FormLabel className="text-sm font-normal cursor-pointer" onClick={() => field.onChange(!field.value)}>
                                   Wallet Loaded
                                 </FormLabel>
                               </FormItem>
