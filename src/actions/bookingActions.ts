@@ -19,6 +19,7 @@ const PreparedAccountSchema = z.object({
   password: z.string().min(1, "Password is required."),
   isMasterAdded: z.boolean(),
   isWalletLoaded: z.boolean(),
+  handlingBy: z.string().optional(),
 });
 
 const ServerBookingFormSchema = z.object({

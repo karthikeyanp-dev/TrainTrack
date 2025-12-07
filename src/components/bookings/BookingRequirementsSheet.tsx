@@ -116,8 +116,13 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
   // Reset form when sheet opens to get latest data
   const handleOpenChange = (open: boolean) => {
     if (open) {
+      // Ensure all accounts have the handlingBy field, even if it's undefined in the data
+      const accountsWithDefaults = (booking.preparedAccounts || []).map(acc => ({
+        ...acc,
+        handlingBy: acc.handlingBy || "",
+      }));
       form.reset({
-        accounts: booking.preparedAccounts || [],
+        accounts: accountsWithDefaults,
       });
     }
     setIsOpen(open);
