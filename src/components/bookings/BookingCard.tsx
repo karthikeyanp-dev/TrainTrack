@@ -188,10 +188,10 @@ export function BookingCard({ booking }: BookingCardProps) {
     // Build prepared accounts section if exists
     let preparedAccountsText = '';
     if (booking.preparedAccounts && booking.preparedAccounts.length > 0) {
-      const accountsDetails = booking.preparedAccounts.map((acc, index) => 
-        `${index + 1}. User: ${acc.username} | Pass: ${acc.password} | 
-          Master: ${acc.isMasterAdded ? '✅' : '❌'} | Wallet: ${acc.isWalletLoaded ? '✅' : '❌'}`
-      ).join('\n');
+      const accountsDetails = booking.preparedAccounts.map((acc, index) => {
+        const handlingInfo = acc.handlingBy ? ` | Handler: ${acc.handlingBy}` : '';
+        return `${index + 1}. ${acc.username} | ${acc.password} | Master: ${acc.isMasterAdded ? '✅' : '❌'} | Wallet: ${acc.isWalletLoaded ? '✅' : '❌'}${handlingInfo}`;
+      }).join('\n');
       preparedAccountsText = `\n-\nID(s) for Booking:\n${accountsDetails}`;
     }
 
@@ -390,6 +390,12 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                           <span className="font-medium font-mono">{account.password}</span>
                         </div>
                       </div>
+                      {account.handlingBy && (
+                        <div className="mt-1">
+                          <span className="text-muted-foreground">Handling By:</span>{" "}
+                          <span className="font-medium">{account.handlingBy}</span>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>

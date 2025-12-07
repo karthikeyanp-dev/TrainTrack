@@ -38,6 +38,7 @@ const PreparedAccountSchema = z.object({
   password: z.string().min(1, "Password is required"),
   isMasterAdded: z.boolean(),
   isWalletLoaded: z.boolean(),
+  handlingBy: z.string().optional(),
 });
 
 const FormSchema = z.object({
@@ -108,6 +109,7 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
       password: "",
       isMasterAdded: false,
       isWalletLoaded: false,
+      handlingBy: "",
     });
   };
 
@@ -199,6 +201,20 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
                               <FormLabel>Password</FormLabel>
                               <FormControl>
                                 <Input placeholder="Enter password" {...field} autoComplete="off" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+
+                        <FormField
+                          control={form.control}
+                          name={`accounts.${index}.handlingBy`}
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Handling By</FormLabel>
+                              <FormControl>
+                                <Input placeholder="Enter handler name" {...field} autoComplete="off" />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
