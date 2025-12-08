@@ -14,7 +14,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, CheckCircle2 } from "lucide-react";
+import { Loader2, CheckCircle2, Trash2 } from "lucide-react";
 import type { IrctcAccount } from "@/types/account";
 import { getAccounts } from "@/actions/accountActions";
 import type { PaymentMethod, BookingRecord } from "@/types/bookingRecord";
@@ -22,6 +22,7 @@ import { ALL_PAYMENT_METHODS } from "@/types/bookingRecord";
 import {
   getBookingRecordByBookingId,
   saveBookingRecord,
+  deleteBookingRecord,
 } from "@/actions/bookingRecordActions";
 
 interface BookingRecordFormProps {
@@ -40,6 +41,7 @@ export function BookingRecordForm({ bookingId, onClose }: BookingRecordFormProps
   const [accounts, setAccounts] = useState<IrctcAccount[]>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [existingRecord, setExistingRecord] = useState<BookingRecord | null>(null);
   const { toast } = useToast();
 
@@ -92,6 +94,39 @@ export function BookingRecordForm({ bookingId, onClose }: BookingRecordFormProps
 
   const handleMethodChange = (value: PaymentMethod) => {
     setForm(prev => ({ ...prev, methodUsed: value }));
+  };
+
+  const handleDelete = async () => {
+    if (!existingRecord) return;
+    
+    if (!confirm("Are you sure you want to delete this booking record? This will also refund the amount to the wallet if applicable.")) {
+      return;
+    }
+
+    setIsDeleting(true);
+    const result = await deleteBookingRecord(existingRecord.id);
+
+    if (result.success) {
+      toast({
+        title: "Record Deleted",
+        description: "Booking record has been deleted successfully.",
+      });
+      setExistingRecord(null);
+      setForm({
+        bookedBy: "",
+        bookedAccountUsername: "",
+        amountCharged: "",
+        methodUsed: "",
+      });
+      loadData(); // Reload to refresh wallet balances
+    } else {
+      toast({
+        title: "Error Deleting Record",
+        description: result.error || "Failed to delete record",
+        variant: "destructive",
+      });
+    }
+    setIsDeleting(false);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -277,7 +312,7 @@ export function BookingRecordForm({ bookingId, onClose }: BookingRecordFormProps
           </div>
 
           <div className="flex gap-2 pt-2">
-            <Button type="submit" className="flex-1 text-sm" disabled={isSubmitting}>
+            <Button type="submit" className="flex-1 text-sm" disabled={isSubmitting || isDeleting}>
               {isSubmitting && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
               {isSubmitting 
                 ? "Saving..." 
@@ -286,12 +321,27 @@ export function BookingRecordForm({ bookingId, onClose }: BookingRecordFormProps
                   : "Save Record"
               }
             </Button>
+            
+            {existingRecord && (
+              <Button
+                type="button"
+                variant="destructive"
+                size="icon"
+                onClick={handleDelete}
+                disabled={isSubmitting || isDeleting}
+                className="shrink-0"
+                title="Delete Record"
+              >
+                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+              </Button>
+            )}
+
             {onClose && (
               <Button
                 type="button"
                 variant="outline"
                 onClick={onClose}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isDeleting}
                 className="text-sm"
               >
                 Close

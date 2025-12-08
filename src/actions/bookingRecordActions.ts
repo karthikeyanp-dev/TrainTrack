@@ -108,36 +108,45 @@ export async function saveBookingRecord(formData: BookingRecordFormData): Promis
       await updateDoc(docRef, updateData);
 
       try {
-        const prevMethod = existingRecord.methodUsed;
-        const prevAmount = existingRecord.amountCharged;
+        const oldUser = existingRecord.bookedAccountUsername;
+        const oldMethod = existingRecord.methodUsed;
+        const oldAmount = existingRecord.amountCharged;
+
+        const newUser = validationResult.data.bookedAccountUsername;
         const newMethod = validationResult.data.methodUsed;
         const newAmount = validationResult.data.amountCharged;
-        const username = validationResult.data.bookedAccountUsername;
 
-        if (username) {
-          let delta = 0;
-          if (prevMethod === 'Wallet' && newMethod === 'Wallet') {
-            delta = newAmount - prevAmount;
-          } else if (prevMethod === 'Wallet' && newMethod !== 'Wallet') {
-            delta = -prevAmount;
-          } else if (prevMethod !== 'Wallet' && newMethod === 'Wallet') {
-            delta = newAmount;
-          }
+        const adjustments: Record<string, number> = {};
 
-          if (delta !== 0) {
-            const accountsCollection = collection(db, "irctcAccounts");
-            const qAcc = query(accountsCollection, where("username", "==", username));
-            const accSnap = await getDocs(qAcc);
-            if (!accSnap.empty) {
-              const accDoc = accSnap.docs[0];
-              const currentWallet = (accDoc.data().walletAmount as number) || 0;
-              const newWallet = currentWallet - delta;
-              const accDocRef = doc(db, "irctcAccounts", accDoc.id);
-              await updateDoc(accDocRef, { walletAmount: newWallet, updatedAt: serverTimestamp() });
-            }
+        // 1. Refund logic: If previously paid by Wallet, add amount back to old user
+        if (oldMethod === 'Wallet' && oldUser) {
+          adjustments[oldUser] = (adjustments[oldUser] || 0) + oldAmount;
+        }
+
+        // 2. Debit logic: If now paying by Wallet, subtract amount from new user
+        if (newMethod === 'Wallet' && newUser) {
+          adjustments[newUser] = (adjustments[newUser] || 0) - newAmount;
+        }
+
+        // Apply adjustments
+        for (const [username, amount] of Object.entries(adjustments)) {
+          if (amount === 0) continue;
+
+          const accountsCollection = collection(db, "irctcAccounts");
+          const qAcc = query(accountsCollection, where("username", "==", username));
+          const accSnap = await getDocs(qAcc);
+
+          if (!accSnap.empty) {
+            const accDoc = accSnap.docs[0];
+            const currentWallet = (accDoc.data().walletAmount as number) || 0;
+            const newWallet = currentWallet + amount;
+            const accDocRef = doc(db, "irctcAccounts", accDoc.id);
+            await updateDoc(accDocRef, { walletAmount: newWallet, updatedAt: serverTimestamp() });
           }
         }
-      } catch {}
+      } catch (walletError) {
+        console.error("Failed to update wallet balances:", walletError);
+      }
 
       const updatedDocSnap = await getDoc(docRef);
       if (!updatedDocSnap.exists()) {
@@ -290,6 +299,37 @@ export async function deleteBookingRecord(id: string): Promise<{ success: boolea
     }
 
     const docRef = doc(db, "bookingRecords", id);
+    
+    // 1. Fetch the record to check for wallet refund
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) {
+       return { success: false, error: "Record not found" };
+    }
+    const data = docSnap.data();
+    const methodUsed = data.methodUsed;
+    const amountCharged = data.amountCharged;
+    const bookedAccountUsername = data.bookedAccountUsername;
+
+    // 2. Refund logic: If previously paid by Wallet, add amount back to user
+    if (methodUsed === 'Wallet' && bookedAccountUsername && amountCharged > 0) {
+        try {
+            const accountsCollection = collection(db, "irctcAccounts");
+            const qAcc = query(accountsCollection, where("username", "==", bookedAccountUsername));
+            const accSnap = await getDocs(qAcc);
+
+            if (!accSnap.empty) {
+                const accDoc = accSnap.docs[0];
+                const currentWallet = (accDoc.data().walletAmount as number) || 0;
+                const newWallet = currentWallet + amountCharged;
+                const accDocRef = doc(db, "irctcAccounts", accDoc.id);
+                await updateDoc(accDocRef, { walletAmount: newWallet, updatedAt: serverTimestamp() });
+            }
+        } catch (walletError) {
+             console.error("Failed to refund wallet balance:", walletError);
+             return { success: false, error: "Failed to refund wallet amount. Record was not deleted." };
+        }
+    }
+
     await deleteDoc(docRef);
 
     try {

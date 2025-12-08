@@ -168,7 +168,7 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
           )}
         </Button>
       </SheetTrigger>
-      <SheetContent side="bottom" className="h-[85vh] flex flex-col" onOpenAutoFocus={(e) => e.preventDefault()}>
+      <SheetContent side="bottom" className="h-[85vh] flex flex-col bg-card" onOpenAutoFocus={(e) => e.preventDefault()}>
         <SheetHeader>
           <SheetTitle>Booking Requirements</SheetTitle>
           <SheetDescription>

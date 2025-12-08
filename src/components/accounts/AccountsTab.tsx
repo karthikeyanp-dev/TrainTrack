@@ -9,7 +9,15 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Trash2, Edit3, Eye, EyeOff, Plus, X } from "lucide-react";
 import type { IrctcAccount } from "@/types/account";
-import { getAccounts, addAccount, deleteAccount } from "@/actions/accountActions";
+import { getAccounts, addAccount, deleteAccount, updateAccount } from "@/actions/accountActions";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -36,6 +44,9 @@ export function AccountsTab() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
+  const [accountToTopUp, setAccountToTopUp] = useState<IrctcAccount | null>(null);
+  const [topUpAmount, setTopUpAmount] = useState<string>("");
+  const [isUpdatingWallet, setIsUpdatingWallet] = useState(false);
   const { toast } = useToast();
 
   const [form, setForm] = useState<AccountFormState>({
@@ -155,6 +166,48 @@ export function AccountsTab() {
 
     setShowDeleteDialog(false);
     setAccountToDelete(null);
+  };
+
+  const handleTopUpSubmit = async () => {
+    if (!accountToTopUp) return;
+    
+    const amountToAdd = Number(topUpAmount);
+    if (isNaN(amountToAdd) || amountToAdd <= 0) {
+      toast({
+        title: "Invalid Amount",
+        description: "Please enter a valid positive amount.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUpdatingWallet(true);
+    const newWalletAmount = accountToTopUp.walletAmount + amountToAdd;
+    
+    // We need to pass all required fields to updateAccount
+    const result = await updateAccount(accountToTopUp.id, {
+        username: accountToTopUp.username,
+        password: accountToTopUp.password,
+        walletAmount: newWalletAmount,
+        lastBookedDate: accountToTopUp.lastBookedDate
+    });
+
+    if (result.success && result.account) {
+      setAccounts(prev => prev.map(acc => acc.id === result.account!.id ? result.account! : acc));
+      toast({
+        title: "Wallet Updated",
+        description: `Added ₹${amountToAdd} to wallet. New balance: ₹${newWalletAmount.toFixed(2)}`,
+      });
+      setAccountToTopUp(null);
+      setTopUpAmount("");
+    } else {
+      toast({
+        title: "Update Failed",
+        description: result.errors?.formErrors?.[0] || "Failed to update wallet amount.",
+        variant: "destructive",
+      });
+    }
+    setIsUpdatingWallet(false);
   };
 
   const togglePasswordVisibility = (accountId: string) => {
@@ -301,9 +354,21 @@ export function AccountsTab() {
                   </Button>
                 </div>
               </div>
-              <div>
+              <div className="flex items-center gap-2">
                 <span className="font-medium">Wallet: </span>
-                ₹{account.walletAmount.toFixed(2)}
+                <span>₹{account.walletAmount.toFixed(2)}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 text-primary hover:text-primary px-2 text-xs"
+                  onClick={() => {
+                    setAccountToTopUp(account);
+                    setTopUpAmount("");
+                  }}
+                  title="Add Wallet Amount"
+                >
+                  <Plus className="h-3 w-3 mr-1" /> Add
+                </Button>
               </div>
               <div>
                 <span className="font-medium">Last Booked: </span>
@@ -340,6 +405,48 @@ export function AccountsTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <Dialog open={!!accountToTopUp} onOpenChange={(open) => !open && setAccountToTopUp(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Wallet Amount</DialogTitle>
+            <DialogDescription>
+              Add money to your IRCTC wallet balance.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right">Current Balance</Label>
+              <div className="col-span-3">₹{accountToTopUp?.walletAmount.toFixed(2)}</div>
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="amount" className="text-right">Amount to Add</Label>
+              <Input
+                id="amount"
+                type="number"
+                value={topUpAmount}
+                onChange={(e) => setTopUpAmount(e.target.value)}
+                className="col-span-3"
+                placeholder="e.g. 500"
+                min="0"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label className="text-right font-bold">New Total</Label>
+              <div className="col-span-3 font-bold">
+                ₹{((accountToTopUp?.walletAmount || 0) + (Number(topUpAmount) || 0)).toFixed(2)}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAccountToTopUp(null)}>Cancel</Button>
+            <Button onClick={handleTopUpSubmit} disabled={isUpdatingWallet}>
+              {isUpdatingWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Update Balance
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

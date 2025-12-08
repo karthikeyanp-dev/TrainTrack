@@ -55,6 +55,7 @@ async function BookingDataFetcher({ searchQuery }: { searchQuery?: string }) {
 export default async function HomePage({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined }}) {
   const resolvedSearchParams = await searchParams;
   const searchQuery = typeof resolvedSearchParams?.search === 'string' ? resolvedSearchParams.search : undefined;
+  
   const tabParamRaw = resolvedSearchParams?.tab;
   const tabParam = typeof tabParamRaw === 'string' ? tabParamRaw : Array.isArray(tabParamRaw) ? tabParamRaw[0] : undefined;
   const topTab = tabParam === 'accounts' ? 'accounts' : 'bookings';
