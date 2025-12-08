@@ -6,6 +6,7 @@ import { Suspense } from "react";
 import { BookingsLoadingSkeleton } from "@/components/bookings/BookingsLoadingSkeleton";
 import { getBookings, getDistinctBookingDates, getPendingBookings } from "@/actions/bookingActions";
 import { BookingsView } from "@/components/bookings/BookingsView";
+import { AccountsTab } from "@/components/accounts/AccountsTab";
 import type { Booking } from "@/types/booking";
 
 const DATES_PER_PAGE = 10;
@@ -55,11 +56,19 @@ export default async function HomePage({ searchParams }: { searchParams?: { [key
   const resolvedSearchParams = await searchParams;
   const searchQuery = typeof resolvedSearchParams?.search === 'string' ? resolvedSearchParams.search : undefined;
   
+  const tabParamRaw = resolvedSearchParams?.tab;
+  const tabParam = typeof tabParamRaw === 'string' ? tabParamRaw : Array.isArray(tabParamRaw) ? tabParamRaw[0] : undefined;
+  const topTab = tabParam === 'accounts' ? 'accounts' : 'bookings';
+  
   return (
-    <AppShell showAddButton={true}>
-      <Suspense fallback={<BookingsLoadingSkeleton />}>
-        <BookingDataFetcher searchQuery={searchQuery} />
-      </Suspense>
+    <AppShell showAddButton={topTab === 'bookings'} activeTab={topTab as 'bookings' | 'accounts'}>
+      {topTab === 'accounts' ? (
+        <AccountsTab />
+      ) : (
+        <Suspense fallback={<BookingsLoadingSkeleton />}>
+          <BookingDataFetcher searchQuery={searchQuery} />
+        </Suspense>
+      )}
     </AppShell>
   );
 }

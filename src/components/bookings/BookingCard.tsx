@@ -7,9 +7,11 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "./StatusBadge";
-import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X, CreditCard } from "lucide-react";
+import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X, CreditCard, Receipt } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateBookingStatus, deleteBooking } from "@/actions/bookingActions";
+import { getBookingRecordByBookingId } from "@/actions/bookingRecordActions";
+import type { BookingRecord } from "@/types/bookingRecord";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
@@ -34,6 +36,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { BookingRequirementsSheet } from "./BookingRequirementsSheet";
+import { BookingRecordForm } from "./BookingRecordForm";
 
 
 interface BookingCardProps {
@@ -63,6 +66,21 @@ export function BookingCard({ booking }: BookingCardProps) {
   const [clientFormattedUpdatedAt, setClientFormattedUpdatedAt] = useState<string | null>(null);
   const [clientFormattedJourneyDate, setClientFormattedJourneyDate] = useState<string | null>(null);
   const [clientFormattedBookingDate, setClientFormattedBookingDate] = useState<string | null>(null);
+  const [showRecordForm, setShowRecordForm] = useState(false);
+  const [bookingRecord, setBookingRecord] = useState<BookingRecord | null>(null);
+
+  const fetchBookingRecord = useCallback(async () => {
+    try {
+      const record = await getBookingRecordByBookingId(booking.id);
+      setBookingRecord(record);
+    } catch (error) {
+      console.error("Failed to fetch booking record:", error);
+    }
+  }, [booking.id]);
+
+  useEffect(() => {
+    fetchBookingRecord();
+  }, [fetchBookingRecord]);
 
   const formatDate = useCallback((dateString: string): string => {
     if (!dateString) return 'N/A';
@@ -403,8 +421,57 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             </AccordionItem>
           </Accordion>
         )}
+
+        {/* Booking Details Accordion */}
+        {bookingRecord && (
+          <Accordion type="single" collapsible className="w-full">
+            <AccordionItem value="booking-details" className="border-none">
+              <AccordionTrigger className="py-2 text-sm hover:no-underline">
+                <span className="flex items-center gap-2">
+                  <span className="font-semibold">Booking Details</span>
+                  <CheckCircle2 className="h-4 w-4 text-green-600" />
+                </span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="bg-muted/50 rounded-md p-2 text-xs space-y-2 pt-1">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-muted-foreground">Booked By:</span>
+                      <div className="font-medium">{bookingRecord.bookedBy}</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Amount:</span>
+                      <div className="font-medium">₹{bookingRecord.amountCharged}</div>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Account Used:</span>
+                    <div className="font-medium">{bookingRecord.bookedAccountUsername}</div>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">Payment Method:</span>
+                    <div className="font-medium">{bookingRecord.methodUsed}</div>
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        )}
         {/* Status section removed */}
       </CardContent>
+      
+      {showRecordForm && (
+        <div className="px-6">
+          <BookingRecordForm 
+            bookingId={booking.id} 
+            onClose={() => {
+              setShowRecordForm(false);
+              fetchBookingRecord();
+            }} 
+          />
+        </div>
+      )}
+      
       <CardFooter className="flex flex-col items-stretch gap-3 pt-4 border-t">
         {/* Created and Last Updated side by side */}
         <div className="flex gap-2">
@@ -458,6 +525,22 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
              <Trash2 className="h-4 w-4" />
            </Button>
          </div>
+        
+        {/* Booking Record Toggle Button */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowRecordForm(prev => !prev)}
+          className="w-full"
+        >
+          <MessageSquare className="mr-2 h-4 w-4" />
+          {showRecordForm 
+            ? "Hide Booking Record" 
+            : bookingRecord 
+              ? "Update Booking Details" 
+              : "Record Booking Details"
+          }
+        </Button>
         <div className="flex flex-col gap-1.5">
            <Label htmlFor={`status-select-${booking.id}`} className="text-xs font-medium text-muted-foreground">Update Booking Status:</Label>
             <Select
