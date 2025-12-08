@@ -6,6 +6,8 @@ import { Suspense } from "react";
 import { BookingsLoadingSkeleton } from "@/components/bookings/BookingsLoadingSkeleton";
 import { getBookings, getDistinctBookingDates, getPendingBookings } from "@/actions/bookingActions";
 import { BookingsView } from "@/components/bookings/BookingsView";
+import { AccountsTab } from "@/components/accounts/AccountsTab";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import type { Booking } from "@/types/booking";
 
 const DATES_PER_PAGE = 10;
@@ -57,9 +59,22 @@ export default async function HomePage({ searchParams }: { searchParams?: { [key
   
   return (
     <AppShell showAddButton={true}>
-      <Suspense fallback={<BookingsLoadingSkeleton />}>
-        <BookingDataFetcher searchQuery={searchQuery} />
-      </Suspense>
+      <Tabs defaultValue="bookings" className="w-full">
+        <TabsList className="grid w-full grid-cols-2 md:w-[400px] mb-6">
+          <TabsTrigger value="bookings">Bookings</TabsTrigger>
+          <TabsTrigger value="accounts">Accounts</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="bookings">
+          <Suspense fallback={<BookingsLoadingSkeleton />}>
+            <BookingDataFetcher searchQuery={searchQuery} />
+          </Suspense>
+        </TabsContent>
+
+        <TabsContent value="accounts">
+          <AccountsTab />
+        </TabsContent>
+      </Tabs>
     </AppShell>
   );
 }

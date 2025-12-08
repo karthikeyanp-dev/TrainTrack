@@ -34,6 +34,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { BookingRequirementsSheet } from "./BookingRequirementsSheet";
+import { BookingRecordForm } from "./BookingRecordForm";
 
 
 interface BookingCardProps {
@@ -63,6 +64,7 @@ export function BookingCard({ booking }: BookingCardProps) {
   const [clientFormattedUpdatedAt, setClientFormattedUpdatedAt] = useState<string | null>(null);
   const [clientFormattedJourneyDate, setClientFormattedJourneyDate] = useState<string | null>(null);
   const [clientFormattedBookingDate, setClientFormattedBookingDate] = useState<string | null>(null);
+  const [showRecordForm, setShowRecordForm] = useState(false);
 
   const formatDate = useCallback((dateString: string): string => {
     if (!dateString) return 'N/A';
@@ -405,6 +407,16 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
         )}
         {/* Status section removed */}
       </CardContent>
+      
+      {showRecordForm && (
+        <div className="px-6">
+          <BookingRecordForm 
+            bookingId={booking.id} 
+            onClose={() => setShowRecordForm(false)} 
+          />
+        </div>
+      )}
+      
       <CardFooter className="flex flex-col items-stretch gap-3 pt-4 border-t">
         {/* Created and Last Updated side by side */}
         <div className="flex gap-2">
@@ -458,6 +470,17 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
              <Trash2 className="h-4 w-4" />
            </Button>
          </div>
+        
+        {/* Booking Record Toggle Button */}
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setShowRecordForm(prev => !prev)}
+          className="w-full"
+        >
+          <MessageSquare className="mr-2 h-4 w-4" />
+          {showRecordForm ? "Hide Booking Record" : "Record Booking Details"}
+        </Button>
         <div className="flex flex-col gap-1.5">
            <Label htmlFor={`status-select-${booking.id}`} className="text-xs font-medium text-muted-foreground">Update Booking Status:</Label>
             <Select
