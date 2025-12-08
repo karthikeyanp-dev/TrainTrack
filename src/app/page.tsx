@@ -7,7 +7,6 @@ import { BookingsLoadingSkeleton } from "@/components/bookings/BookingsLoadingSk
 import { getBookings, getDistinctBookingDates, getPendingBookings } from "@/actions/bookingActions";
 import { BookingsView } from "@/components/bookings/BookingsView";
 import { AccountsTab } from "@/components/accounts/AccountsTab";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import type { Booking } from "@/types/booking";
 
 const DATES_PER_PAGE = 10;
@@ -56,25 +55,19 @@ async function BookingDataFetcher({ searchQuery }: { searchQuery?: string }) {
 export default async function HomePage({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined }}) {
   const resolvedSearchParams = await searchParams;
   const searchQuery = typeof resolvedSearchParams?.search === 'string' ? resolvedSearchParams.search : undefined;
+  const tabParamRaw = resolvedSearchParams?.tab;
+  const tabParam = typeof tabParamRaw === 'string' ? tabParamRaw : Array.isArray(tabParamRaw) ? tabParamRaw[0] : undefined;
+  const topTab = tabParam === 'accounts' ? 'accounts' : 'bookings';
   
   return (
-    <AppShell showAddButton={true}>
-      <Tabs defaultValue="bookings" className="w-full">
-        <TabsList className="grid w-full grid-cols-2 md:w-[400px] mb-6">
-          <TabsTrigger value="bookings">Bookings</TabsTrigger>
-          <TabsTrigger value="accounts">Accounts</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="bookings">
-          <Suspense fallback={<BookingsLoadingSkeleton />}>
-            <BookingDataFetcher searchQuery={searchQuery} />
-          </Suspense>
-        </TabsContent>
-
-        <TabsContent value="accounts">
-          <AccountsTab />
-        </TabsContent>
-      </Tabs>
+    <AppShell showAddButton={topTab === 'bookings'} activeTab={topTab as 'bookings' | 'accounts'}>
+      {topTab === 'accounts' ? (
+        <AccountsTab />
+      ) : (
+        <Suspense fallback={<BookingsLoadingSkeleton />}>
+          <BookingDataFetcher searchQuery={searchQuery} />
+        </Suspense>
+      )}
     </AppShell>
   );
 }

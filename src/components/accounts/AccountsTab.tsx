@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, Edit3, Eye, EyeOff } from "lucide-react";
+import { Loader2, Trash2, Edit3, Eye, EyeOff, Plus, X } from "lucide-react";
 import type { IrctcAccount } from "@/types/account";
 import { getAccounts, addAccount, deleteAccount } from "@/actions/accountActions";
 import {
@@ -33,6 +33,7 @@ export function AccountsTab() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
   const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
   const { toast } = useToast();
@@ -115,6 +116,7 @@ export function AccountsTab() {
         walletAmount: "",
         lastBookedDate: "",
       });
+      setShowAddForm(false);
     } else {
       const errorMessage = result.errors?.formErrors?.[0] || "Failed to add account";
       toast({
@@ -179,10 +181,22 @@ export function AccountsTab() {
 
   return (
     <div className="space-y-8">
-      <Card className="max-w-xl">
-        <CardHeader>
-          <CardTitle>Add IRCTC Account</CardTitle>
-        </CardHeader>
+      <div className="flex justify-end">
+        {!showAddForm && (
+          <Button onClick={() => setShowAddForm(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Add Account
+          </Button>
+        )}
+      </div>
+
+      {showAddForm && (
+        <Card className="max-w-xl">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle>Add IRCTC Account</CardTitle>
+            <Button variant="ghost" size="icon" onClick={() => setShowAddForm(false)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </CardHeader>
         <CardContent>
           <form className="space-y-4" onSubmit={handleSubmit}>
             <div className="space-y-2">
@@ -242,6 +256,7 @@ export function AccountsTab() {
           </form>
         </CardContent>
       </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {accounts.map(account => (
@@ -299,7 +314,7 @@ export function AccountsTab() {
         ))}
         {accounts.length === 0 && (
           <p className="text-sm text-muted-foreground col-span-full">
-            No accounts added yet. Use the form above to add your first IRCTC account.
+            No accounts added yet. Click &apos;Add Account&apos; to add your first IRCTC account.
           </p>
         )}
       </div>

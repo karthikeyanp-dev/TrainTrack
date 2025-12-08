@@ -152,69 +152,69 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
     return (
         <>
             <Tabs defaultValue="pending" className="w-full">
-            <TabsList className="grid w-full grid-cols-2 md:w-[400px]">
+              <TabsList className="grid w-full grid-cols-2 md:w-[400px]">
                 <TabsTrigger value="pending">Pending</TabsTrigger>
                 <TabsTrigger value="completed">Completed</TabsTrigger>
-            </TabsList>
+              </TabsList>
 
-            <TabsContent value="pending" className="mt-6">
+              <TabsContent value="pending" className="mt-6">
                 <h2 className="text-2xl font-semibold mb-4">Pending Bookings</h2>
                 {pendingDates.length === 0 ? (
-                <Alert className="mt-4">
+                  <Alert className="mt-4">
                     {searchQuery ? <Search className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
                     <AlertTitle>{searchQuery ? "Search Results" : "No Pending Bookings"}</AlertTitle>
                     <AlertDescription>{noPendingMessage}</AlertDescription>
-                </Alert>
+                  </Alert>
                 ) : (
-                <Accordion type="multiple" className="w-full space-y-4" defaultValue={pendingDates.length > 0 ? [pendingDates[0]] : []}>
-                  {pendingDates.map(date => (
-                    <AccordionItem value={date} key={`pending-${date}`} className="border-b-0">
-                      <AccordionTrigger className="p-0 hover:no-underline">
-                        <DateGroupHeading dateString={date} />
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        {renderBookingsForDate(pendingBookingsByDate[date])}
-                      </AccordionContent>
-                    </AccordionItem>
-                  ))}
-                </Accordion>
+                  <Accordion type="multiple" className="w-full space-y-4" defaultValue={pendingDates.length > 0 ? [pendingDates[0]] : []}>
+                    {pendingDates.map(date => (
+                      <AccordionItem value={date} key={`pending-${date}`} className="border-b-0">
+                        <AccordionTrigger className="p-0 hover:no-underline">
+                          <DateGroupHeading dateString={date} />
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          {renderBookingsForDate(pendingBookingsByDate[date])}
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
                 )}
-            </TabsContent>
+              </TabsContent>
 
-            <TabsContent value="completed" className="mt-6">
+              <TabsContent value="completed" className="mt-6">
                 <h2 className="text-2xl font-semibold mb-4">Completed Bookings</h2>
                 {completedDates.length === 0 ? (
-                <Alert className="mt-4">
+                  <Alert className="mt-4">
                     {searchQuery ? <Search className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
                     <AlertTitle>{searchQuery ? "Search Results" : "No Completed Bookings"}</AlertTitle>
                     <AlertDescription>{noCompletedMessage}</AlertDescription>
-                </Alert>
+                  </Alert>
                 ) : (
-                <Accordion type="multiple" className="w-full space-y-4" defaultValue={completedDates.length > 0 ? [completedDates[0]] : []}>
-                  {completedDates.map(date => (
-                    <AccordionItem value={date} key={`completed-${date}`} className="border-b-0">
-                      <AccordionTrigger className="p-0 hover:no-underline">
-                        <DateGroupHeading dateString={date} />
-                      </AccordionTrigger>
-                      <AccordionContent>
-                        {renderBookingsForDate(completedBookingsByDate[date])}
-                      </AccordionContent>
-                    </AccordionItem>
-                  ))}
-                </Accordion>
+                  <Accordion type="multiple" className="w-full space-y-4" defaultValue={completedDates.length > 0 ? [completedDates[0]] : []}>
+                    {completedDates.map(date => (
+                      <AccordionItem value={date} key={`completed-${date}`} className="border-b-0">
+                        <AccordionTrigger className="p-0 hover:no-underline">
+                          <DateGroupHeading dateString={date} />
+                        </AccordionTrigger>
+                        <AccordionContent>
+                          {renderBookingsForDate(completedBookingsByDate[date])}
+                        </AccordionContent>
+                      </AccordionItem>
+                    ))}
+                  </Accordion>
                 )}
-            </TabsContent>
+              </TabsContent>
             </Tabs>
-            
+
             {!searchQuery && hasMore && (
-                <div ref={ref} className="flex justify-center items-center p-4 h-10">
-                    {isLoading && <Loader2 className="h-8 w-8 animate-spin text-primary" />}
-                </div>
+              <div ref={ref} className="flex justify-center items-center p-4 h-10">
+                {isLoading && <Loader2 className="h-8 w-8 animate-spin text-primary" />}
+              </div>
             )}
             {!searchQuery && !hasMore && allBookingDates.length > 0 && (
-                <div className="text-center text-muted-foreground p-4">
-                    You've reached the end of the list.
-                </div>
+              <div className="text-center text-muted-foreground p-4">
+                You've reached the end of the list.
+              </div>
             )}
         </>
     );

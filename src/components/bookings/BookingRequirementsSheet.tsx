@@ -33,6 +33,16 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ClipboardList, Plus, Trash2, LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { getAccounts } from "@/actions/accountActions";
+import type { IrctcAccount } from "@/types/account";
+
 const PreparedAccountSchema = z.object({
   username: z.string().min(1, "Username is required"),
   password: z.string().min(1, "Password is required"),
@@ -54,6 +64,7 @@ interface BookingRequirementsSheetProps {
 
 export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequirementsSheetProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [availableAccounts, setAvailableAccounts] = useState<IrctcAccount[]>([]);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const IconComponent = iconComponent || ClipboardList;
@@ -116,6 +127,16 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
   // Reset form when sheet opens to get latest data
   const handleOpenChange = (open: boolean) => {
     if (open) {
+      // Fetch available accounts
+      getAccounts().then(setAvailableAccounts).catch(err => {
+        console.error("Failed to load accounts", err);
+        toast({
+            title: "Error",
+            description: "Failed to load accounts list.",
+            variant: "destructive",
+        });
+      });
+
       // Ensure all accounts have the handlingBy field, even if it's undefined in the data
       const accountsWithDefaults = (booking.preparedAccounts || []).map(acc => ({
         ...acc,
@@ -189,10 +210,30 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
                           name={`accounts.${index}.username`}
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Username</FormLabel>
-                              <FormControl>
-                                <Input placeholder="Enter username" {...field} autoComplete="off" />
-                              </FormControl>
+                              <FormLabel>Account</FormLabel>
+                              <Select
+                                onValueChange={(value) => {
+                                  field.onChange(value);
+                                  const selectedAccount = availableAccounts.find(acc => acc.username === value);
+                                  if (selectedAccount) {
+                                    form.setValue(`accounts.${index}.password`, selectedAccount.password);
+                                  }
+                                }}
+                                value={field.value}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select an account" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {availableAccounts.map((account) => (
+                                    <SelectItem key={account.id} value={account.username}>
+                                      {account.username}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                               <FormMessage />
                             </FormItem>
                           )}
@@ -202,13 +243,7 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
                           control={form.control}
                           name={`accounts.${index}.password`}
                           render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Password</FormLabel>
-                              <FormControl>
-                                <Input placeholder="Enter password" {...field} autoComplete="off" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
+                            <input type="hidden" {...field} />
                           )}
                         />
 
