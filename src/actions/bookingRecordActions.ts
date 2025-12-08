@@ -3,6 +3,7 @@
 
 import type { BookingRecord, BookingRecordFormData, PaymentMethod } from "@/types/bookingRecord";
 import { ALL_PAYMENT_METHODS } from "@/types/bookingRecord";
+import { getBookingById } from "@/actions/bookingActions";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { db } from "@/lib/firebase";
@@ -17,6 +18,7 @@ import {
   serverTimestamp, 
   query, 
   where,
+  deleteField,
   Timestamp,
   type DocumentSnapshot,
   type DocumentData
@@ -144,8 +146,60 @@ export async function saveBookingRecord(formData: BookingRecordFormData): Promis
             await updateDoc(accDocRef, { walletAmount: newWallet, updatedAt: serverTimestamp() });
           }
         }
+        
+        // 3. Update Last Booked Date logic
+        // If user has changed, we need to:
+        // a. Revert date for old user (if possible)
+        // b. Update date for new user
+        if (oldUser !== newUser) {
+           const accountsCollection = collection(db, "irctcAccounts");
+           
+           // Revert old user
+           if (oldUser) {
+             const qOld = query(accountsCollection, where("username", "==", oldUser));
+             const oldSnap = await getDocs(qOld);
+             if (!oldSnap.empty) {
+               const oldDoc = oldSnap.docs[0];
+               const oldData = oldDoc.data();
+               // Only revert if we have a previous date stored, otherwise set to empty string
+               if (oldData.previousLastBookedDate) {
+                 await updateDoc(doc(db, "irctcAccounts", oldDoc.id), {
+                   lastBookedDate: oldData.previousLastBookedDate,
+                   previousLastBookedDate: deleteField(),
+                   updatedAt: serverTimestamp()
+                 });
+               } else {
+                 // Fallback: if no previous date, clear the last booked date
+                 await updateDoc(doc(db, "irctcAccounts", oldDoc.id), {
+                   lastBookedDate: "", 
+                   previousLastBookedDate: deleteField(),
+                   updatedAt: serverTimestamp()
+                 });
+               }
+             }
+           }
+
+           // Update new user
+           if (newUser) {
+             const booking = await getBookingById(validationResult.data.bookingId);
+             if (booking) {
+                const qNew = query(accountsCollection, where("username", "==", newUser));
+                const newSnap = await getDocs(qNew);
+                if (!newSnap.empty) {
+                  const newDoc = newSnap.docs[0];
+                  const newData = newDoc.data();
+                  await updateDoc(doc(db, "irctcAccounts", newDoc.id), {
+                    lastBookedDate: booking.bookingDate,
+                    previousLastBookedDate: newData.lastBookedDate || "",
+                    updatedAt: serverTimestamp()
+                  });
+                }
+             }
+           }
+        }
+
       } catch (walletError) {
-        console.error("Failed to update wallet balances:", walletError);
+        console.error("Failed to update wallet balances or dates:", walletError);
       }
 
       const updatedDocSnap = await getDoc(docRef);
@@ -179,20 +233,35 @@ export async function saveBookingRecord(formData: BookingRecordFormData): Promis
       const docRef = await addDoc(collection(db, "bookingRecords"), recordDataForFirestore);
 
       try {
-        if (validationResult.data.methodUsed === 'Wallet') {
-          const username = validationResult.data.bookedAccountUsername;
-          const accountsCollection = collection(db, "irctcAccounts");
-          const qAcc = query(accountsCollection, where("username", "==", username));
-          const accSnap = await getDocs(qAcc);
-          if (!accSnap.empty) {
-            const accDoc = accSnap.docs[0];
-            const currentWallet = (accDoc.data().walletAmount as number) || 0;
-            const newWallet = currentWallet - validationResult.data.amountCharged;
-            const accDocRef = doc(db, "irctcAccounts", accDoc.id);
-            await updateDoc(accDocRef, { walletAmount: newWallet, updatedAt: serverTimestamp() });
+        const username = validationResult.data.bookedAccountUsername;
+        const accountsCollection = collection(db, "irctcAccounts");
+        const qAcc = query(accountsCollection, where("username", "==", username));
+        const accSnap = await getDocs(qAcc);
+
+        if (!accSnap.empty) {
+          const accDoc = accSnap.docs[0];
+          const accData = accDoc.data();
+          const accDocRef = doc(db, "irctcAccounts", accDoc.id);
+          const updates: any = { updatedAt: serverTimestamp() };
+
+          // 1. Wallet Logic
+          if (validationResult.data.methodUsed === 'Wallet') {
+            const currentWallet = (accData.walletAmount as number) || 0;
+            updates.walletAmount = currentWallet - validationResult.data.amountCharged;
           }
+
+          // 2. Date Logic
+          const booking = await getBookingById(validationResult.data.bookingId);
+          if (booking) {
+             updates.lastBookedDate = booking.bookingDate;
+             updates.previousLastBookedDate = accData.lastBookedDate || "";
+          }
+
+          await updateDoc(accDocRef, updates);
         }
-      } catch {}
+      } catch (error) {
+        console.error("Failed to update account wallet/dates on creation:", error);
+      }
 
       const now = new Date().toISOString();
       const newRecord: BookingRecord = {
@@ -310,8 +379,8 @@ export async function deleteBookingRecord(id: string): Promise<{ success: boolea
     const amountCharged = data.amountCharged;
     const bookedAccountUsername = data.bookedAccountUsername;
 
-    // 2. Refund logic: If previously paid by Wallet, add amount back to user
-    if (methodUsed === 'Wallet' && bookedAccountUsername && amountCharged > 0) {
+    // 2. Update Account Logic (Refund Wallet + Revert Date)
+    if (bookedAccountUsername) {
         try {
             const accountsCollection = collection(db, "irctcAccounts");
             const qAcc = query(accountsCollection, where("username", "==", bookedAccountUsername));
@@ -319,14 +388,38 @@ export async function deleteBookingRecord(id: string): Promise<{ success: boolea
 
             if (!accSnap.empty) {
                 const accDoc = accSnap.docs[0];
-                const currentWallet = (accDoc.data().walletAmount as number) || 0;
-                const newWallet = currentWallet + amountCharged;
+                const accData = accDoc.data();
                 const accDocRef = doc(db, "irctcAccounts", accDoc.id);
-                await updateDoc(accDocRef, { walletAmount: newWallet, updatedAt: serverTimestamp() });
+                const updates: any = { updatedAt: serverTimestamp() };
+                let shouldUpdate = false;
+
+                // Refund Wallet
+                if (methodUsed === 'Wallet' && amountCharged > 0) {
+                   const currentWallet = (accData.walletAmount as number) || 0;
+                   updates.walletAmount = currentWallet + amountCharged;
+                   shouldUpdate = true;
+                }
+
+                // Revert Date
+                if (accData.previousLastBookedDate) {
+                   updates.lastBookedDate = accData.previousLastBookedDate;
+                   updates.previousLastBookedDate = deleteField();
+                   shouldUpdate = true;
+                } else {
+                   // Fallback: if no previous date, clear the last booked date
+                   updates.lastBookedDate = "";
+                   updates.previousLastBookedDate = deleteField();
+                   shouldUpdate = true;
+                }
+
+                if (shouldUpdate) {
+                   await updateDoc(accDocRef, updates);
+                }
             }
-        } catch (walletError) {
-             console.error("Failed to refund wallet balance:", walletError);
-             return { success: false, error: "Failed to refund wallet amount. Record was not deleted." };
+        } catch (accountError) {
+             console.error("Failed to update account (wallet/date) during deletion:", accountError);
+             // We continue to delete the record even if account update fails, 
+             // though in a real app we might want a transaction.
         }
     }
 

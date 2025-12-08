@@ -49,29 +49,33 @@ export function AppShell({ children, showAddButton = false, activeTab }: AppShel
           </Link>
       )}
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-        <div className="container">
-          <nav className="grid grid-cols-2">
+        <div className="container py-2">
+          <nav className="grid grid-cols-2 bg-muted p-1 rounded-md">
             <Link
-              href="/?tab=bookings"
+              href="/"
               aria-current={activeTab === "bookings" ? "page" : undefined}
               className={cn(
-                "flex flex-col items-center gap-1 py-3",
-                activeTab === "bookings" ? "text-primary" : "text-muted-foreground"
+                "flex flex-col items-center justify-center gap-1 rounded-sm py-2 transition-all",
+                activeTab === "bookings" 
+                  ? "bg-card text-foreground shadow-sm" 
+                  : "text-muted-foreground hover:bg-background/50"
               )}
             >
               <TrainFront className="h-5 w-5" />
-              <span className="text-xs">Bookings</span>
+              <span className="text-xs font-medium">Bookings</span>
             </Link>
             <Link
-              href="/?tab=accounts"
+              href="/accounts"
               aria-current={activeTab === "accounts" ? "page" : undefined}
               className={cn(
-                "flex flex-col items-center gap-1 py-3",
-                activeTab === "accounts" ? "text-primary" : "text-muted-foreground"
+                "flex flex-col items-center justify-center gap-1 rounded-sm py-2 transition-all",
+                activeTab === "accounts" 
+                  ? "bg-card text-foreground shadow-sm" 
+                  : "text-muted-foreground hover:bg-background/50"
               )}
             >
               <User className="h-5 w-5" />
-              <span className="text-xs">Accounts</span>
+              <span className="text-xs font-medium">Accounts</span>
             </Link>
           </nav>
         </div>

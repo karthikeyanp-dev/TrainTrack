@@ -45,11 +45,19 @@ export function AccountsTab() {
   const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
   const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
   const [accountToTopUp, setAccountToTopUp] = useState<IrctcAccount | null>(null);
+  const [accountToEdit, setAccountToEdit] = useState<IrctcAccount | null>(null);
   const [topUpAmount, setTopUpAmount] = useState<string>("");
   const [isUpdatingWallet, setIsUpdatingWallet] = useState(false);
   const { toast } = useToast();
 
   const [form, setForm] = useState<AccountFormState>({
+    username: "",
+    password: "",
+    walletAmount: "",
+    lastBookedDate: "",
+  });
+
+  const [editForm, setEditForm] = useState<AccountFormState>({
     username: "",
     password: "",
     walletAmount: "",
@@ -210,6 +218,74 @@ export function AccountsTab() {
     setIsUpdatingWallet(false);
   };
 
+  const handleEditClick = (account: IrctcAccount) => {
+    setAccountToEdit(account);
+    setEditForm({
+      username: account.username,
+      password: account.password,
+      walletAmount: account.walletAmount.toString(),
+      lastBookedDate: account.lastBookedDate || "",
+    });
+  };
+
+  const handleEditChange = (field: keyof AccountFormState) =>
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      setEditForm(prev => ({ ...prev, [field]: e.target.value }));
+    };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!accountToEdit) return;
+    setIsSubmitting(true);
+
+    const walletAmountNum = Number(editForm.walletAmount || 0);
+    if (Number.isNaN(walletAmountNum)) {
+      toast({
+        title: "Invalid Input",
+        description: "Wallet Amount must be a valid number",
+        variant: "destructive",
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (!editForm.username.trim() || !editForm.password.trim()) {
+      toast({
+        title: "Missing Fields",
+        description: "Username and Password are required",
+        variant: "destructive",
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    const result = await updateAccount(accountToEdit.id, {
+      username: editForm.username.trim(),
+      password: editForm.password.trim(),
+      walletAmount: walletAmountNum,
+      lastBookedDate: editForm.lastBookedDate || "",
+    });
+
+    if (result.success && result.account) {
+      toast({
+        title: "Account Updated",
+        description: `IRCTC account ${result.account.username} has been updated.`,
+      });
+
+      setAccounts(prev => prev.map(acc => acc.id === result.account!.id ? result.account! : acc));
+      setAccountToEdit(null);
+    } else {
+      const errorMessage = result.errors?.formErrors?.[0] || "Failed to update account";
+      toast({
+        title: "Error Updating Account",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
+
+    setIsSubmitting(false);
+  };
+
   const togglePasswordVisibility = (accountId: string) => {
     setVisiblePasswords(prev => {
       const newSet = new Set(prev);
@@ -319,15 +395,26 @@ export function AccountsTab() {
                 <CardTitle className="text-base">
                   {account.username}
                 </CardTitle>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-destructive hover:text-destructive"
-                  onClick={() => handleDeleteClick(account.id)}
-                  title="Delete Account"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                    onClick={() => handleEditClick(account)}
+                    title="Edit Account"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    onClick={() => handleDeleteClick(account.id)}
+                    title="Delete Account"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
@@ -445,6 +532,78 @@ export function AccountsTab() {
               Update Balance
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!accountToEdit} onOpenChange={(open) => !open && setAccountToEdit(null)}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Edit IRCTC Account</DialogTitle>
+            <DialogDescription>
+              Update account details.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={handleEditSubmit}>
+            <div className="space-y-2">
+              <Label htmlFor="edit-username">Username</Label>
+              <Input
+                id="edit-username"
+                value={editForm.username}
+                onChange={handleEditChange("username")}
+                placeholder="IRCTC username"
+                required
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-password">Password</Label>
+              <Input
+                id="edit-password"
+                type="text"
+                value={editForm.password}
+                onChange={handleEditChange("password")}
+                placeholder="IRCTC password"
+                required
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-walletAmount">Wallet Amount</Label>
+              <Input
+                id="edit-walletAmount"
+                type="number"
+                value={editForm.walletAmount}
+                onChange={handleEditChange("walletAmount")}
+                placeholder="e.g. 1500"
+                min={0}
+                step="0.01"
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="edit-lastBookedDate">Last Booked Date</Label>
+              <Input
+                id="edit-lastBookedDate"
+                type="date"
+                value={editForm.lastBookedDate}
+                onChange={handleEditChange("lastBookedDate")}
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setAccountToEdit(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </form>
         </DialogContent>
       </Dialog>
     </div>
