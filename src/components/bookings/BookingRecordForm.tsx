@@ -218,7 +218,7 @@ export function BookingRecordForm({ bookingId, onClose }: BookingRecordFormProps
       <CardHeader className="pb-3">
         <CardTitle className="text-sm flex items-center gap-2">
           {existingRecord && <CheckCircle2 className="h-4 w-4 text-green-600" />}
-          {existingRecord ? "Update Booking Record" : "Record Booking Details"}
+          {existingRecord ? "Update Booked Details" : "Add Booked Details"}
         </CardTitle>
       </CardHeader>
       <CardContent>

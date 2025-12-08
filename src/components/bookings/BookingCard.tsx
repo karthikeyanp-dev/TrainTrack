@@ -535,10 +535,10 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
         >
           <MessageSquare className="mr-2 h-4 w-4" />
           {showRecordForm 
-            ? "Hide Booking Record" 
+            ? "Hide Booked Details" 
             : bookingRecord 
-              ? "Update Booking Details" 
-              : "Record Booking Details"
+              ? "Update Booked Details" 
+              : "Add Booked Details"
           }
         </Button>
         <div className="flex flex-col gap-1.5">
