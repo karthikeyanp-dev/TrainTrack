@@ -72,7 +72,7 @@ export function AccountsTab() {
     setIsLoading(true);
     try {
       const fetchedAccounts = await getAccounts();
-      setAccounts(fetchedAccounts);
+      setAccounts(fetchedAccounts.sort((a, b) => b.walletAmount - a.walletAmount));
     } catch (error) {
       toast({
         title: "Error Loading Accounts",
@@ -127,7 +127,7 @@ export function AccountsTab() {
         description: `IRCTC account ${result.account.username} has been saved.`,
       });
 
-      setAccounts(prev => [result.account!, ...prev]);
+      setAccounts(prev => [result.account!, ...prev].sort((a, b) => b.walletAmount - a.walletAmount));
 
       setForm({
         username: "",
@@ -201,7 +201,7 @@ export function AccountsTab() {
     });
 
     if (result.success && result.account) {
-      setAccounts(prev => prev.map(acc => acc.id === result.account!.id ? result.account! : acc));
+      setAccounts(prev => prev.map(acc => acc.id === result.account!.id ? result.account! : acc).sort((a, b) => b.walletAmount - a.walletAmount));
       toast({
         title: "Wallet Updated",
         description: `Added ₹${amountToAdd} to wallet. New balance: ₹${newWalletAmount.toFixed(2)}`,
@@ -272,7 +272,7 @@ export function AccountsTab() {
         description: `IRCTC account ${result.account.username} has been updated.`,
       });
 
-      setAccounts(prev => prev.map(acc => acc.id === result.account!.id ? result.account! : acc));
+      setAccounts(prev => prev.map(acc => acc.id === result.account!.id ? result.account! : acc).sort((a, b) => b.walletAmount - a.walletAmount));
       setAccountToEdit(null);
     } else {
       const errorMessage = result.errors?.formErrors?.[0] || "Failed to update account";
@@ -300,6 +300,9 @@ export function AccountsTab() {
 
   const maskPassword = (password: string) => "•".repeat(Math.min(password.length, 8));
 
+  const totalAccounts = accounts.length;
+  const totalWalletAmount = accounts.reduce((sum, acc) => sum + acc.walletAmount, 0);
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center p-12">
@@ -310,7 +313,12 @@ export function AccountsTab() {
 
   return (
     <div className="space-y-8">
-      <div className="flex justify-end">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="text-sm text-muted-foreground">
+          Total Accounts: <span className="font-medium text-foreground">{totalAccounts}</span>
+          <span className="mx-2">•</span>
+          Total Wallet: <span className="font-medium text-foreground">₹{totalWalletAmount.toFixed(2)}</span>
+        </div>
         {!showAddForm && (
           <Button onClick={() => setShowAddForm(true)}>
             <Plus className="mr-2 h-4 w-4" /> Add Account
