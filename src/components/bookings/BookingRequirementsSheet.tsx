@@ -32,14 +32,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ClipboardList, Plus, Trash2, LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import { AccountSelect } from "@/components/accounts/AccountSelect";
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { getAccounts } from "@/actions/accountActions";
 import type { IrctcAccount } from "@/types/account";
 
@@ -48,6 +42,7 @@ const PreparedAccountSchema = z.object({
   password: z.string().min(1, "Password is required"),
   isMasterAdded: z.boolean(),
   isWalletLoaded: z.boolean(),
+  walletAmount: z.number().optional(),
   handlingBy: z.string().optional(),
 });
 
@@ -127,23 +122,39 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
   // Reset form when sheet opens to get latest data
   const handleOpenChange = (open: boolean) => {
     if (open) {
-      // Fetch available accounts
-      getAccounts().then(setAvailableAccounts).catch(err => {
+      // Initial reset with stored data to show something immediately
+      const initialAccounts = (booking.preparedAccounts || []).map(acc => ({
+        ...acc,
+        handlingBy: acc.handlingBy || "",
+      }));
+      form.reset({
+        accounts: initialAccounts,
+      });
+
+      // Fetch available accounts and update with latest wallet info
+      getAccounts().then(accounts => {
+        setAvailableAccounts(accounts);
+        
+        // Update form values with latest wallet amounts
+        const currentFormAccounts = form.getValues("accounts");
+        const updatedAccounts = currentFormAccounts.map(acc => {
+            const latestAccount = accounts.find(a => a.username === acc.username);
+            if (latestAccount) {
+                return { ...acc, walletAmount: latestAccount.walletAmount };
+            }
+            return acc;
+        });
+        
+        form.reset({
+            accounts: updatedAccounts,
+        });
+      }).catch(err => {
         console.error("Failed to load accounts", err);
         toast({
             title: "Error",
             description: "Failed to load accounts list.",
             variant: "destructive",
         });
-      });
-
-      // Ensure all accounts have the handlingBy field, even if it's undefined in the data
-      const accountsWithDefaults = (booking.preparedAccounts || []).map(acc => ({
-        ...acc,
-        handlingBy: acc.handlingBy || "",
-      }));
-      form.reset({
-        accounts: accountsWithDefaults,
       });
     }
     setIsOpen(open);
@@ -211,29 +222,19 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Account</FormLabel>
-                              <Select
-                                onValueChange={(value) => {
+                              <AccountSelect
+                                accounts={availableAccounts}
+                                value={field.value}
+                                onChange={(value) => {
                                   field.onChange(value);
                                   const selectedAccount = availableAccounts.find(acc => acc.username === value);
                                   if (selectedAccount) {
                                     form.setValue(`accounts.${index}.password`, selectedAccount.password);
+                                    form.setValue(`accounts.${index}.walletAmount`, selectedAccount.walletAmount);
                                   }
                                 }}
-                                value={field.value}
-                              >
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select an account" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {availableAccounts.map((account) => (
-                                    <SelectItem key={account.id} value={account.username}>
-                                      {account.username}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                                placeholder="Select an account"
+                              />
                               <FormMessage />
                             </FormItem>
                           )}

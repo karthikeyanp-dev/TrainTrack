@@ -208,7 +208,8 @@ export function BookingCard({ booking }: BookingCardProps) {
     if (booking.preparedAccounts && booking.preparedAccounts.length > 0) {
       const accountsDetails = booking.preparedAccounts.map((acc, index) => {
         const handlingInfo = acc.handlingBy ? ` | Handler: ${acc.handlingBy}` : '';
-        return `${index + 1}. ${acc.username} | ${acc.password} | Master: ${acc.isMasterAdded ? '✅' : '❌'} | Wallet: ${acc.isWalletLoaded ? '✅' : '❌'}${handlingInfo}`;
+        const walletInfo = acc.walletAmount !== undefined ? ` (₹${acc.walletAmount.toFixed(2)})` : '';
+        return `${index + 1}. ${acc.username} | ${acc.password} | Master: ${acc.isMasterAdded ? '✅' : '❌'} | Wallet: ${acc.isWalletLoaded ? '✅' : '❌'}${walletInfo}${handlingInfo}`;
       }).join('\n');
       preparedAccountsText = `\n-\nID(s) for Booking:\n${accountsDetails}`;
     }
@@ -394,7 +395,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                               : "bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400"
                           )}>
                             {account.isWalletLoaded ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                            Wallet
+                            Wallet{account.walletAmount !== undefined ? ` (₹${account.walletAmount.toFixed(2)})` : ''}
                           </span>
                         </div>
                       </div>

@@ -26,6 +26,7 @@ export interface PreparedAccount {
   password: string;
   isMasterAdded: boolean;
   isWalletLoaded: boolean;
+  walletAmount?: number;
   handlingBy?: string;
 }
 

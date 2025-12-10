@@ -16,6 +16,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, CheckCircle2, Trash2 } from "lucide-react";
 import type { IrctcAccount } from "@/types/account";
+import { AccountSelect } from "@/components/accounts/AccountSelect";
 import { getAccounts } from "@/actions/accountActions";
 import type { PaymentMethod, BookingRecord } from "@/types/bookingRecord";
 import { ALL_PAYMENT_METHODS } from "@/types/bookingRecord";
@@ -241,29 +242,14 @@ export function BookingRecordForm({ bookingId, onClose }: BookingRecordFormProps
             <Label htmlFor={`bookedAccount-${bookingId}`} className="text-xs">
               Booked Account
             </Label>
-            <Select
+            <AccountSelect
+              accounts={accounts}
               value={form.bookedAccountUsername}
-              onValueChange={value =>
+              onChange={value =>
                 setForm(prev => ({ ...prev, bookedAccountUsername: value }))
               }
-              disabled={isSubmitting}
-            >
-              <SelectTrigger id={`bookedAccount-${bookingId}`} className="text-sm">
-                <SelectValue placeholder="Select IRCTC account" />
-              </SelectTrigger>
-              <SelectContent>
-                {accounts.length === 0 && (
-                  <SelectItem value="_none" disabled>
-                    No accounts available
-                  </SelectItem>
-                )}
-                {accounts.map(acc => (
-                  <SelectItem key={acc.id} value={acc.username}>
-                    {acc.username}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              placeholder="Select IRCTC account"
+            />
           </div>
 
           <div className="space-y-1">
@@ -289,7 +275,7 @@ export function BookingRecordForm({ bookingId, onClose }: BookingRecordFormProps
             </Label>
             {(() => {
               const selectedAccount = accounts.find(acc => acc.username === form.bookedAccountUsername);
-              const walletDisplay = typeof selectedAccount?.walletAmount === 'number' ? ` (₹${selectedAccount.walletAmount})` : '';
+              const walletDisplay = typeof selectedAccount?.walletAmount === 'number' ? ` (₹${selectedAccount.walletAmount.toFixed(2)})` : '';
               return (
               <Select
                 value={form.methodUsed || ""}
