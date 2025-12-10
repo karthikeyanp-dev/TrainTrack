@@ -83,7 +83,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           remarks: initialData.remarks || "",
           passengers: initialData.passengers?.map(p => ({
             name: p.name || "",
-            age: p.age !== undefined ? String(p.age) : undefined,
+            age: p.age,
             gender: p.gender,
           })),
         }

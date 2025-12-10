@@ -8,7 +8,7 @@ import { AlertCircle } from "lucide-react";
 import type { BookingFormData, Passenger } from "@/types/booking";
 
 interface EditBookingPageProps {
-  params: { id: string };
+  params: Promise<{ id: string }>;
 }
 
 export default async function EditBookingPage({ params }: EditBookingPageProps) {

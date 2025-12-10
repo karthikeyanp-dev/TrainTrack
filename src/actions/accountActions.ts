@@ -104,6 +104,7 @@ export async function addAccount(formData: AccountFormData): Promise<{
     const now = new Date().toISOString();
     const newAccount: IrctcAccount = {
       ...validationResult.data,
+      lastBookedDate: validationResult.data.lastBookedDate || "",
       id: docRef.id,
       createdAt: now,
       updatedAt: now,

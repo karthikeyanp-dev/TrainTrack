@@ -186,7 +186,7 @@ export function BookingRecordForm({ bookingId, onClose }: BookingRecordFormProps
     if (result.success && result.record) {
       toast({
         title: existingRecord ? "Record Updated" : "Record Saved",
-        description: "Booking details have been saved successfully.",
+        description: "Booked details have been saved successfully.",
       });
       setExistingRecord(result.record);
       if (onClose) {

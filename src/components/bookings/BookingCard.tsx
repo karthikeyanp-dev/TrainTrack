@@ -429,7 +429,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             <AccordionItem value="booking-details" className="border-none">
               <AccordionTrigger className="py-2 text-sm hover:no-underline">
                 <span className="flex items-center gap-2">
-                  <span className="font-semibold">Booking Details</span>
+                  <span className="font-semibold">Booked Details</span>
                   <CheckCircle2 className="h-4 w-4 text-green-600" />
                 </span>
               </AccordionTrigger>

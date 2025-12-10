@@ -53,7 +53,7 @@ async function BookingDataFetcher({ searchQuery }: { searchQuery?: string }) {
 
 import { redirect } from 'next/navigation';
 
-export default async function HomePage({ searchParams }: { searchParams?: { [key: string]: string | string[] | undefined }}) {
+export default async function HomePage({ searchParams }: { searchParams?: Promise<{ [key: string]: string | string[] | undefined }>}) {
   const resolvedSearchParams = await searchParams;
   if (resolvedSearchParams?.tab === 'accounts') {
     redirect('/accounts');

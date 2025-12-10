@@ -1,7 +1,6 @@
 
-export type PaymentMethod = "Wallet" | "UPI" | "Others";
-
-export const ALL_PAYMENT_METHODS: PaymentMethod[] = ["Wallet", "UPI", "Others"];
+export const ALL_PAYMENT_METHODS = ["Wallet", "UPI", "Others"] as const;
+export type PaymentMethod = typeof ALL_PAYMENT_METHODS[number];
 
 export interface BookingRecord {
   id: string;

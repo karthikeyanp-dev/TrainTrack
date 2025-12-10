@@ -1,18 +1,16 @@
 
 
-export type BookingStatus = "Requested" | "Booked" | "Missed" | "Booking Failed" | "User Cancelled";
+export const ALL_BOOKING_STATUSES = ["Requested", "Booked", "Missed", "Booking Failed", "User Cancelled"] as const;
+export type BookingStatus = typeof ALL_BOOKING_STATUSES[number];
 
-export const ALL_BOOKING_STATUSES: BookingStatus[] = ["Requested", "Booked", "Missed", "Booking Failed", "User Cancelled"];
+export const ALL_TRAIN_CLASSES = ["SL", "3A", "2A", "1A", "2S", "EC", "CC", "UR"] as const;
+export type TrainClass = typeof ALL_TRAIN_CLASSES[number];
 
-export type TrainClass = "SL" | "3A" | "2A" | "1A" | "2S" | "EC" | "CC" | "UR";
+export const ALL_PASSENGER_GENDERS = ["M", "F", "O"] as const;
+export type PassengerGender = typeof ALL_PASSENGER_GENDERS[number];
 
-export const ALL_TRAIN_CLASSES: TrainClass[] = ["SL", "3A", "2A", "1A", "2S", "EC", "CC", "UR"];
-
-export type PassengerGender = "M" | "F" | "O";
-export const ALL_PASSENGER_GENDERS: PassengerGender[] = ["M", "F", "O"];
-
-export type BookingType = "Tatkal" | "General";
-export const ALL_BOOKING_TYPES: BookingType[] = ["Tatkal", "General"];
+export const ALL_BOOKING_TYPES = ["Tatkal", "General"] as const;
+export type BookingType = typeof ALL_BOOKING_TYPES[number];
 
 
 export interface Passenger {
