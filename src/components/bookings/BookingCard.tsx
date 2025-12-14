@@ -28,6 +28,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Accordion,
   AccordionContent,
   AccordionItem,
@@ -37,6 +43,7 @@ import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { BookingRequirementsSheet } from "./BookingRequirementsSheet";
 import { BookingRecordForm } from "./BookingRecordForm";
+import { StatusReasonDialog } from "./StatusReasonDialog";
 
 
 interface BookingCardProps {
@@ -67,6 +74,8 @@ export function BookingCard({ booking }: BookingCardProps) {
   const [clientFormattedJourneyDate, setClientFormattedJourneyDate] = useState<string | null>(null);
   const [clientFormattedBookingDate, setClientFormattedBookingDate] = useState<string | null>(null);
   const [showRecordForm, setShowRecordForm] = useState(false);
+  const [showBookedDetailsDialog, setShowBookedDetailsDialog] = useState(false);
+  const [showReasonDialog, setShowReasonDialog] = useState(false);
   const [bookingRecord, setBookingRecord] = useState<BookingRecord | null>(null);
 
   const fetchBookingRecord = useCallback(async () => {
@@ -117,7 +126,7 @@ export function BookingCard({ booking }: BookingCardProps) {
 
 
   const statusUpdateMutation = useMutation({
-    mutationFn: ({ id, status }: { id: string; status: BookingStatus }) => updateBookingStatus(id, status),
+    mutationFn: ({ id, status, reason }: { id: string; status: BookingStatus; reason?: string }) => updateBookingStatus(id, status, reason),
     onSuccess: (updatedBooking) => {
       if (updatedBooking) {
         queryClient.invalidateQueries({ queryKey: ["bookings"] });
@@ -176,8 +185,33 @@ export function BookingCard({ booking }: BookingCardProps) {
   });
 
   const handleStatusSelect = (newStatus: string) => {
-    setStatusToConfirm(newStatus as BookingStatus);
-    setShowStatusConfirmDialog(true);
+    if (newStatus === "Booked") {
+      // Show the booked details dialog instead of confirmation
+      setShowBookedDetailsDialog(true);
+    } else if (newStatus === "Missed" || newStatus === "Booking Failed") {
+      // Show reason dialog for Missed and Booking Failed
+      setStatusToConfirm(newStatus as BookingStatus);
+      setShowReasonDialog(true);
+    } else {
+      // Show regular confirmation dialog for other statuses
+      setStatusToConfirm(newStatus as BookingStatus);
+      setShowStatusConfirmDialog(true);
+    }
+  };
+
+  const handleBookedDetailsSuccess = () => {
+    // Update the status to Booked after record is saved
+    statusUpdateMutation.mutate({ id: booking.id, status: "Booked" });
+    setShowBookedDetailsDialog(false);
+    fetchBookingRecord();
+  };
+
+  const handleReasonConfirm = (reason: string) => {
+    if (statusToConfirm) {
+      statusUpdateMutation.mutate({ id: booking.id, status: statusToConfirm, reason });
+      setShowReasonDialog(false);
+      setStatusToConfirm(null);
+    }
   };
 
   const handleConfirmStatusUpdate = () => {
@@ -352,6 +386,16 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
           <div className="flex items-start gap-2">
             <MessageSquare className="h-4 w-4 text-muted-foreground mt-0.5" />
             <span className="flex-1"><span className="font-semibold">Remarks:</span> {booking.remarks}</span>
+          </div>
+        )}
+        
+        {booking.statusReason && (booking.status === "Missed" || booking.status === "Booking Failed") && (
+          <div className="flex items-start gap-2 bg-muted/50 rounded-md p-2">
+            <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-500 mt-0.5" />
+            <span className="flex-1">
+              <span className="font-semibold text-yellow-700 dark:text-yellow-500">Status Reason:</span>
+              <span className="block mt-0.5 text-muted-foreground">{booking.statusReason}</span>
+            </span>
           </div>
         )}
 
@@ -584,6 +628,29 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        <StatusReasonDialog
+          open={showReasonDialog}
+          onOpenChange={setShowReasonDialog}
+          status={statusToConfirm || "Missed"}
+          bookingDetails={`${booking.source.toUpperCase()} to ${booking.destination.toUpperCase()} for ${booking.userName}`}
+          onConfirm={handleReasonConfirm}
+          isLoading={statusUpdateMutation.isPending}
+        />
+
+        <Dialog open={showBookedDetailsDialog} onOpenChange={setShowBookedDetailsDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add Booked Details</DialogTitle>
+            </DialogHeader>
+            <BookingRecordForm 
+              bookingId={booking.id} 
+              onClose={() => setShowBookedDetailsDialog(false)}
+              onSave={handleBookedDetailsSuccess}
+              hideWrapper={true}
+            />
+          </DialogContent>
+        </Dialog>
 
         <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
             <AlertDialogContent>

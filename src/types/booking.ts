@@ -41,6 +41,7 @@ export interface Booking {
   trainPreference?: string; // Optional
   remarks?: string; // Optional
   status: BookingStatus;
+  statusReason?: string; // Optional reason for status like Missed or Booking Failed
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
   preparedAccounts?: PreparedAccount[]; // Optional array of prepared accounts for booking requirements

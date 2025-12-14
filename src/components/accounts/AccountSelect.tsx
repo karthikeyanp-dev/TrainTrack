@@ -47,7 +47,7 @@ export function AccountSelect({
   const selectedAccount = sortedAccounts.find((account) => account.username === value)
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal={true}>
       <PopoverTrigger asChild>
         <Button
           variant="outline"

@@ -80,6 +80,7 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     trainPreference: data.trainPreference as string | undefined,
     remarks: (data.remarks || data.timePreference) as string | undefined, // Backward compatibility
     status: data.status as BookingStatus,
+    statusReason: data.statusReason as string | undefined,
     createdAt: toISOStringSafe(data.createdAt, 'createdAt', id),
     updatedAt: toISOStringSafe(data.updatedAt, 'updatedAt', id),
     preparedAccounts: Array.isArray(data.preparedAccounts) ? data.preparedAccounts as PreparedAccount[] : undefined,
@@ -338,17 +339,27 @@ export async function getBookingById(id: string): Promise<Booking | null> {
   }
 }
 
-export async function updateBookingStatus(id: string, status: BookingStatus): Promise<Booking | null> {
+export async function updateBookingStatus(id: string, status: BookingStatus, reason?: string): Promise<Booking | null> {
  try {
     if (!db) {
       console.error("[Firestore Error] In updateBookingStatus: Firestore db instance is not available.");
       return null;
     }
     const docRef = doc(db, "bookings", id);
-    await updateDoc(docRef, {
+    const updateData: Record<string, any> = {
       status,
       updatedAt: serverTimestamp(),
-    });
+    };
+    
+    // Add or remove statusReason based on whether reason is provided
+    if (reason !== undefined && reason.trim() !== '') {
+      updateData.statusReason = reason.trim();
+    } else if (reason === '') {
+      // Explicitly clear the statusReason if empty string is passed
+      updateData.statusReason = deleteField();
+    }
+    
+    await updateDoc(docRef, updateData);
 
     try {
       revalidatePath("/");

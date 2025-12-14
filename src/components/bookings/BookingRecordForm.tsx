@@ -29,6 +29,8 @@ import {
 interface BookingRecordFormProps {
   bookingId: string;
   onClose?: () => void;
+  onSave?: () => void;
+  hideWrapper?: boolean;
 }
 
 interface FormState {
@@ -38,7 +40,7 @@ interface FormState {
   methodUsed: PaymentMethod | "";
 }
 
-export function BookingRecordForm({ bookingId, onClose }: BookingRecordFormProps) {
+export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = false }: BookingRecordFormProps) {
   const [accounts, setAccounts] = useState<IrctcAccount[]>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -189,7 +191,9 @@ export function BookingRecordForm({ bookingId, onClose }: BookingRecordFormProps
         description: "Booked details have been saved successfully.",
       });
       setExistingRecord(result.record);
-      if (onClose) {
+      if (onSave) {
+        onSave();
+      } else if (onClose) {
         onClose();
       }
     } else {
@@ -205,6 +209,16 @@ export function BookingRecordForm({ bookingId, onClose }: BookingRecordFormProps
   };
 
   if (isLoadingAccounts) {
+    const loadingContent = (
+      <div className="flex justify-center items-center p-6">
+        <Loader2 className="h-6 w-6 animate-spin text-primary" />
+      </div>
+    );
+    
+    if (hideWrapper) {
+      return loadingContent;
+    }
+    
     return (
       <Card className="mt-3">
         <CardContent className="flex justify-center items-center p-6">
@@ -212,6 +226,125 @@ export function BookingRecordForm({ bookingId, onClose }: BookingRecordFormProps
         </CardContent>
       </Card>
     );
+  }
+
+  const formContent = (
+    <form className="space-y-3" onSubmit={handleSubmit}>
+      <div className="space-y-1">
+        <Label htmlFor={`bookedBy-${bookingId}`} className="text-xs">
+          Booked By
+        </Label>
+        <Input
+          id={`bookedBy-${bookingId}`}
+          value={form.bookedBy}
+          onChange={handleChangeText("bookedBy")}
+          placeholder="Person who did the booking"
+          disabled={isSubmitting}
+          className="text-sm"
+        />
+      </div>
+
+      <div className="space-y-1">
+        <Label htmlFor={`bookedAccount-${bookingId}`} className="text-xs">
+          Booked Account
+        </Label>
+        <AccountSelect
+          accounts={accounts}
+          value={form.bookedAccountUsername}
+          onChange={value =>
+            setForm(prev => ({ ...prev, bookedAccountUsername: value }))
+          }
+          placeholder="Select IRCTC account"
+        />
+      </div>
+
+      <div className="space-y-1">
+        <Label htmlFor={`amountCharged-${bookingId}`} className="text-xs">
+          Amount Charged (₹)
+        </Label>
+        <Input
+          id={`amountCharged-${bookingId}`}
+          type="number"
+          value={form.amountCharged}
+          onChange={handleChangeText("amountCharged")}
+          placeholder="Final transaction cost"
+          min={0}
+          step="0.01"
+          disabled={isSubmitting}
+          className="text-sm"
+        />
+      </div>
+
+      <div className="space-y-1">
+        <Label htmlFor={`methodUsed-${bookingId}`} className="text-xs">
+          Method Used
+        </Label>
+        {(() => {
+          const selectedAccount = accounts.find(acc => acc.username === form.bookedAccountUsername);
+          const walletDisplay = typeof selectedAccount?.walletAmount === 'number' ? ` (₹${selectedAccount.walletAmount.toFixed(2)})` : '';
+          return (
+          <Select
+            value={form.methodUsed || ""}
+            onValueChange={value => handleMethodChange(value as PaymentMethod)}
+            disabled={isSubmitting}
+          >
+            <SelectTrigger id={`methodUsed-${bookingId}`} className="text-sm">
+              <SelectValue placeholder="Select payment method" />
+            </SelectTrigger>
+            <SelectContent position="popper">
+            {ALL_PAYMENT_METHODS.map(method => (
+              <SelectItem key={method} value={method}>
+                {method === 'Wallet' ? `Wallet${walletDisplay}` : method}
+              </SelectItem>
+            ))}
+            </SelectContent>
+          </Select>
+          );
+        })()}
+      </div>
+
+      <div className="flex gap-2 pt-2">
+        <Button type="submit" className="flex-1 text-sm" disabled={isSubmitting || isDeleting}>
+          {isSubmitting && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
+          {isSubmitting 
+            ? "Saving..." 
+            : existingRecord 
+              ? "Update Record" 
+              : "Save Record"
+          }
+        </Button>
+        
+        {existingRecord && (
+          <Button
+            type="button"
+            variant="destructive"
+            size="icon"
+            onClick={handleDelete}
+            disabled={isSubmitting || isDeleting}
+            className="shrink-0"
+            title="Delete Record"
+          >
+            {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+          </Button>
+        )}
+
+        {onClose && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={onClose}
+            disabled={isSubmitting || isDeleting}
+            className="text-sm"
+          >
+            Close
+          </Button>
+        )}
+      </div>
+    </form>
+  );
+
+  if (hideWrapper) {
+    return formContent;
   }
 
   return (
@@ -223,118 +356,7 @@ export function BookingRecordForm({ bookingId, onClose }: BookingRecordFormProps
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <form className="space-y-3" onSubmit={handleSubmit}>
-          <div className="space-y-1">
-            <Label htmlFor={`bookedBy-${bookingId}`} className="text-xs">
-              Booked By
-            </Label>
-            <Input
-              id={`bookedBy-${bookingId}`}
-              value={form.bookedBy}
-              onChange={handleChangeText("bookedBy")}
-              placeholder="Person who did the booking"
-              disabled={isSubmitting}
-              className="text-sm"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label htmlFor={`bookedAccount-${bookingId}`} className="text-xs">
-              Booked Account
-            </Label>
-            <AccountSelect
-              accounts={accounts}
-              value={form.bookedAccountUsername}
-              onChange={value =>
-                setForm(prev => ({ ...prev, bookedAccountUsername: value }))
-              }
-              placeholder="Select IRCTC account"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label htmlFor={`amountCharged-${bookingId}`} className="text-xs">
-              Amount Charged (₹)
-            </Label>
-            <Input
-              id={`amountCharged-${bookingId}`}
-              type="number"
-              value={form.amountCharged}
-              onChange={handleChangeText("amountCharged")}
-              placeholder="Final transaction cost"
-              min={0}
-              step="0.01"
-              disabled={isSubmitting}
-              className="text-sm"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <Label htmlFor={`methodUsed-${bookingId}`} className="text-xs">
-              Method Used
-            </Label>
-            {(() => {
-              const selectedAccount = accounts.find(acc => acc.username === form.bookedAccountUsername);
-              const walletDisplay = typeof selectedAccount?.walletAmount === 'number' ? ` (₹${selectedAccount.walletAmount.toFixed(2)})` : '';
-              return (
-              <Select
-                value={form.methodUsed || ""}
-                onValueChange={value => handleMethodChange(value as PaymentMethod)}
-                disabled={isSubmitting}
-              >
-                <SelectTrigger id={`methodUsed-${bookingId}`} className="text-sm">
-                  <SelectValue placeholder="Select payment method" />
-                </SelectTrigger>
-                <SelectContent>
-                {ALL_PAYMENT_METHODS.map(method => (
-                  <SelectItem key={method} value={method}>
-                    {method === 'Wallet' ? `Wallet${walletDisplay}` : method}
-                  </SelectItem>
-                ))}
-                </SelectContent>
-              </Select>
-              );
-            })()}
-          </div>
-
-          <div className="flex gap-2 pt-2">
-            <Button type="submit" className="flex-1 text-sm" disabled={isSubmitting || isDeleting}>
-              {isSubmitting && <Loader2 className="mr-2 h-3 w-3 animate-spin" />}
-              {isSubmitting 
-                ? "Saving..." 
-                : existingRecord 
-                  ? "Update Record" 
-                  : "Save Record"
-              }
-            </Button>
-            
-            {existingRecord && (
-              <Button
-                type="button"
-                variant="destructive"
-                size="icon"
-                onClick={handleDelete}
-                disabled={isSubmitting || isDeleting}
-                className="shrink-0"
-                title="Delete Record"
-              >
-                {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-              </Button>
-            )}
-
-            {onClose && (
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onClose}
-                disabled={isSubmitting || isDeleting}
-                className="text-sm"
-              >
-                Close
-              </Button>
-            )}
-          </div>
-        </form>
+        {formContent}
       </CardContent>
     </Card>
   );
