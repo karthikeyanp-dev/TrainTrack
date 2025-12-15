@@ -1,43 +1,39 @@
 name: Deploy to Cloud Run
+
 on:
   push:
     branches:
       - master
   workflow_dispatch:
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
+
     steps:
       - uses: actions/checkout@v4
-      - name: Check required secrets
+
+      # (Optional) Basic check to ensure secrets exist before starting
+      - name: Check required setup
         env:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GCP_SA_KEY: ${{ secrets.GCP_SA_KEY }}
-          CLOUD_RUN_SERVICE: ${{ secrets.CLOUD_RUN_SERVICE }}
-          CLOUD_RUN_REGION: ${{ secrets.CLOUD_RUN_REGION }}
         run: |
-          test -n "$GCP_PROJECT_ID"
-          test -n "$GCP_SA_KEY"
-          test -n "$CLOUD_RUN_SERVICE"
-          test -n "$CLOUD_RUN_REGION"
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-      - run: npm ci
-      - run: npm run build
+          test -n "$GCP_PROJECT_ID" || echo "Missing GCP_PROJECT_ID"
+          test -n "$GCP_SA_KEY" || echo "Missing GCP_SA_KEY"
+
       - id: auth
         uses: google-github-actions/auth@v2
         with:
           credentials_json: ${{ secrets.GCP_SA_KEY }}
+
       - uses: google-github-actions/setup-gcloud@v2
         with:
           project_id: ${{ secrets.GCP_PROJECT_ID }}
-      - name: Verify authentication
-        run: gcloud auth list --filter=status:ACTIVE --format='value(account)'
+
       - id: deploy
         uses: google-github-actions/deploy-cloudrun@v2
         with:
@@ -45,3 +41,13 @@ jobs:
           region: ${{ secrets.CLOUD_RUN_REGION }}
           source: .
           allow-unauthenticated: true
+          # This injects the secrets into your application runtime
+          env_vars: |
+            GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
+            NEXT_PUBLIC_FIREBASE_API_KEY=${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+            NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+            NEXT_PUBLIC_FIREBASE_PROJECT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+            NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+            NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+            NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+            NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}
