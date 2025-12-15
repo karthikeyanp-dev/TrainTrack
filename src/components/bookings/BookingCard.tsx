@@ -91,29 +91,34 @@ export function BookingCard({ booking }: BookingCardProps) {
     fetchBookingRecord();
   }, [fetchBookingRecord]);
 
-  const formatDate = useCallback((dateString: string): string => {
-    if (!dateString) return 'N/A';
+  const formatDate = useCallback((dateString: string | any): string => {
+    if (!dateString) return "N/A";
     try {
+      if (typeof dateString === "object" && dateString && typeof dateString.toDate === "function") {
+        return format(dateString.toDate(), "MMM dd, yyyy (EEE)");
+      }
+
+      if (typeof dateString !== "string") {
+        return "Invalid Type";
+      }
+
       if (dateString.match(/^\d{4}-\d{2}-\d{2}$/)) {
-        // For YYYY-MM-DD strings, ensure they are treated as local dates.
-        // Appending T00:00:00 or T12:00:00 makes it local to the environment.
-        // For display like "MMM dd, yyyy (EEE)", the time component doesn't matter as much as getting the date right.
-        const date = new Date(dateString + 'T12:00:00');
+        const date = new Date(dateString + "T12:00:00");
         if (isNaN(date.getTime())) {
           console.warn(`[BookingCard] Invalid date-only string: ${dateString}`);
-          return 'Invalid Date';
+          return "Invalid Date";
         }
         return format(date, "MMM dd, yyyy (EEE)");
       }
-      const date = new Date(dateString); // Handles ISO strings with timezones
+      const date = new Date(dateString);
       if (isNaN(date.getTime())) {
         console.warn(`[BookingCard] Invalid timestamp string: ${dateString}`);
-        return 'Invalid Date';
+        return "Invalid Date";
       }
       return format(date, "MMM dd, yyyy (EEE)");
     } catch (error) {
       console.error(`[BookingCard] Error formatting date "${dateString}":`, error);
-      return 'Error Date';
+      return "Error Date";
     }
   }, []);
 
@@ -234,8 +239,10 @@ export function BookingCard({ booking }: BookingCardProps) {
 
   const handleShare = async () => {
     const passengerDetailsText = booking.passengers.map((p, index) => `${index + 1}. ${p.name} ${p.age} ${p.gender.toUpperCase()}`).join('\n');
-    const journeyDateFormatted = clientFormattedJourneyDate || "N/A";
-    const bookingDateFormatted = clientFormattedBookingDate || "N/A";
+    const formattedJourney = formatDate(booking.journeyDate);
+    const journeyDateFormatted = formattedJourney !== "N/A" ? formattedJourney : (booking.journeyDate || "N/A");
+    const formattedBooking = formatDate(booking.bookingDate);
+    const bookingDateFormatted = formattedBooking !== "N/A" ? formattedBooking : (booking.bookingDate || "N/A");
     
     // Build prepared accounts section if exists
     let preparedAccountsText = '';
