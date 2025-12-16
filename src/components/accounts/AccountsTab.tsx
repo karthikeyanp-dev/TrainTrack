@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -10,6 +9,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Trash2, Edit3, Eye, EyeOff, Plus, X } from "lucide-react";
 import type { IrctcAccount } from "@/types/account";
 import { getAccounts, addAccount, deleteAccount, updateAccount } from "@/actions/accountActions";
+import type { Handler } from "@/types/handler";
+import { getHandlers, addHandler, updateHandler, deleteHandler } from "@/actions/handlerActions";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
   DialogContent,
@@ -36,7 +38,7 @@ interface AccountFormState {
   lastBookedDate: string;
 }
 
-export function AccountsTab() {
+function AccountsManager() {
   const [accounts, setAccounts] = useState<IrctcAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -615,5 +617,318 @@ export function AccountsTab() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function HandlersManager() {
+  const [handlers, setHandlers] = useState<Handler[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [handlerToDelete, setHandlerToDelete] = useState<string | null>(null);
+  const [handlerToEdit, setHandlerToEdit] = useState<Handler | null>(null);
+  const { toast } = useToast();
+
+  const [name, setName] = useState("");
+  const [editName, setEditName] = useState("");
+
+  useEffect(() => {
+    loadHandlers();
+  }, []);
+
+  const loadHandlers = async () => {
+    setIsLoading(true);
+    try {
+      const fetchedHandlers = await getHandlers();
+      setHandlers(fetchedHandlers);
+    } catch (error) {
+      toast({
+        title: "Error Loading Handlers",
+        description: "Failed to load handlers",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+
+    if (!name.trim()) {
+      toast({
+        title: "Missing Fields",
+        description: "Handler name is required",
+        variant: "destructive",
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    const result = await addHandler({
+      name: name.trim(),
+    });
+
+    if (result.success && result.handler) {
+      toast({
+        title: "Handler Added",
+        description: `Handler ${result.handler.name} has been saved.`,
+      });
+
+      setHandlers(prev => [...prev, result.handler!].sort((a, b) => a.name.localeCompare(b.name)));
+      setName("");
+      setShowAddForm(false);
+    } else {
+      const errorMessage = result.errors?.formErrors?.[0] || "Failed to add handler";
+      toast({
+        title: "Error Adding Handler",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
+
+    setIsSubmitting(false);
+  };
+
+  const handleDeleteClick = (handlerId: string) => {
+    setHandlerToDelete(handlerId);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!handlerToDelete) return;
+
+    const result = await deleteHandler(handlerToDelete);
+
+    if (result.success) {
+      toast({
+        title: "Handler Deleted",
+        description: "Handler has been deleted.",
+      });
+      setHandlers(prev => prev.filter(h => h.id !== handlerToDelete));
+    } else {
+      toast({
+        title: "Error Deleting Handler",
+        description: result.error || "Failed to delete handler",
+        variant: "destructive",
+      });
+    }
+
+    setHandlerToDelete(null);
+  };
+
+  const handleEditClick = (handler: Handler) => {
+    setHandlerToEdit(handler);
+    setEditName(handler.name);
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!handlerToEdit) return;
+    setIsSubmitting(true);
+
+    if (!editName.trim()) {
+      toast({
+        title: "Missing Fields",
+        description: "Handler name is required",
+        variant: "destructive",
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    const result = await updateHandler(handlerToEdit.id, {
+      name: editName.trim(),
+    });
+
+    if (result.success && result.handler) {
+      toast({
+        title: "Handler Updated",
+        description: `Handler ${result.handler.name} has been updated.`,
+      });
+
+      setHandlers(prev => prev.map(h => h.id === result.handler!.id ? result.handler! : h).sort((a, b) => a.name.localeCompare(b.name)));
+      setHandlerToEdit(null);
+    } else {
+      const errorMessage = result.errors?.formErrors?.[0] || "Failed to update handler";
+      toast({
+        title: "Error Updating Handler",
+        description: errorMessage,
+        variant: "destructive",
+      });
+    }
+
+    setIsSubmitting(false);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center p-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="text-sm text-muted-foreground">
+          Total Handlers: <span className="font-medium text-foreground">{handlers.length}</span>
+        </div>
+        {!showAddForm && (
+          <Button onClick={() => setShowAddForm(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Add Handler
+          </Button>
+        )}
+      </div>
+
+      {showAddForm && (
+        <Card className="max-w-xl">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle>Add Handler</CardTitle>
+            <Button variant="ghost" size="icon" onClick={() => setShowAddForm(false)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </CardHeader>
+          <CardContent>
+            <form className="space-y-4" onSubmit={handleSubmit}>
+              <div className="space-y-2">
+                <Label htmlFor="handler-name">Name</Label>
+                <Input
+                  id="handler-name"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Handler Name"
+                  required
+                  disabled={isSubmitting}
+                />
+              </div>
+
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isSubmitting ? "Adding..." : "Add Handler"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {handlers.map(handler => (
+          <Card key={handler.id}>
+            <CardHeader className="pb-3">
+              <div className="flex justify-between items-start">
+                <CardTitle className="text-base">
+                  {handler.name}
+                </CardTitle>
+                <div className="flex gap-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-primary"
+                    onClick={() => handleEditClick(handler)}
+                    title="Edit Handler"
+                  >
+                    <Edit3 className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-destructive hover:text-destructive"
+                    onClick={() => handleDeleteClick(handler.id)}
+                    title="Delete Handler"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm">
+              <div className="text-xs text-muted-foreground">
+                Last Updated: {new Date(handler.updatedAt).toLocaleDateString()}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+        {handlers.length === 0 && (
+          <p className="text-sm text-muted-foreground col-span-full">
+            No handlers added yet. Click &apos;Add Handler&apos; to add your first handler.
+          </p>
+        )}
+      </div>
+
+      <AlertDialog open={!!handlerToDelete} onOpenChange={(open) => !open && setHandlerToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Handler?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. This will permanently delete the handler.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setHandlerToDelete(null)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={!!handlerToEdit} onOpenChange={(open) => !open && setHandlerToEdit(null)}>
+        <DialogContent className="max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Edit Handler</DialogTitle>
+            <DialogDescription>
+              Update handler details.
+            </DialogDescription>
+          </DialogHeader>
+          <form className="space-y-4" onSubmit={handleEditSubmit}>
+            <div className="space-y-2">
+              <Label htmlFor="edit-handler-name">Name</Label>
+              <Input
+                id="edit-handler-name"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                placeholder="Handler Name"
+                required
+                disabled={isSubmitting}
+              />
+            </div>
+
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setHandlerToEdit(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+export function AccountsTab() {
+  return (
+    <Tabs defaultValue="accounts" className="w-full">
+      <TabsList className="mb-4">
+        <TabsTrigger value="accounts">Accounts</TabsTrigger>
+        <TabsTrigger value="handlers">Handlers</TabsTrigger>
+      </TabsList>
+      <TabsContent value="accounts">
+        <AccountsManager />
+      </TabsContent>
+      <TabsContent value="handlers">
+        <HandlersManager />
+      </TabsContent>
+    </Tabs>
   );
 }

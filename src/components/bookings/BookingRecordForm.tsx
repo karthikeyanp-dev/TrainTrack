@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useEffect, useState } from "react";
@@ -25,6 +24,8 @@ import {
   saveBookingRecord,
   deleteBookingRecord,
 } from "@/actions/bookingRecordActions";
+import { getHandlers } from "@/actions/handlerActions";
+import type { Handler } from "@/types/handler";
 
 interface BookingRecordFormProps {
   bookingId: string;
@@ -42,6 +43,7 @@ interface FormState {
 
 export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = false }: BookingRecordFormProps) {
   const [accounts, setAccounts] = useState<IrctcAccount[]>([]);
+  const [handlers, setHandlers] = useState<Handler[]>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -62,12 +64,14 @@ export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = fa
   const loadData = async () => {
     setIsLoadingAccounts(true);
     try {
-      const [fetchedAccounts, existingRec] = await Promise.all([
+      const [fetchedAccounts, fetchedHandlers, existingRec] = await Promise.all([
         getAccounts(),
+        getHandlers(),
         getBookingRecordByBookingId(bookingId),
       ]);
 
       setAccounts(fetchedAccounts);
+      setHandlers(fetchedHandlers);
 
       if (existingRec) {
         setExistingRecord(existingRec);
@@ -81,7 +85,7 @@ export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = fa
     } catch (error) {
       toast({
         title: "Error Loading Data",
-        description: "Failed to load accounts or existing record",
+        description: "Failed to load accounts, handlers, or existing record",
         variant: "destructive",
       });
     } finally {
@@ -90,7 +94,7 @@ export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = fa
   };
 
   const handleChangeText =
-    (field: keyof Omit<FormState, "methodUsed">) =>
+    (field: keyof Omit<FormState, "methodUsed" | "bookedBy">) =>
     (e: React.ChangeEvent<HTMLInputElement>) => {
       setForm(prev => ({ ...prev, [field]: e.target.value }));
     };
@@ -234,14 +238,22 @@ export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = fa
         <Label htmlFor={`bookedBy-${bookingId}`} className="text-xs">
           Booked By
         </Label>
-        <Input
-          id={`bookedBy-${bookingId}`}
+        <Select
           value={form.bookedBy}
-          onChange={handleChangeText("bookedBy")}
-          placeholder="Person who did the booking"
+          onValueChange={(value) => setForm(prev => ({ ...prev, bookedBy: value }))}
           disabled={isSubmitting}
-          className="text-sm"
-        />
+        >
+          <SelectTrigger id={`bookedBy-${bookingId}`} className="text-sm">
+            <SelectValue placeholder="Select handler" />
+          </SelectTrigger>
+          <SelectContent>
+            {handlers.map((handler) => (
+              <SelectItem key={handler.id} value={handler.name}>
+                {handler.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="space-y-1">

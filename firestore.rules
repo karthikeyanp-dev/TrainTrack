@@ -1,0 +1,25 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Existing bookings collection rules
+    match /bookings/{bookingId} {
+      allow read, write: if true;
+    }
+    
+    // IRCTC Accounts collection
+    match /irctcAccounts/{accountId} {
+      allow read, write: if true;
+    }
+    
+    // Booking Records collection
+    match /bookingRecords/{recordId} {
+      allow read, write: if true;
+    }
+
+    // Handlers collection
+    match /handlers/{handlerId} {
+      allow read, write: if true;
+    }
+  }
+}

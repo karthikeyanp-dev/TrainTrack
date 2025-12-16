@@ -33,9 +33,18 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { ClipboardList, Plus, Trash2, LucideIcon } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { AccountSelect } from "@/components/accounts/AccountSelect";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 import { getAccounts } from "@/actions/accountActions";
 import type { IrctcAccount } from "@/types/account";
+import { getHandlers } from "@/actions/handlerActions";
+import type { Handler } from "@/types/handler";
 
 const PreparedAccountSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -60,6 +69,7 @@ interface BookingRequirementsSheetProps {
 export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequirementsSheetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [availableAccounts, setAvailableAccounts] = useState<IrctcAccount[]>([]);
+  const [availableHandlers, setAvailableHandlers] = useState<Handler[]>([]);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const IconComponent = iconComponent || ClipboardList;
@@ -131,31 +141,34 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
         accounts: initialAccounts,
       });
 
-      // Fetch available accounts and update with latest wallet info
-      getAccounts().then(accounts => {
-        setAvailableAccounts(accounts);
-        
-        // Update form values with latest wallet amounts
-        const currentFormAccounts = form.getValues("accounts");
-        const updatedAccounts = currentFormAccounts.map(acc => {
-            const latestAccount = accounts.find(a => a.username === acc.username);
-            if (latestAccount) {
-                return { ...acc, walletAmount: latestAccount.walletAmount };
-            }
-            return acc;
-        });
-        
-        form.reset({
-            accounts: updatedAccounts,
-        });
-      }).catch(err => {
-        console.error("Failed to load accounts", err);
-        toast({
+      // Fetch available accounts and handlers
+      Promise.all([getAccounts(), getHandlers()])
+        .then(([accounts, handlers]) => {
+          setAvailableAccounts(accounts);
+          setAvailableHandlers(handlers);
+          
+          // Update form values with latest wallet amounts
+          const currentFormAccounts = form.getValues("accounts");
+          const updatedAccounts = currentFormAccounts.map(acc => {
+              const latestAccount = accounts.find(a => a.username === acc.username);
+              if (latestAccount) {
+                  return { ...acc, walletAmount: latestAccount.walletAmount };
+              }
+              return acc;
+          });
+          
+          form.reset({
+              accounts: updatedAccounts,
+          });
+        })
+        .catch(err => {
+          console.error("Failed to load data", err);
+          toast({
             title: "Error",
-            description: "Failed to load accounts list.",
+            description: "Failed to load accounts or handlers list.",
             variant: "destructive",
+          });
         });
-      });
     }
     setIsOpen(open);
   };
@@ -254,9 +267,23 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
                           render={({ field }) => (
                             <FormItem>
                               <FormLabel>Handling By</FormLabel>
-                              <FormControl>
-                                <Input placeholder="Enter handler name" {...field} autoComplete="off" />
-                              </FormControl>
+                              <Select
+                                value={field.value}
+                                onValueChange={field.onChange}
+                              >
+                                <FormControl>
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Select handler" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  {availableHandlers.map((handler) => (
+                                    <SelectItem key={handler.id} value={handler.name}>
+                                      {handler.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
                               <FormMessage />
                             </FormItem>
                           )}

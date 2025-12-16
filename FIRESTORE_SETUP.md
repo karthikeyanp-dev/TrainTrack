@@ -2,10 +2,11 @@
 
 ## Collections Added
 
-This implementation adds two new Firestore collections:
+This implementation adds three new Firestore collections:
 
 1. **`irctcAccounts`** - Stores IRCTC user account information
 2. **`bookingRecords`** - Stores booking completion records
+3. **`handlers`** - Stores names of handlers (operators/agents)
 
 ## Required Firestore Security Rules
 
@@ -21,13 +22,18 @@ service cloud.firestore {
       allow read, write: if true; // Adjust based on your auth requirements
     }
     
-    // New: IRCTC Accounts collection
+    // IRCTC Accounts collection
     match /irctcAccounts/{accountId} {
       allow read, write: if true; // Adjust based on your auth requirements
     }
     
-    // New: Booking Records collection
+    // Booking Records collection
     match /bookingRecords/{recordId} {
+      allow read, write: if true; // Adjust based on your auth requirements
+    }
+
+    // Handlers collection
+    match /handlers/{handlerId} {
       allow read, write: if true; // Adjust based on your auth requirements
     }
   }
@@ -49,6 +55,9 @@ The following composite indexes may be needed (Firebase will prompt you to creat
 
 ### For `irctcAccounts` collection:
 - Field: `createdAt` (Descending)
+
+### For `handlers` collection:
+- Field: `name` (Ascending)
 
 These indexes will be automatically suggested by Firebase when you first run queries that need them.
 
@@ -79,14 +88,24 @@ These indexes will be automatically suggested by Firebase when you first run que
 }
 ```
 
+### `handlers` Document
+```typescript
+{
+  name: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+```
+
 ## Testing
 
 After deploying:
 
 1. Go to the **Accounts** tab
-2. Add a test IRCTC account
-3. Go to a booking card in the **Bookings** tab
-4. Click "Record Booking Details"
-5. Fill in the form and save
+2. Click on "Handlers" tab
+3. Add a test Handler
+4. Go to a booking card in the **Bookings** tab
+5. Click "Record Booking Details"
+6. Verify the Handler appears in the dropdown
 
 Check your Firestore console to verify data is being stored correctly.
