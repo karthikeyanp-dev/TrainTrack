@@ -41,6 +41,7 @@ jobs:
           region: ${{ secrets.CLOUD_RUN_REGION }}
           source: .
           allow-unauthenticated: true
+          flags: '--no-cache'
           # This injects the secrets into your application runtime
           env_vars: |
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
