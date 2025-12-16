@@ -28,6 +28,14 @@ jobs:
           echo "NEXT_PUBLIC_FIREBASE_APP_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}" >> .env
           echo "NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}" >> .env
 
+      # 2. NEW STEP: Create .gcloudignore to allow uploading the .env file
+      - name: Create .gcloudignore
+        run: |
+          echo ".git" > .gcloudignore
+          echo ".github" >> .gcloudignore
+          echo "node_modules" >> .gcloudignore
+          echo "!env" >> .gcloudignore  # The "!" means "Do NOT ignore this file"
+          
       - id: auth
         uses: google-github-actions/auth@v2
         with:
