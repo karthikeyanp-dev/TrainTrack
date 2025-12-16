@@ -16,5 +16,9 @@ COPY . .
 # This is where NEXT_PUBLIC_ vars get baked in!
 RUN npm run build
 
+# --- NEW: Explicitly set Host and Port for Cloud Run ---
+ENV HOSTNAME="0.0.0.0"
+ENV PORT=8080
+
 # Start the server
 CMD ["npm", "start"]
