@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -12,13 +12,22 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import type { BookingStatus } from "@/types/booking";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { getHandlers } from "@/actions/handlerActions";
+import type { Handler } from "@/types/handler";
 
 interface StatusReasonDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   status: BookingStatus;
   bookingDetails: string;
-  onConfirm: (reason: string) => void;
+  onConfirm: (reason: string, handler?: string) => void;
   isLoading?: boolean;
 }
 
@@ -31,14 +40,39 @@ export function StatusReasonDialog({
   isLoading = false,
 }: StatusReasonDialogProps) {
   const [reason, setReason] = useState("");
+  const [handler, setHandler] = useState("");
+  const [handlers, setHandlers] = useState<Handler[]>([]);
+  const [isLoadingHandlers, setIsLoadingHandlers] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    let isMounted = true;
+    setIsLoadingHandlers(true);
+    getHandlers()
+      .then((fetchedHandlers) => {
+        if (isMounted) {
+          setHandlers(fetchedHandlers);
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setIsLoadingHandlers(false);
+        }
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, [open]);
 
   const handleConfirm = () => {
-    onConfirm(reason.trim());
-    setReason(""); // Reset after confirm
+    onConfirm(reason.trim(), handler || undefined);
+    setReason("");
+    setHandler("");
   };
 
   const handleCancel = () => {
     setReason("");
+    setHandler("");
     onOpenChange(false);
   };
 
@@ -53,7 +87,27 @@ export function StatusReasonDialog({
           <p className="text-sm text-muted-foreground">
             {bookingDetails}
           </p>
-          
+
+          <div className="space-y-2">
+            <Label htmlFor="status-handler">Handler</Label>
+            <Select
+              value={handler}
+              onValueChange={setHandler}
+              disabled={isLoading || isLoadingHandlers || handlers.length === 0}
+            >
+              <SelectTrigger id="status-handler">
+                <SelectValue placeholder="Select handler" />
+              </SelectTrigger>
+              <SelectContent>
+                {handlers.map((h) => (
+                  <SelectItem key={h.id} value={h.name}>
+                    {h.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="status-reason">
               Reason {status === "Missed" || status === "Booking Failed" ? "(Required)" : "(Optional)"}

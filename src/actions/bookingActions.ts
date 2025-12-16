@@ -73,17 +73,18 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     destination: data.destination as string,
     journeyDate: data.journeyDate as string,
     userName: data.userName as string,
-    passengers: Array.isArray(data.passengers) ? data.passengers as Passenger[] : [], // Default to empty array if not present or not an array
+    passengers: Array.isArray(data.passengers) ? data.passengers as Passenger[] : [],
     bookingDate: data.bookingDate as string,
     classType: data.classType as TrainClass,
-    bookingType: (data.bookingType as BookingType) || 'Tatkal', // Default to 'Tatkal' if not present
+    bookingType: (data.bookingType as BookingType) || "Tatkal",
     trainPreference: data.trainPreference as string | undefined,
-    remarks: (data.remarks || data.timePreference) as string | undefined, // Backward compatibility
+    remarks: (data.remarks || data.timePreference) as string | undefined,
     status: data.status as BookingStatus,
     statusReason: data.statusReason as string | undefined,
-    createdAt: toISOStringSafe(data.createdAt, 'createdAt', id),
-    updatedAt: toISOStringSafe(data.updatedAt, 'updatedAt', id),
-    preparedAccounts: Array.isArray(data.preparedAccounts) ? data.preparedAccounts as PreparedAccount[] : undefined,
+    statusHandler: data.statusHandler as string | undefined,
+    createdAt: toISOStringSafe(data.createdAt, "createdAt", id),
+    updatedAt: toISOStringSafe(data.updatedAt, "updatedAt", id),
+    preparedAccounts: Array.isArray(data.preparedAccounts) ? (data.preparedAccounts as PreparedAccount[]) : undefined,
   };
 };
 
@@ -339,7 +340,12 @@ export async function getBookingById(id: string): Promise<Booking | null> {
   }
 }
 
-export async function updateBookingStatus(id: string, status: BookingStatus, reason?: string): Promise<Booking | null> {
+export async function updateBookingStatus(
+  id: string,
+  status: BookingStatus,
+  reason?: string,
+  handler?: string
+): Promise<Booking | null> {
  try {
     if (!db) {
       console.error("[Firestore Error] In updateBookingStatus: Firestore db instance is not available.");
@@ -351,12 +357,16 @@ export async function updateBookingStatus(id: string, status: BookingStatus, rea
       updatedAt: serverTimestamp(),
     };
     
-    // Add or remove statusReason based on whether reason is provided
     if (reason !== undefined && reason.trim() !== '') {
       updateData.statusReason = reason.trim();
     } else if (reason === '') {
-      // Explicitly clear the statusReason if empty string is passed
       updateData.statusReason = deleteField();
+    }
+
+    if (handler !== undefined && handler.trim() !== "") {
+      updateData.statusHandler = handler.trim();
+    } else if (handler === "") {
+      updateData.statusHandler = deleteField();
     }
     
     await updateDoc(docRef, updateData);

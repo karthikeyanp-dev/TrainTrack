@@ -131,7 +131,17 @@ export function BookingCard({ booking }: BookingCardProps) {
 
 
   const statusUpdateMutation = useMutation({
-    mutationFn: ({ id, status, reason }: { id: string; status: BookingStatus; reason?: string }) => updateBookingStatus(id, status, reason),
+    mutationFn: ({
+      id,
+      status,
+      reason,
+      handler,
+    }: {
+      id: string;
+      status: BookingStatus;
+      reason?: string;
+      handler?: string;
+    }) => updateBookingStatus(id, status, reason, handler),
     onSuccess: (updatedBooking) => {
       if (updatedBooking) {
         queryClient.invalidateQueries({ queryKey: ["bookings"] });
@@ -211,9 +221,9 @@ export function BookingCard({ booking }: BookingCardProps) {
     fetchBookingRecord();
   };
 
-  const handleReasonConfirm = (reason: string) => {
+  const handleReasonConfirm = (reason: string, handler?: string) => {
     if (statusToConfirm) {
-      statusUpdateMutation.mutate({ id: booking.id, status: statusToConfirm, reason });
+      statusUpdateMutation.mutate({ id: booking.id, status: statusToConfirm, reason, handler });
       setShowReasonDialog(false);
       setStatusToConfirm(null);
     }
@@ -402,6 +412,11 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             <span className="flex-1">
               <span className="font-semibold text-yellow-700 dark:text-yellow-500">Status Reason:</span>
               <span className="block mt-0.5 text-muted-foreground">{booking.statusReason}</span>
+              {booking.statusHandler && (
+                <span className="block mt-0.5 text-muted-foreground">
+                  Handler: {booking.statusHandler}
+                </span>
+              )}
             </span>
           </div>
         )}
