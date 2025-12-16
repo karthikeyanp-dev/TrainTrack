@@ -32,6 +32,9 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <section id="main" className='max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8'>
+            <div style={{ backgroundColor: 'red', color: 'white', padding: '20px', fontSize: '24px', zIndex: 9999, position: 'relative' }}>
+              VERSION TEST: 5.0 - DIRECT DEPLOY
+            </div>
             <Providers>{children}</Providers>
           </section>
         </ThemeProvider>
