@@ -148,7 +148,7 @@ export async function getHandlers(): Promise<Handler[]> {
     }
 
     const handlersCollection = collection(db, "handlers");
-    const q = query(handlersCollection, orderBy("name", "asc"));
+    const q = query(handlersCollection, orderBy("createdAt", "asc"));
     const querySnapshot = await getDocs(q);
 
     const handlers = querySnapshot.docs.map(doc => {

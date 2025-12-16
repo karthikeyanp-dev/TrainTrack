@@ -676,7 +676,7 @@ function HandlersManager() {
         description: `Handler ${result.handler.name} has been saved.`,
       });
 
-      setHandlers(prev => [...prev, result.handler!].sort((a, b) => a.name.localeCompare(b.name)));
+      setHandlers(prev => [...prev, result.handler!].sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
       setName("");
       setShowAddForm(false);
     } else {
@@ -747,7 +747,11 @@ function HandlersManager() {
         description: `Handler ${result.handler.name} has been updated.`,
       });
 
-      setHandlers(prev => prev.map(h => h.id === result.handler!.id ? result.handler! : h).sort((a, b) => a.name.localeCompare(b.name)));
+      setHandlers(prev =>
+        prev
+          .map(h => (h.id === result.handler!.id ? result.handler! : h))
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      );
       setHandlerToEdit(null);
     } else {
       const errorMessage = result.errors?.formErrors?.[0] || "Failed to update handler";
