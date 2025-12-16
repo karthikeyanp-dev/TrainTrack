@@ -35,7 +35,7 @@ jobs:
           echo ".github" >> .gcloudignore
           echo "node_modules" >> .gcloudignore
           echo "!env" >> .gcloudignore  # The "!" means "Do NOT ignore this file"
-          
+
       - id: auth
         uses: google-github-actions/auth@v2
         with:
@@ -52,7 +52,7 @@ jobs:
           region: ${{ secrets.CLOUD_RUN_REGION }}
           source: .
           allow-unauthenticated: true
-          flags: '--clear-base-image'
+          flags: '--clear-base-image --memory 1Gi'
           # We can keep this for runtime safety, but the .env file above does the heavy lifting now
           env_vars: |
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
