@@ -44,6 +44,7 @@ jobs:
           region: ${{ secrets.CLOUD_RUN_REGION }}
           source: .
           allow-unauthenticated: true
+          flags: '--clear-base-image'
           # We can keep this for runtime safety, but the .env file above does the heavy lifting now
           env_vars: |
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
