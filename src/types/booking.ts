@@ -3,7 +3,7 @@
 export const ALL_BOOKING_STATUSES = ["Requested", "Booked", "Missed", "Booking Failed", "User Cancelled"] as const;
 export type BookingStatus = typeof ALL_BOOKING_STATUSES[number];
 
-export const ALL_TRAIN_CLASSES = ["SL", "3A", "2A", "1A", "2S", "EC", "CC", "UR"] as const;
+export const ALL_TRAIN_CLASSES = ["SL", "3A", "2A", "1A", "2S", "EC", "CC w Food", "CC w/o Food", "UR"] as const;
 export type TrainClass = typeof ALL_TRAIN_CLASSES[number];
 
 export const ALL_PASSENGER_GENDERS = ["M", "F", "O"] as const;

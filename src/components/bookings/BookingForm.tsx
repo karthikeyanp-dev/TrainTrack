@@ -429,12 +429,12 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                   <X className="h-4 w-4" />
                 </Button>
               )}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-start">
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-start">
                 <FormField
                   control={form.control}
                   name={`passengers.${index}.name`}
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="md:col-span-5">
                       <FormLabel>Passenger Name</FormLabel>
                       <FormControl>
                         <Input placeholder="Full Name" {...field} value={field.value ?? ''} />
@@ -447,7 +447,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                   control={form.control}
                   name={`passengers.${index}.age`}
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="md:col-span-2">
                       <FormLabel>Age</FormLabel>
                       <FormControl>
                         <Input
@@ -473,7 +473,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                   control={form.control}
                   name={`passengers.${index}.gender`}
                   render={({ field }) => (
-                    <FormItem>
+                    <FormItem className="md:col-span-5">
                       <FormLabel>Gender</FormLabel>
                       <FormControl>
                         <RadioGroup

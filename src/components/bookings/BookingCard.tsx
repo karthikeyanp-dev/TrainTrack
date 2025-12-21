@@ -500,7 +500,16 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                 </span>
               </AccordionTrigger>
               <AccordionContent>
-                <div className="bg-muted/50 rounded-md p-2 text-xs space-y-2 pt-1">
+                <div className="bg-muted/50 rounded-md p-2 text-xs space-y-2 pt-1 relative">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="absolute top-1 right-1 h-6 w-6 text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowRecordForm(true)}
+                    title="Update Details"
+                  >
+                    <Edit3 className="h-3 w-3" />
+                  </Button>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
                       <span className="text-muted-foreground">Booked By:</span>
@@ -593,21 +602,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
            </Button>
          </div>
         
-        {/* Booking Record Toggle Button */}
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => setShowRecordForm(prev => !prev)}
-          className="w-full"
-        >
-          <MessageSquare className="mr-2 h-4 w-4" />
-          {showRecordForm 
-            ? "Hide Booked Details" 
-            : bookingRecord 
-              ? "Update Booked Details" 
-              : "Add Booked Details"
-          }
-        </Button>
+
         <div className="flex flex-col gap-1.5">
            <Label htmlFor={`status-select-${booking.id}`} className="text-xs font-medium text-muted-foreground">Update Booking Status:</Label>
             <Select
