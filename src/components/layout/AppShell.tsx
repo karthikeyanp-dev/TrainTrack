@@ -11,9 +11,10 @@ interface AppShellProps {
   children: ReactNode;
   showAddButton?: boolean;
   activeTab?: "bookings" | "accounts";
+  onTabChange?: (tab: "bookings" | "accounts") => void;
 }
 
-export function AppShell({ children, showAddButton = false, activeTab }: AppShellProps) {
+export function AppShell({ children, showAddButton = false, activeTab, onTabChange }: AppShellProps) {
   const searchBarFallback = (
     <Button variant="ghost" size="icon" disabled aria-label="Loading search">
       <Search className="h-5 w-5 opacity-50" />
@@ -51,32 +52,67 @@ export function AppShell({ children, showAddButton = false, activeTab }: AppShel
       <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container py-2">
           <nav className="grid grid-cols-2 bg-muted p-1 rounded-md">
-            <Link
-              href="/"
-              aria-current={activeTab === "bookings" ? "page" : undefined}
-              className={cn(
-                "flex flex-col items-center justify-center gap-1 rounded-sm py-2 transition-all",
-                activeTab === "bookings" 
-                  ? "bg-card text-foreground shadow-sm" 
-                  : "text-muted-foreground hover:bg-background/50"
-              )}
-            >
-              <TrainFront className="h-5 w-5" />
-              <span className="text-xs font-medium">Bookings</span>
-            </Link>
-            <Link
-              href="/accounts"
-              aria-current={activeTab === "accounts" ? "page" : undefined}
-              className={cn(
-                "flex flex-col items-center justify-center gap-1 rounded-sm py-2 transition-all",
-                activeTab === "accounts" 
-                  ? "bg-card text-foreground shadow-sm" 
-                  : "text-muted-foreground hover:bg-background/50"
-              )}
-            >
-              <User className="h-5 w-5" />
-              <span className="text-xs font-medium">Accounts</span>
-            </Link>
+            {onTabChange ? (
+              // Client-side navigation when callback is provided
+              <>
+                <button
+                  onClick={() => onTabChange("bookings")}
+                  aria-current={activeTab === "bookings" ? "page" : undefined}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-1 rounded-sm py-2 transition-all",
+                    activeTab === "bookings" 
+                      ? "bg-card text-foreground shadow-sm" 
+                      : "text-muted-foreground hover:bg-background/50"
+                  )}
+                >
+                  <TrainFront className="h-5 w-5" />
+                  <span className="text-xs font-medium">Bookings</span>
+                </button>
+                <button
+                  onClick={() => onTabChange("accounts")}
+                  aria-current={activeTab === "accounts" ? "page" : undefined}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-1 rounded-sm py-2 transition-all",
+                    activeTab === "accounts" 
+                      ? "bg-card text-foreground shadow-sm" 
+                      : "text-muted-foreground hover:bg-background/50"
+                  )}
+                >
+                  <User className="h-5 w-5" />
+                  <span className="text-xs font-medium">Accounts</span>
+                </button>
+              </>
+            ) : (
+              // Server-side navigation with Link when no callback
+              <>
+                <Link
+                  href="/"
+                  aria-current={activeTab === "bookings" ? "page" : undefined}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-1 rounded-sm py-2 transition-all",
+                    activeTab === "bookings" 
+                      ? "bg-card text-foreground shadow-sm" 
+                      : "text-muted-foreground hover:bg-background/50"
+                  )}
+                >
+                  <TrainFront className="h-5 w-5" />
+                  <span className="text-xs font-medium">Bookings</span>
+                </Link>
+                <Link
+                  href="/accounts"
+                  aria-current={activeTab === "accounts" ? "page" : undefined}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-1 rounded-sm py-2 transition-all",
+                    activeTab === "accounts" 
+                      ? "bg-card text-foreground shadow-sm" 
+                      : "text-muted-foreground hover:bg-background/50"
+                  )}
+                >
+                  <User className="h-5 w-5" />
+                  <span className="text-xs font-medium">Accounts</span>
+                </Link>
+              </>
+            )}
           </nav>
         </div>
       </div>

@@ -1,17 +1,6 @@
-
-import { AppShell } from "@/components/layout/AppShell";
-import { AccountsTab } from "@/components/accounts/AccountsTab";
-import type { Metadata } from "next";
-
-export const metadata: Metadata = {
-  title: "TrainTrack - Accounts",
-  description: "Manage your IRCTC accounts.",
-};
+import { redirect } from "next/navigation";
 
 export default function AccountsPage() {
-  return (
-    <AppShell activeTab="accounts">
-      <AccountsTab />
-    </AppShell>
-  );
+  // Redirect to unified page with accounts tab
+  redirect("/?tab=accounts");
 }
