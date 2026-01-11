@@ -286,3 +286,59 @@ export async function deleteAccount(id: string): Promise<{ success: boolean; err
     return { success: false, error: `Failed to delete account: ${errorMessage}` };
   }
 }
+
+export interface AccountStats {
+  accountId: string;
+  username: string;
+  bookingsCount: number;
+}
+
+export async function getAccountStats(): Promise<AccountStats[]> {
+  try {
+    if (!db) {
+      console.error("[Firestore Error] In getAccountStats: Firestore db instance is not available");
+      return [];
+    }
+
+    const accountsCollection = collection(db, "irctcAccounts");
+    const bookingRecordsCollection = collection(db, "bookingRecords");
+    
+    const [accountsSnapshot, bookingRecordsSnapshot] = await Promise.all([
+      getDocs(query(accountsCollection, orderBy("createdAt", "desc"))),
+      getDocs(bookingRecordsCollection)
+    ]);
+
+    const accounts = accountsSnapshot.docs.map(doc => {
+      try {
+        return mapDocToAccount(doc, doc.id);
+      } catch (mapError) {
+        console.error(`[Mapping Error] Failed to map account document ${doc.id}:`, 
+          mapError instanceof Error ? mapError.message : String(mapError));
+        return null;
+      }
+    }).filter(account => account !== null) as IrctcAccount[];
+
+    const stats: AccountStats[] = accounts.map(account => {
+      let bookingsCount = 0;
+
+      bookingRecordsSnapshot.docs.forEach(recordDoc => {
+        const recordData = recordDoc.data();
+        if (recordData.bookedAccountUsername === account.username) {
+          bookingsCount++;
+        }
+      });
+
+      return {
+        accountId: account.id,
+        username: account.username,
+        bookingsCount
+      };
+    });
+
+    return stats;
+  } catch (error) {
+    console.error("[Firestore Error] In getAccountStats:", 
+      error instanceof Error ? error.message : String(error));
+    return [];
+  }
+}

@@ -260,3 +260,77 @@ export async function deleteHandler(id: string): Promise<{ success: boolean; err
     return { success: false, error: `Failed to delete handler: ${errorMessage}` };
   }
 }
+
+export interface HandlerStats {
+  handlerId: string;
+  handlerName: string;
+  mappedBookings: number;
+  bookedByHandler: number;
+}
+
+export async function getHandlerStats(): Promise<HandlerStats[]> {
+  try {
+    if (!db) {
+      console.error("[Firestore Error] In getHandlerStats: Firestore db instance is not available");
+      return [];
+    }
+
+    const handlersCollection = collection(db, "handlers");
+    const bookingsCollection = collection(db, "bookings");
+    const bookingRecordsCollection = collection(db, "bookingRecords");
+    
+    const [handlersSnapshot, bookingsSnapshot, bookingRecordsSnapshot] = await Promise.all([
+      getDocs(query(handlersCollection, orderBy("createdAt", "asc"))),
+      getDocs(bookingsCollection),
+      getDocs(bookingRecordsCollection)
+    ]);
+
+    const handlers = handlersSnapshot.docs.map(doc => {
+      try {
+        return mapDocToHandler(doc, doc.id);
+      } catch (mapError) {
+        console.error(`[Mapping Error] Failed to map handler document ${doc.id}:`, 
+          mapError instanceof Error ? mapError.message : String(mapError));
+        return null;
+      }
+    }).filter(handler => handler !== null) as Handler[];
+
+    const stats: HandlerStats[] = handlers.map(handler => {
+      let mappedBookings = 0;
+      let bookedByHandler = 0;
+
+      bookingsSnapshot.docs.forEach(bookingDoc => {
+        const bookingData = bookingDoc.data();
+        
+        if (Array.isArray(bookingData.preparedAccounts)) {
+          const hasHandlerInAccounts = bookingData.preparedAccounts.some(
+            (account: any) => account.handlingBy === handler.name
+          );
+          if (hasHandlerInAccounts) {
+            mappedBookings++;
+          }
+        }
+      });
+
+      bookingRecordsSnapshot.docs.forEach(recordDoc => {
+        const recordData = recordDoc.data();
+        if (recordData.bookedBy === handler.name) {
+          bookedByHandler++;
+        }
+      });
+
+      return {
+        handlerId: handler.id,
+        handlerName: handler.name,
+        mappedBookings,
+        bookedByHandler
+      };
+    });
+
+    return stats;
+  } catch (error) {
+    console.error("[Firestore Error] In getHandlerStats:", 
+      error instanceof Error ? error.message : String(error));
+    return [];
+  }
+}

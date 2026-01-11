@@ -8,9 +8,9 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Trash2, Edit3, Eye, EyeOff, Plus, X } from "lucide-react";
 import type { IrctcAccount } from "@/types/account";
-import { getAccounts, addAccount, deleteAccount, updateAccount } from "@/actions/accountActions";
+import { getAccounts, addAccount, deleteAccount, updateAccount, getAccountStats, type AccountStats } from "@/actions/accountActions";
 import type { Handler } from "@/types/handler";
-import { getHandlers, addHandler, updateHandler, deleteHandler } from "@/actions/handlerActions";
+import { getHandlers, addHandler, updateHandler, deleteHandler, getHandlerStats, type HandlerStats } from "@/actions/handlerActions";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -40,6 +40,7 @@ interface AccountFormState {
 
 function AccountsManager() {
   const [accounts, setAccounts] = useState<IrctcAccount[]>([]);
+  const [accountStats, setAccountStats] = useState<AccountStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -73,8 +74,12 @@ function AccountsManager() {
   const loadAccounts = async () => {
     setIsLoading(true);
     try {
-      const fetchedAccounts = await getAccounts();
+      const [fetchedAccounts, fetchedStats] = await Promise.all([
+        getAccounts(),
+        getAccountStats()
+      ]);
       setAccounts(fetchedAccounts.sort((a, b) => b.walletAmount - a.walletAmount));
+      setAccountStats(fetchedStats);
     } catch (error) {
       toast({
         title: "Error Loading Accounts",
@@ -398,7 +403,9 @@ function AccountsManager() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {accounts.map(account => (
+        {accounts.map(account => {
+          const stats = accountStats.find(s => s.accountId === account.id);
+          return (
           <Card key={account.id}>
             <CardHeader className="pb-3">
               <div className="flex justify-between items-start">
@@ -468,12 +475,17 @@ function AccountsManager() {
                 </Button>
               </div>
               <div>
+                <span className="font-medium">Booked: </span>
+                {stats?.bookingsCount ?? 0}
+              </div>
+              <div>
                 <span className="font-medium">Last Booked: </span>
                 {account.lastBookedDate || "—"}
               </div>
             </CardContent>
           </Card>
-        ))}
+          );
+        })}
         {accounts.length === 0 && (
           <p className="text-sm text-muted-foreground col-span-full">
             No accounts added yet. Click &apos;Add Account&apos; to add your first IRCTC account.
@@ -622,6 +634,7 @@ function AccountsManager() {
 
 function HandlersManager() {
   const [handlers, setHandlers] = useState<Handler[]>([]);
+  const [handlerStats, setHandlerStats] = useState<HandlerStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -639,8 +652,12 @@ function HandlersManager() {
   const loadHandlers = async () => {
     setIsLoading(true);
     try {
-      const fetchedHandlers = await getHandlers();
+      const [fetchedHandlers, fetchedStats] = await Promise.all([
+        getHandlers(),
+        getHandlerStats()
+      ]);
       setHandlers(fetchedHandlers);
+      setHandlerStats(fetchedStats);
     } catch (error) {
       toast({
         title: "Error Loading Handlers",
@@ -818,42 +835,55 @@ function HandlersManager() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {handlers.map(handler => (
-          <Card key={handler.id}>
-            <CardHeader className="pb-3">
-              <div className="flex justify-between items-start">
-                <CardTitle className="text-base">
-                  {handler.name}
-                </CardTitle>
-                <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-primary"
-                    onClick={() => handleEditClick(handler)}
-                    title="Edit Handler"
-                  >
-                    <Edit3 className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => handleDeleteClick(handler.id)}
-                    title="Delete Handler"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+        {handlers.map(handler => {
+          const stats = handlerStats.find(s => s.handlerId === handler.id);
+          return (
+            <Card key={handler.id}>
+              <CardHeader className="pb-3">
+                <div className="flex justify-between items-start">
+                  <CardTitle className="text-base">
+                    {handler.name}
+                  </CardTitle>
+                  <div className="flex gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-primary"
+                      onClick={() => handleEditClick(handler)}
+                      title="Edit Handler"
+                    >
+                      <Edit3 className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-destructive hover:text-destructive"
+                      onClick={() => handleDeleteClick(handler.id)}
+                      title="Delete Handler"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="text-xs text-muted-foreground">
-                Last Updated: {new Date(handler.updatedAt).toLocaleDateString()}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <div className="grid grid-cols-2 gap-2 pb-2 border-b">
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Handling:</span>
+                    <span className="ml-1 font-medium text-foreground">{stats?.mappedBookings ?? 0}</span>
+                  </div>
+                  <div className="text-xs">
+                    <span className="text-muted-foreground">Booked:</span>
+                    <span className="ml-1 font-medium text-foreground">{stats?.bookedByHandler ?? 0}</span>
+                  </div>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Last Updated: {new Date(handler.updatedAt).toLocaleDateString()}
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
         {handlers.length === 0 && (
           <p className="text-sm text-muted-foreground col-span-full">
             No handlers added yet. Click &apos;Add Handler&apos; to add your first handler.
