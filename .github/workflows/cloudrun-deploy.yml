@@ -52,7 +52,15 @@ jobs:
           region: ${{ secrets.CLOUD_RUN_REGION }}
           source: .
           allow-unauthenticated: true
-          flags: '--clear-base-image --memory 1Gi'
+          flags: |
+            --clear-base-image
+            --memory 2Gi
+            --cpu 2
+            --min-instances 1
+            --max-instances 10
+            --concurrency 80
+            --timeout 60
+            --cpu-boost
           # We can keep this for runtime safety, but the .env file above does the heavy lifting now
           env_vars: |
             GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}
