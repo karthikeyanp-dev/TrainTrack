@@ -8,9 +8,6 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   serverExternalPackages: ['handlebars'],
-  generateBuildId: async () => {
-    return `build-${Date.now()}`;
-  },
   images: {
     remotePatterns: [
       {
