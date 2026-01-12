@@ -6,7 +6,7 @@ WORKDIR /app
 
 # Copy package files and install dependencies
 COPY package*.json ./
-RUN npm ci --only=production --ignore-scripts
+RUN npm ci
 
 # Copy the rest of your app source code
 # (This includes the .env file we will generate in GitHub Actions)
@@ -15,6 +15,9 @@ COPY . .
 # Build the Next.js app
 # This is where NEXT_PUBLIC_ vars get baked in!
 RUN npm run build
+
+# Remove dev dependencies after build to reduce image size
+RUN npm prune --omit=dev
 
 # Set environment variables for Cloud Run
 ENV NODE_ENV=production
