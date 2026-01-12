@@ -318,13 +318,24 @@ export async function getAccountStats(): Promise<AccountStats[]> {
       }
     }).filter(account => account !== null) as IrctcAccount[];
 
+    // Calculate date from 30 days ago
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
     const stats: AccountStats[] = accounts.map(account => {
       let bookingsCount = 0;
 
       bookingRecordsSnapshot.docs.forEach(recordDoc => {
         const recordData = recordDoc.data();
         if (recordData.bookedAccountUsername === account.username) {
-          bookingsCount++;
+          // Only count bookings from the last 30 days
+          const recordDate = recordData.createdAt instanceof Timestamp
+            ? recordData.createdAt.toDate()
+            : new Date(recordData.createdAt);
+
+          if (recordDate >= thirtyDaysAgo) {
+            bookingsCount++;
+          }
         }
       });
 

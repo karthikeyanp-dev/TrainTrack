@@ -475,7 +475,7 @@ function AccountsManager() {
                 </Button>
               </div>
               <div>
-                <span className="font-medium">Booked: </span>
+                <span className="font-medium">Booked (30d): </span>
                 {stats?.bookingsCount ?? 0}
               </div>
               <div>
