@@ -16,9 +16,6 @@ COPY . .
 # This is where NEXT_PUBLIC_ vars get baked in!
 RUN npm run build
 
-# Remove dev dependencies after build to reduce image size
-RUN npm prune --omit=dev
-
 # Set environment variables for Cloud Run
 ENV NODE_ENV=production
 ENV HOSTNAME="0.0.0.0"
