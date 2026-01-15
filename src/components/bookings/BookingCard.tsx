@@ -62,6 +62,8 @@ function getStatusIcon(status: BookingStatus) {
 }
 
 export function BookingCard({ booking }: BookingCardProps) {
+  const labelHighlightStyle = { color: '#AB945E', fontWeight: 700 };
+  const sourceDestStyle = { color: '#dfa92a', fontWeight: 700 };
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const router = useRouter();
@@ -355,7 +357,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
         <div className="flex justify-between items-start">
           <div>
             <CardTitle className="text-lg md:text-xl">
-              <span style={{ color: '#AB945E' }}>{booking.source.toUpperCase()}</span> <span className="text-sm text-gray-400">to</span> <span style={{ color: '#AB945E' }}>{booking.destination.toUpperCase()}</span>
+              <span style={sourceDestStyle}>{booking.source.toUpperCase()}</span> <span className="text-sm text-gray-400">to</span> <span style={sourceDestStyle}>{booking.destination.toUpperCase()}</span>
             </CardTitle>
             <hr></hr>
             <CardDescription>For <b>{booking.userName}</b></CardDescription>
@@ -374,17 +376,17 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
       <CardContent className="space-y-3 text-sm flex-grow">
         <div className="flex items-center gap-2">
           <CalendarDays className="h-4 w-4 text-muted-foreground" />
-          <span><span className="font-semibold" style={{ color: '#AB945E' }}>Journey:</span> {clientFormattedJourneyDate || "..."}</span>
+          <span><span style={labelHighlightStyle}>Journey:</span> {clientFormattedJourneyDate || "..."}</span>
         </div>
         <div className="flex items-center gap-2">
           <CalendarDays className="h-4 w-4 text-muted-foreground" />
-          <span><span className="font-semibold" style={{ color: '#AB945E' }}>Book by:</span> {clientFormattedBookingDate || "..."}</span>
+          <span><span style={labelHighlightStyle}>Book by:</span> {clientFormattedBookingDate || "..."}</span>
         </div>
 
         <div className="space-y-1">
           <div className="flex items-center gap-2">
             <Users className="h-4 w-4 text-muted-foreground" />
-            <span className="font-semibold" style={{ color: '#AB945E' }}>Passengers:</span>
+            <span style={labelHighlightStyle}>Passengers:</span>
           </div>
           {booking.passengers.map((passenger, index) => (
             <div key={index} className="ml-6 text-sm">
@@ -396,13 +398,13 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
         {booking.trainPreference && (
           <div className="flex items-start gap-2">
             <Train className="h-4 w-4 text-muted-foreground mt-0.5" />
-            <span className="flex-1"><span className="font-semibold" style={{ color: '#AB945E' }}>Train Pref:</span> {booking.trainPreference}</span>
+            <span className="flex-1"><span style={labelHighlightStyle}>Train Pref:</span> {booking.trainPreference}</span>
           </div>
         )}
         {booking.remarks && (
           <div className="flex items-start gap-2">
             <MessageSquare className="h-4 w-4 text-muted-foreground mt-0.5" />
-            <span className="flex-1"><span className="font-semibold" style={{ color: '#AB945E' }}>Remarks:</span> {booking.remarks}</span>
+            <span className="flex-1"><span style={labelHighlightStyle}>Remarks:</span> {booking.remarks}</span>
           </div>
         )}
         
@@ -427,7 +429,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             <AccordionItem value="accounts" className="border-none">
               <AccordionTrigger className="py-2 text-sm hover:no-underline">
                 <span className="flex items-center gap-2">
-                  <span className="font-semibold" style={{ color: '#AB945E' }}>ID(s) for Booking</span>
+                  <span style={labelHighlightStyle}>ID(s) for Booking</span>
                   <span className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full">
                     {booking.preparedAccounts.length}
                   </span>
@@ -495,7 +497,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             <AccordionItem value="booking-details" className="border-none">
               <AccordionTrigger className="py-2 text-sm hover:no-underline">
                 <span className="flex items-center gap-2">
-                  <span className="font-semibold" style={{ color: '#AB945E' }}>Booked Details</span>
+                  <span style={labelHighlightStyle}>Booked Details</span>
                   <CheckCircle2 className="h-4 w-4 text-green-600" />
                 </span>
               </AccordionTrigger>
@@ -512,20 +514,20 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                   </Button>
                   <div className="grid grid-cols-2 gap-2">
                     <div>
-                      <span className="text-muted-foreground" style={{ color: '#AB945E' }}>Booked By:</span>
+                      <span style={labelHighlightStyle}>Booked By:</span>
                       <div className="font-medium">{bookingRecord.bookedBy}</div>
                     </div>
                     <div>
-                      <span className="text-muted-foreground" style={{ color: '#AB945E' }}>Amount:</span>
+                      <span style={labelHighlightStyle}>Amount:</span>
                       <div className="font-medium">₹{bookingRecord.amountCharged}</div>
                     </div>
                   </div>
                   <div>
-                    <span className="text-muted-foreground" style={{ color: '#AB945E' }}>Account Used:</span>
+                    <span style={labelHighlightStyle}>Account Used:</span>
                     <div className="font-medium">{bookingRecord.bookedAccountUsername}</div>
                   </div>
                   <div>
-                    <span className="text-muted-foreground" style={{ color: '#AB945E' }}>Payment Method:</span>
+                    <span style={labelHighlightStyle}>Payment Method:</span>
                     <div className="font-medium">{bookingRecord.methodUsed}</div>
                   </div>
                 </div>
@@ -552,11 +554,11 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
         {/* Created and Last Updated side by side */}
         <div className="flex gap-2">
           <div className="flex-1 text-xs text-muted-foreground">
-            <div className="font-semibold mb-1" style={{ color: '#AB945E' }}>Created</div>
+            <div className="mb-1" style={labelHighlightStyle}>Created</div>
             <div>{clientFormattedCreatedAt || "..."}</div>
           </div>
           <div className="flex-1 text-xs text-muted-foreground text-right">
-            <div className="font-semibold mb-1" style={{ color: '#AB945E' }}>Last Updated</div>
+            <div className="mb-1" style={labelHighlightStyle}>Last Updated</div>
             <div>{clientFormattedUpdatedAt || "..."}</div>
           </div>
         </div>
@@ -604,7 +606,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
         
 
         <div className="flex flex-col gap-1.5">
-           <Label htmlFor={`status-select-${booking.id}`} className="text-xs font-medium text-muted-foreground" style={{ color: '#AB945E' }}>Update Booking Status:</Label>
+           <Label htmlFor={`status-select-${booking.id}`} className="text-xs" style={labelHighlightStyle}>Update Booking Status:</Label>
             <Select
                 value={booking.status}
                 onValueChange={handleStatusSelect}

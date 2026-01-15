@@ -31,6 +31,8 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+const labelHighlightStyle = { color: '#AB945E', fontWeight: 700 };
+
 interface AccountFormState {
   username: string;
   password: string;
@@ -435,8 +437,8 @@ function AccountsManager() {
               </div>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="font-medium">Password: </span>
+              <div className="flex items-center gap-2">
+                <span style={labelHighlightStyle}>Password: </span>
                 <div className="flex items-center gap-2">
                   <span className="font-mono text-xs">
                     {visiblePasswords.has(account.id) 
@@ -459,7 +461,7 @@ function AccountsManager() {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className="font-medium">Wallet: </span>
+                <span style={labelHighlightStyle}>Wallet: </span>
                 <span>₹{account.walletAmount.toFixed(2)}</span>
                 <Button
                   variant="ghost"
@@ -475,11 +477,11 @@ function AccountsManager() {
                 </Button>
               </div>
               <div>
-                <span className="font-medium">Booked (30d): </span>
+                <span style={labelHighlightStyle}>Booked (30d): </span>
                 {stats?.bookingsCount ?? 0}
               </div>
               <div>
-                <span className="font-medium">Last Booked: </span>
+                <span style={labelHighlightStyle}>Last Booked: </span>
                 {account.lastBookedDate || "—"}
               </div>
             </CardContent>
@@ -869,11 +871,11 @@ function HandlersManager() {
               <CardContent className="space-y-2 text-sm">
                 <div className="grid grid-cols-2 gap-2 pb-2 border-b">
                   <div className="text-xs">
-                    <span className="text-muted-foreground">Handling:</span>
+                    <span style={labelHighlightStyle}>Handled:</span>
                     <span className="ml-1 font-medium text-foreground">{stats?.mappedBookings ?? 0}</span>
                   </div>
                   <div className="text-xs">
-                    <span className="text-muted-foreground">Booked:</span>
+                    <span style={labelHighlightStyle}>Booked:</span>
                     <span className="ml-1 font-medium text-foreground">{stats?.bookedByHandler ?? 0}</span>
                   </div>
                 </div>
