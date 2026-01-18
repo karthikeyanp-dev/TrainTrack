@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getHandlers, getHandlerStats, type HandlerStats } from "@/actions/handlerActions";
+import { getHandlers, getHandlerStats, type HandlerStats } from "@/lib/handlersClient";
 import type { Handler } from "@/types/handler";
 
 /**

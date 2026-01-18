@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getAccounts, getAccountStats, type AccountStats } from "@/actions/accountActions";
+import { getAccounts, getAccountStats, type AccountStats } from "@/lib/accountsClient";
 import type { IrctcAccount } from "@/types/account";
 
 /**

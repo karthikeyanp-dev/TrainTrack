@@ -5,10 +5,10 @@ import { BookingsLoadingSkeleton } from "@/components/bookings/BookingsLoadingSk
 import { BookingsView } from "@/components/bookings/BookingsView";
 import { useBookings, usePendingBookings, useBookingDates } from "@/hooks/useBookings";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, Suspense } from "react";
 import type { Booking } from "@/types/booking";
 
-export default function HomePage() {
+function HomePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const searchQuery = searchParams.get('search') || undefined;
@@ -97,5 +97,13 @@ export default function HomePage() {
         />
       )}
     </AppShell>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense fallback={<AppShell showAddButton={true} activeTab="bookings"><BookingsLoadingSkeleton /></AppShell>}>
+      <HomePageContent />
+    </Suspense>
   );
 }

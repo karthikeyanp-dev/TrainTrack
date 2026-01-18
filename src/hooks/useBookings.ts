@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { getBookings, getPendingBookings, getDistinctBookingDates } from "@/actions/bookingActions";
+import { getBookings, getPendingBookings, getDistinctBookingDates } from "@/lib/firestoreClient";
 import type { Booking } from "@/types/booking";
 
 /**

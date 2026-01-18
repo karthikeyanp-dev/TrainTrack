@@ -16,15 +16,14 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, CheckCircle2, Trash2 } from "lucide-react";
 import type { IrctcAccount } from "@/types/account";
 import { AccountSelect } from "@/components/accounts/AccountSelect";
-import { getAccounts } from "@/actions/accountActions";
+import { getAccounts } from "@/lib/accountsClient";
 import type { PaymentMethod, BookingRecord } from "@/types/bookingRecord";
 import { ALL_PAYMENT_METHODS } from "@/types/bookingRecord";
-import {
-  getBookingRecordByBookingId,
-  saveBookingRecord,
-  deleteBookingRecord,
-} from "@/actions/bookingRecordActions";
-import { getHandlers } from "@/actions/handlerActions";
+// TODO: Create booking records client library
+const getBookingRecordByBookingId = async (id: string) => null;
+const saveBookingRecord = async (data: any) => ({ success: false, error: 'Not implemented' });
+const deleteBookingRecord = async (id: string) => ({ success: false, error: 'Not implemented' });
+import { getHandlers } from "@/lib/handlersClient";
 import type { Handler } from "@/types/handler";
 
 interface BookingRecordFormProps {

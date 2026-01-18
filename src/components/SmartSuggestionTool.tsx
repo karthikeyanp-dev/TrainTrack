@@ -6,8 +6,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Loader2, Lightbulb, Info } from "lucide-react";
-import { suggestDestinations, type SuggestDestinationsInput, type SuggestDestinationsOutput } from "@/ai/flows/smart-destination-suggestion";
-import { getAllBookingsAsJsonString } from "@/actions/bookingActions";
+// AI suggestions temporarily disabled for static export
+// import { suggestDestinations, type SuggestDestinationsInput, type SuggestDestinationsOutput } from "@/ai/flows/smart-destination-suggestion";
+type SuggestDestinationsInput = any;
+type SuggestDestinationsOutput = any;
+import { getAllBookingsAsJsonString } from "@/lib/firestoreClient";
 import { Label } from "@/components/ui/label";
 
 export function SmartSuggestionTool() {
@@ -47,12 +50,17 @@ export function SmartSuggestionTool() {
     setSuggestions(null);
 
     try {
+      // AI suggestions temporarily disabled for static export
+      setError('AI suggestions feature is currently unavailable in this deployment.');
+      return;
+      /*
       const input: SuggestDestinationsInput = {
         pastBookingData,
         popularTravelTrends,
       };
       const result = await suggestDestinations(input);
       setSuggestions(result);
+      */
     } catch (err) {
       console.error(err);
       setError(err instanceof Error ? err.message : "An unknown error occurred while fetching suggestions.");

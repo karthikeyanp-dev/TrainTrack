@@ -6,7 +6,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import type { Booking, PreparedAccount } from "@/types/booking";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { updateBookingRequirements } from "@/actions/bookingActions";
+import { updateBookingRequirements } from "@/lib/firestoreClient";
 import { useToast } from "@/hooks/use-toast";
 
 import {
@@ -41,9 +41,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import { getAccounts } from "@/actions/accountActions";
+import { getAccounts } from "@/lib/accountsClient";
 import type { IrctcAccount } from "@/types/account";
-import { getHandlers } from "@/actions/handlerActions";
+import { getHandlers } from "@/lib/handlersClient";
 import type { Handler } from "@/types/handler";
 
 const PreparedAccountSchema = z.object({

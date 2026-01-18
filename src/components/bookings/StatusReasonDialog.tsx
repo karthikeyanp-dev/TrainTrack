@@ -19,7 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getHandlers } from "@/actions/handlerActions";
+import { getHandlers } from "@/lib/handlersClient";
 import type { Handler } from "@/types/handler";
 
 interface StatusReasonDialogProps {
