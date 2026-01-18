@@ -10,7 +10,7 @@ import { Loader2, Trash2, Edit3, Eye, EyeOff, Plus, X } from "lucide-react";
 import type { IrctcAccount } from "@/types/account";
 import { getAccounts, addAccount, deleteAccount, updateAccount, getAccountStats, type AccountStats } from "@/lib/accountsClient";
 import type { Handler } from "@/types/handler";
-import { getHandlers, addHandler, updateHandler, deleteHandler, getHandlerStats, type HandlerStats } from "@/lib/handlersClient";
+import { getHandlers, addHandler, updateHandler, deleteHandler } from "@/lib/handlersClient";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -641,7 +641,6 @@ function AccountsManager() {
 
 function HandlersManager() {
   const [handlers, setHandlers] = useState<Handler[]>([]);
-  const [handlerStats, setHandlerStats] = useState<HandlerStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -659,12 +658,8 @@ function HandlersManager() {
   const loadHandlers = async () => {
     setIsLoading(true);
     try {
-      const [fetchedHandlers, fetchedStats] = await Promise.all([
-        getHandlers(),
-        getHandlerStats()
-      ]);
+      const fetchedHandlers = await getHandlers();
       setHandlers(fetchedHandlers);
-      setHandlerStats(fetchedStats);
     } catch (error) {
       toast({
         title: "Error Loading Handlers",
@@ -843,9 +838,7 @@ function HandlersManager() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {handlers.map(handler => {
-          const stats = handlerStats.find(s => s.handlerId === handler.id);
-          return (
+        {handlers.map(handler => (
             <Card key={handler.id}>
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start">
@@ -875,17 +868,12 @@ function HandlersManager() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
-                <div>
-                  <span style={labelHighlightStyle}>Bookings Handled: </span>
-                  <span className="font-medium text-foreground">{stats?.bookingCount ?? 0}</span>
-                </div>
                 <div className="text-xs text-muted-foreground">
                   Last Updated: {new Date(handler.updatedAt).toLocaleDateString()}
                 </div>
               </CardContent>
             </Card>
-          );
-        })}
+          ))}
         {handlers.length === 0 && (
           <p className="text-sm text-muted-foreground col-span-full">
             No handlers added yet. Click &apos;Add Handler&apos; to add your first handler.
