@@ -148,7 +148,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
         title: isEditMode ? "Booking Updated!" : "Booking Request Added!",
         description: `Request for ${result.booking.userName} from ${result.booking.source} to ${result.booking.destination} ${isEditMode ? 'updated' : 'saved'}.`,
       });
-      router.push("/"); 
+      router.push("/");
     } else {
       const errorMessage = result.error || "An unexpected error occurred. Please try again.";
       toast({

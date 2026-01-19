@@ -2,6 +2,7 @@
 const nextConfig = {
   /* config options here */
   output: 'export', // Enable static export
+  trailingSlash: true, // Required for static export routing
   typescript: {
     ignoreBuildErrors: true,
   },

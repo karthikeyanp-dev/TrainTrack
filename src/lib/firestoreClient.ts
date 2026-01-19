@@ -399,3 +399,86 @@ export async function getBookingRecordByBookingId(bookingId: string): Promise<an
     return null;
   }
 }
+
+export async function saveBookingRecord(data: {
+  bookingId: string;
+  bookedBy: string;
+  bookedAccountUsername: string;
+  amountCharged: number;
+  methodUsed: string;
+}): Promise<{ success: boolean; error?: string; record?: any; errors?: any }> {
+  if (!db) {
+    return { success: false, error: "Firestore database is not configured" };
+  }
+
+  try {
+    const recordsCollection = collection(db, "bookingRecords");
+    
+    // Check if a record already exists for this booking
+    const q = query(recordsCollection, where("bookingId", "==", data.bookingId));
+    const querySnapshot = await getDocs(q);
+
+    const recordData = {
+      bookingId: data.bookingId,
+      bookedBy: data.bookedBy,
+      bookedAccountUsername: data.bookedAccountUsername,
+      amountCharged: data.amountCharged,
+      methodUsed: data.methodUsed,
+      updatedAt: serverTimestamp(),
+    };
+
+    let docId: string;
+
+    if (!querySnapshot.empty) {
+      // Update existing record
+      const existingDoc = querySnapshot.docs[0];
+      docId = existingDoc.id;
+      await updateDoc(doc(db, "bookingRecords", docId), recordData);
+    } else {
+      // Create new record
+      const docRef = await addDoc(recordsCollection, {
+        ...recordData,
+        createdAt: serverTimestamp(),
+      });
+      docId = docRef.id;
+    }
+
+    // Retrieve the saved record
+    const savedDoc = await getDoc(doc(db, "bookingRecords", docId));
+    if (!savedDoc.exists()) {
+      return { success: false, error: "Failed to retrieve saved record" };
+    }
+
+    const savedData = savedDoc.data();
+    const record = {
+      id: savedDoc.id,
+      bookingId: savedData.bookingId,
+      bookedBy: savedData.bookedBy,
+      bookedAccountUsername: savedData.bookedAccountUsername,
+      amountCharged: savedData.amountCharged,
+      methodUsed: savedData.methodUsed,
+      createdAt: toISOStringSafe(savedData.createdAt, "createdAt", savedDoc.id),
+      updatedAt: toISOStringSafe(savedData.updatedAt, "updatedAt", savedDoc.id),
+    };
+
+    return { success: true, record };
+  } catch (error: any) {
+    console.error("[Firestore Error] saveBookingRecord:", error);
+    return { success: false, error: error.message || "Failed to save booking record" };
+  }
+}
+
+export async function deleteBookingRecord(id: string): Promise<{ success: boolean; error?: string }> {
+  if (!db) {
+    return { success: false, error: "Firestore database is not configured" };
+  }
+
+  try {
+    const docRef = doc(db, "bookingRecords", id);
+    await deleteDoc(docRef);
+    return { success: true };
+  } catch (error: any) {
+    console.error(`[Firestore Error] deleteBookingRecord (${id}):`, error);
+    return { success: false, error: error.message || "Failed to delete booking record" };
+  }
+}
