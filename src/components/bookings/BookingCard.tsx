@@ -249,7 +249,11 @@ export function BookingCard({ booking }: BookingCardProps) {
   };
 
   const handleShare = () => {
-    const passengerDetailsText = booking.passengers.map((p, index) => `${index + 1}. ${p.name} ${p.age} ${p.gender.toUpperCase()}`).join('\n');
+    const passengerDetailsText = booking.passengers.map((p, index) => {
+      const isChild = p.age >= 5 && p.age <= 11;
+      const berthInfo = isChild ? (p.berthRequired ? ' [Berth Required]' : ' [No Berth]') : '';
+      return `${index + 1}. ${p.name} ${p.age} ${p.gender.toUpperCase()}${berthInfo}`;
+    }).join('\n');
     const formattedJourney = formatDate(booking.journeyDate);
     const journeyDateFormatted = formattedJourney !== "N/A" ? formattedJourney : (booking.journeyDate || "N/A");
     const formattedBooking = formatDate(booking.bookingDate);
@@ -416,11 +420,27 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             <Users className="h-4 w-4 text-muted-foreground" />
             <span style={labelHighlightStyle}>Passengers:</span>
           </div>
-          {booking.passengers.map((passenger, index) => (
-            <div key={index} className="ml-6 text-sm">
-              {passenger.name}, {passenger.age}, {passenger.gender.toUpperCase()}
-            </div>
-          ))}
+          {booking.passengers.map((passenger, index) => {
+            const isChild = passenger.age >= 5 && passenger.age <= 11;
+            return (
+              <div key={index} className="ml-6 text-sm flex items-center gap-2 flex-wrap">
+                <span>{passenger.name}, {passenger.age}, {passenger.gender.toUpperCase()}</span>
+                {isChild && (
+                  passenger.berthRequired ? (
+                    <span className="inline-flex items-center gap-1 text-xs bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded-full whitespace-nowrap">
+                      <CheckCircle2 className="h-3 w-3" />
+                      Berth
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 px-2 py-0.5 rounded-full whitespace-nowrap">
+                      <XCircle className="h-3 w-3" />
+                      No Berth
+                    </span>
+                  )
+                )}
+              </div>
+            );
+          })}
         </div>
 
         {booking.trainPreference && (

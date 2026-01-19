@@ -23,6 +23,7 @@ export interface Passenger {
   name: string;
   age: number;
   gender: PassengerGender;
+  berthRequired?: boolean; // For child passengers aged 5-11
 }
 
 export interface PreparedAccount {

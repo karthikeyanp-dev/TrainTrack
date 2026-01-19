@@ -39,6 +39,7 @@ const passengerSchema = z.object({
     z.literal(undefined)
   ]).optional(),
   gender: z.enum(ALL_PASSENGER_GENDERS, { errorMap: () => ({ message: "Gender is required." }) }).optional().or(z.literal(undefined)),
+  berthRequired: z.boolean().optional(),
 });
 
 const bookingFormSchema = z.object({
@@ -85,6 +86,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             name: p.name || "",
             age: p.age !== undefined ? String(p.age) : undefined as any,
             gender: p.gender,
+            berthRequired: p.berthRequired || false,
           })),
         }
       : {
@@ -94,7 +96,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           userName: "",
           trainPreference: "",
           remarks: "",
-          passengers: [{ name: "", age: undefined, gender: undefined }],
+          passengers: [{ name: "", age: undefined, gender: undefined, berthRequired: false }],
         },
   });
 
@@ -128,6 +130,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           name: p.name!,
           age: Number(p.age!),
           gender: p.gender!,
+          ...(p.berthRequired && { berthRequired: p.berthRequired }),
       })) as Passenger[],
       ...(values.trainPreference && values.trainPreference.trim() !== "" && { trainPreference: values.trainPreference }),
       ...(values.remarks && values.remarks.trim() !== "" && { remarks: values.remarks }),
@@ -456,6 +459,41 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                   )}
                 />
               </div>
+              
+              {/* Berth Required Checkbox - Show only for children aged 5-11 */}
+              {(() => {
+                const ageValue = form.watch(`passengers.${index}.age`);
+                const age = ageValue ? Number(ageValue) : 0;
+                const showBerthCheckbox = age >= 5 && age <= 11;
+                
+                return showBerthCheckbox ? (
+                  <FormField
+                    control={form.control}
+                    name={`passengers.${index}.berthRequired`}
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 mt-3 p-3 bg-muted/30 rounded-md">
+                        <FormControl>
+                          <input
+                            type="checkbox"
+                            checked={field.value || false}
+                            onChange={(e) => field.onChange(e.target.checked)}
+                            className="h-4 w-4 mt-0.5 rounded border-gray-300"
+                            id={`berth-${index}`}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel htmlFor={`berth-${index}`} className="text-sm font-normal cursor-pointer">
+                            Berth Required (Child Passenger)
+                          </FormLabel>
+                          <p className="text-xs text-muted-foreground">
+                            Check if a separate berth is needed for this child
+                          </p>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+                ) : null;
+              })()}
             </div>
           ))}
           <Button
@@ -463,12 +501,13 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             variant="outline"
             onClick={() => {
               const newIndex = fields.length;
-              append({ name: "", age: "", gender: undefined });
+              append({ name: "", age: "", gender: undefined, berthRequired: false });
               // Explicitly clear the form values for the new passenger
               setTimeout(() => {
                 form.setValue(`passengers.${newIndex}.name`, "");
                 form.setValue(`passengers.${newIndex}.age`, "");
                 form.resetField(`passengers.${newIndex}.gender`);
+                form.setValue(`passengers.${newIndex}.berthRequired`, false);
               }, 0);
             }}
             className="mt-2"
