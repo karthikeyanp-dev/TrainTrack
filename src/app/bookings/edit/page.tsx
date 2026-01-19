@@ -8,9 +8,9 @@ import type { BookingFormData, Passenger } from "@/types/booking";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 
-export default function EditBookingPage() {
+function EditBookingContent() {
   const searchParams = useSearchParams();
   const bookingId = searchParams.get('id');
 
@@ -59,7 +59,7 @@ export default function EditBookingPage() {
   }, [bookingId]);
 
   return (
-    <AppShell>
+    <>
       {error && (
         <Alert variant="destructive" className="max-w-2xl mx-auto mb-4">
           <AlertCircle className="h-4 w-4" />
@@ -89,6 +89,30 @@ export default function EditBookingPage() {
           )}
         </CardContent>
       </Card>
+    </>
+  );
+}
+
+export default function EditBookingPage() {
+  return (
+    <AppShell>
+      <Suspense fallback={
+        <Card className="max-w-2xl mx-auto shadow-lg">
+          <CardHeader>
+            <CardTitle className="text-2xl">Edit Booking Request</CardTitle>
+            <CardDescription>
+              Update the booking details below and save your changes.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex justify-center items-center p-12">
+              <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            </div>
+          </CardContent>
+        </Card>
+      }>
+        <EditBookingContent />
+      </Suspense>
     </AppShell>
   );
 }
