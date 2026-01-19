@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, where, onSnapshot, Timestamp } from "firebase/firestore";
-import type { Booking, BookingStatus, Passenger, PreparedAccount } from "@/types/booking";
+import type { Booking, BookingStatus, Passenger, PreparedAccount, TrainClass } from "@/types/booking";
+import { LEGACY_CLASS_MAP } from "@/types/booking";
 
 // Helper to convert Firestore timestamps
 const toISOStringSafe = (value: any): string => {
@@ -23,6 +24,16 @@ const toISOStringSafe = (value: any): string => {
   return new Date().toISOString();
 };
 
+// Normalize legacy class names to new format
+const normalizeClassType = (classType: string): TrainClass => {
+  // Check if it's a legacy class name and map it to the new format
+  if (classType in LEGACY_CLASS_MAP) {
+    return LEGACY_CLASS_MAP[classType as keyof typeof LEGACY_CLASS_MAP];
+  }
+  // Return as-is if it's already a valid new class name
+  return classType as TrainClass;
+};
+
 // Map Firestore document to Booking type
 const mapDocToBooking = (doc: any): Booking => {
   const data = doc.data();
@@ -34,7 +45,7 @@ const mapDocToBooking = (doc: any): Booking => {
     userName: data.userName as string,
     passengers: Array.isArray(data.passengers) ? data.passengers as Passenger[] : [],
     bookingDate: data.bookingDate as string,
-    classType: data.classType,
+    classType: normalizeClassType(data.classType),
     bookingType: data.bookingType || "Tatkal",
     trainPreference: data.trainPreference as string | undefined,
     remarks: (data.remarks || data.timePreference) as string | undefined,

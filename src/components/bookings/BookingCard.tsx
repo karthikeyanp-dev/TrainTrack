@@ -348,28 +348,56 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
       toast({ title: "Copy Failed", description: "Could not copy details to clipboard.", variant: "destructive" });
     }
   };
-  
-  const displayClass = `${booking.bookingType === 'Tatkal' ? 'T' : 'G'}-${booking.classType}`;
+
+  // Create compact display format for train class
+  const getCompactClassDisplay = (classType: string): string => {
+    const classMap: Record<string, string> = {
+      "CC (Veg)": "CC-V",
+      "CC (Non Veg)": "CC-NV", 
+      "CC (No Food)": "CC-NF",
+      "CC": "CC",
+    };
+    return classMap[classType] || classType;
+  };
+
+  const compactClass = getCompactClassDisplay(booking.classType);
+  const displayClass = `${booking.bookingType === 'Tatkal' ? 'T' : 'G'}-${compactClass}`;
 
   return (
     <Card className="w-full shadow-md hover:shadow-lg transition-shadow duration-200 flex flex-col">
       <CardHeader>
-        <div className="flex justify-between items-start">
-          <div>
-            <CardTitle className="text-lg md:text-xl">
+        <div className="space-y-2">
+          {/* First row: Source-Destination and Status Badge */}
+          <div className="flex justify-between items-start gap-2">
+            <CardTitle className="text-lg md:text-xl flex-shrink min-w-0">
               <span style={sourceDestStyle}>{booking.source.toUpperCase()}</span> <span className="text-sm text-gray-400">to</span> <span style={sourceDestStyle}>{booking.destination.toUpperCase()}</span>
             </CardTitle>
-            <hr></hr>
-            <CardDescription>For <b>{booking.userName}</b></CardDescription>
+            <div className="flex-shrink-0">
+              <StatusBadge status={booking.status} />
+            </div>
           </div>
-          <div className="flex flex-col items-end gap-1.5">
-            <StatusBadge status={booking.status} />
-            <span className={cn(
-              "text-3xl font-semibold",
-              booking.bookingType === 'Tatkal' ? "text-primary" : "text-amber-700 dark:text-amber-600"
-            )}>
-              {displayClass}
-            </span>
+          
+          {/* Second row: For userName and Class display */}
+          <div className="flex justify-between items-start gap-2">
+            <CardDescription className="flex-1 min-w-0">
+              For <b>{booking.userName}</b>
+            </CardDescription>
+            <div className="flex flex-col items-end flex-shrink-0">
+              <span 
+                className={cn(
+                  "text-3xl font-semibold leading-none",
+                  booking.bookingType === 'Tatkal' ? "text-primary" : "text-amber-700 dark:text-amber-600"
+                )}
+                title={`${booking.bookingType} - ${booking.classType}`}
+              >
+                {displayClass}
+              </span>
+              {booking.classType.includes("(") && (
+                <span className="text-xs text-muted-foreground mt-1">
+                  {booking.classType.match(/\((.*?)\)/)?.[1]}
+                </span>
+              )}
+            </div>
           </div>
         </div>
       </CardHeader>

@@ -10,7 +10,7 @@ import { Loader2, Trash2, Edit3, Eye, EyeOff, Plus, X } from "lucide-react";
 import type { IrctcAccount } from "@/types/account";
 import { getAccounts, addAccount, deleteAccount, updateAccount, getAccountStats, type AccountStats } from "@/lib/accountsClient";
 import type { Handler } from "@/types/handler";
-import { getHandlers, addHandler, updateHandler, deleteHandler } from "@/lib/handlersClient";
+import { getHandlers, addHandler, updateHandler, deleteHandler, getHandlerStatsForHandlers, type HandlerStats } from "@/lib/handlersClient";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -641,6 +641,7 @@ function AccountsManager() {
 
 function HandlersManager() {
   const [handlers, setHandlers] = useState<Handler[]>([]);
+  const [handlerStats, setHandlerStats] = useState<HandlerStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -659,7 +660,9 @@ function HandlersManager() {
     setIsLoading(true);
     try {
       const fetchedHandlers = await getHandlers();
+      const stats = await getHandlerStatsForHandlers(fetchedHandlers);
       setHandlers(fetchedHandlers);
+      setHandlerStats(stats);
     } catch (error) {
       toast({
         title: "Error Loading Handlers",
@@ -698,6 +701,8 @@ function HandlersManager() {
       setHandlers(prev => [...prev, result.handler!].sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
       setName("");
       setShowAddForm(false);
+      // Refresh stats to include any newly recorded bookings mapping to this handler name
+      loadHandlers();
     } else {
       const errorMessage = result.error || "Failed to add handler";
       toast({
@@ -725,6 +730,7 @@ function HandlersManager() {
         description: "Handler has been deleted.",
       });
       setHandlers(prev => prev.filter(h => h.id !== handlerToDelete));
+      setHandlerStats(prev => prev.filter(s => s.handlerId !== handlerToDelete));
     } else {
       toast({
         title: "Error Deleting Handler",
@@ -773,6 +779,8 @@ function HandlersManager() {
           .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       );
       setHandlerToEdit(null);
+      // Refresh stats in case the handler name changed
+      loadHandlers();
     } else {
       const errorMessage = result.error || "Failed to update handler";
       toast({
@@ -838,7 +846,9 @@ function HandlersManager() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {handlers.map(handler => (
+        {handlers.map(handler => {
+          const stats = handlerStats.find(s => s.handlerId === handler.id || s.name === handler.name);
+          return (
             <Card key={handler.id}>
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start">
@@ -868,12 +878,17 @@ function HandlersManager() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
+                <div>
+                  <span style={labelHighlightStyle}>Bookings (since Jan 1, 2026): </span>
+                  {stats?.bookingCount ?? 0}
+                </div>
                 <div className="text-xs text-muted-foreground">
                   Last Updated: {new Date(handler.updatedAt).toLocaleDateString()}
                 </div>
               </CardContent>
             </Card>
-          ))}
+          );
+        })}
         {handlers.length === 0 && (
           <p className="text-sm text-muted-foreground col-span-full">
             No handlers added yet. Click &apos;Add Handler&apos; to add your first handler.

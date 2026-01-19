@@ -27,8 +27,10 @@ import type {
   BookingFormData, 
   BookingStatus, 
   Passenger,
-  PreparedAccount 
+  PreparedAccount,
+  TrainClass 
 } from "@/types/booking";
+import { LEGACY_CLASS_MAP } from "@/types/booking";
 
 // Helper to convert Firestore timestamps
 const toISOStringSafe = (value: any, fieldName: string, bookingId: string): string => {
@@ -53,6 +55,16 @@ const toISOStringSafe = (value: any, fieldName: string, bookingId: string): stri
   throw new Error(`Unexpected format for '${fieldName}'`);
 };
 
+// Normalize legacy class names to new format
+const normalizeClassType = (classType: string): TrainClass => {
+  // Check if it's a legacy class name and map it to the new format
+  if (classType in LEGACY_CLASS_MAP) {
+    return LEGACY_CLASS_MAP[classType as keyof typeof LEGACY_CLASS_MAP];
+  }
+  // Return as-is if it's already a valid new class name
+  return classType as TrainClass;
+};
+
 // Map Firestore document to Booking type
 const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): Booking => {
   const data = document.data();
@@ -68,7 +80,7 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     userName: data.userName as string,
     passengers: Array.isArray(data.passengers) ? data.passengers as Passenger[] : [],
     bookingDate: data.bookingDate as string,
-    classType: data.classType,
+    classType: normalizeClassType(data.classType),
     bookingType: data.bookingType || "Tatkal",
     trainPreference: data.trainPreference as string | undefined,
     remarks: (data.remarks || data.timePreference) as string | undefined,
