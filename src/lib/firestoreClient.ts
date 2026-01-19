@@ -430,6 +430,81 @@ export async function saveBookingRecord(data: {
     const q = query(recordsCollection, where("bookingId", "==", data.bookingId));
     const querySnapshot = await getDocs(q);
 
+    const isUpdate = !querySnapshot.empty;
+    let previousRecord = null;
+    
+    if (isUpdate) {
+      const existingDoc = querySnapshot.docs[0];
+      previousRecord = existingDoc.data();
+    }
+
+    // Find the account by username
+    const accountsCollection = collection(db, "irctcAccounts");
+    const accountQuery = query(accountsCollection, where("username", "==", data.bookedAccountUsername));
+    const accountSnapshot = await getDocs(accountQuery);
+
+    if (accountSnapshot.empty) {
+      return { success: false, error: `Account with username "${data.bookedAccountUsername}" not found` };
+    }
+
+    const accountDoc = accountSnapshot.docs[0];
+    const accountData = accountDoc.data();
+    const currentWalletAmount = accountData.walletAmount || 0;
+
+    // Handle wallet deduction logic
+    if (data.methodUsed === "Wallet") {
+      // If this is an update, check if we need to refund previous amount first
+      if (isUpdate && previousRecord?.methodUsed === "Wallet") {
+        // Refund the previous amount if it was also wallet
+        const refundAmount = previousRecord.amountCharged || 0;
+        const newWalletAfterRefund = currentWalletAmount + refundAmount;
+        
+        // Now check if we have enough for the new amount
+        if (newWalletAfterRefund < data.amountCharged) {
+          return { success: false, error: `Insufficient wallet balance. Available: ₹${newWalletAfterRefund.toFixed(2)}, Required: ₹${data.amountCharged.toFixed(2)}` };
+        }
+        
+        // Update account with new deduction (refund + deduct in one operation)
+        const finalWalletAmount = newWalletAfterRefund - data.amountCharged;
+        await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
+          walletAmount: finalWalletAmount,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        // New record or previous was not wallet - just deduct
+        if (currentWalletAmount < data.amountCharged) {
+          return { success: false, error: `Insufficient wallet balance. Available: ₹${currentWalletAmount.toFixed(2)}, Required: ₹${data.amountCharged.toFixed(2)}` };
+        }
+        
+        const newWalletAmount = currentWalletAmount - data.amountCharged;
+        await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
+          walletAmount: newWalletAmount,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } else if (isUpdate && previousRecord?.methodUsed === "Wallet") {
+      // Payment method changed from Wallet to something else - refund previous amount
+      const refundAmount = previousRecord.amountCharged || 0;
+      const newWalletAmount = currentWalletAmount + refundAmount;
+      await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
+        walletAmount: newWalletAmount,
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    // Update lastBookedDate
+    const today = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD"
+    const currentLastBookedDate = accountData.lastBookedDate || "";
+    
+    // Only update if this is a new record or if the date has changed
+    if (!isUpdate || currentLastBookedDate !== today) {
+      await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
+        lastBookedDate: today,
+        previousLastBookedDate: currentLastBookedDate || deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+
     const recordData = {
       bookingId: data.bookingId,
       bookedBy: data.bookedBy,
@@ -441,7 +516,7 @@ export async function saveBookingRecord(data: {
 
     let docId: string;
 
-    if (!querySnapshot.empty) {
+    if (isUpdate) {
       // Update existing record
       const existingDoc = querySnapshot.docs[0];
       docId = existingDoc.id;
@@ -487,6 +562,44 @@ export async function deleteBookingRecord(id: string): Promise<{ success: boolea
 
   try {
     const docRef = doc(db, "bookingRecords", id);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) {
+      return { success: false, error: "Booking record not found" };
+    }
+
+    const recordData = docSnap.data();
+    const { bookedAccountUsername, amountCharged, methodUsed } = recordData;
+
+    // If payment was via wallet, refund the amount
+    if (methodUsed === "Wallet" && bookedAccountUsername && amountCharged) {
+      // Find the account by username
+      const accountsCollection = collection(db, "irctcAccounts");
+      const accountQuery = query(accountsCollection, where("username", "==", bookedAccountUsername));
+      const accountSnapshot = await getDocs(accountQuery);
+
+      if (!accountSnapshot.empty) {
+        const accountDoc = accountSnapshot.docs[0];
+        const accountData = accountDoc.data();
+        const currentWalletAmount = accountData.walletAmount || 0;
+        const newWalletAmount = currentWalletAmount + amountCharged;
+
+        // Restore previousLastBookedDate if it exists
+        const updateData: any = {
+          walletAmount: newWalletAmount,
+          updatedAt: serverTimestamp(),
+        };
+
+        if (accountData.previousLastBookedDate) {
+          updateData.lastBookedDate = accountData.previousLastBookedDate;
+          updateData.previousLastBookedDate = deleteField();
+        }
+
+        await updateDoc(doc(db, "irctcAccounts", accountDoc.id), updateData);
+      }
+    }
+
+    // Delete the booking record
     await deleteDoc(docRef);
     return { success: true };
   } catch (error: any) {

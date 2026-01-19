@@ -420,7 +420,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             <Users className="h-4 w-4 text-muted-foreground" />
             <span style={labelHighlightStyle}>Passengers:</span>
           </div>
-          {booking.passengers.map((passenger, index) => {
+          {[...booking.passengers].sort((a, b) => a.name.localeCompare(b.name)).map((passenger, index) => {
             const isChild = passenger.age >= 5 && passenger.age <= 11;
             return (
               <div key={index} className="ml-6 text-sm flex items-center gap-2 flex-wrap">
