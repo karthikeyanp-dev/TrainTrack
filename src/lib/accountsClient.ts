@@ -37,6 +37,39 @@ const toDateString = (value: any): string => {
   return "";
 };
 
+export async function getAccountByUsername(username: string): Promise<IrctcAccount | null> {
+  if (!db) {
+    console.error("[Firestore Error] Database not initialized");
+    return null;
+  }
+
+  try {
+    const accountsCollection = collection(db, "irctcAccounts");
+    const q = query(accountsCollection, where("username", "==", username));
+    const querySnapshot = await getDocs(q);
+
+    if (querySnapshot.empty) {
+      return null;
+    }
+
+    const doc = querySnapshot.docs[0];
+    const data = doc.data();
+    return {
+      id: doc.id,
+      username: data.username as string,
+      password: data.password as string,
+      walletAmount: data.walletAmount as number || 0,
+      lastBookedDate: toDateString(data.lastBookedDate),
+      previousLastBookedDate: data.previousLastBookedDate,
+      createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+      updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
+    };
+  } catch (error) {
+    console.error(`[Firestore Error] getAccountByUsername (${username}):`, error);
+    return null;
+  }
+}
+
 export async function getAccounts(): Promise<IrctcAccount[]> {
   if (!db) {
     console.error("[Firestore Error] Database not initialized");

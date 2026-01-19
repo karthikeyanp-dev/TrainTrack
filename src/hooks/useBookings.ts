@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { db } from "@/lib/firebase";
 import { collection, query, orderBy, where, onSnapshot, Timestamp } from "firebase/firestore";
-import type { Booking, BookingStatus, Passenger, PreparedAccount, TrainClass } from "@/types/booking";
+import type { Booking, BookingStatus, Passenger, PreparedAccount, TrainClass, RefundDetails } from "@/types/booking";
 import { LEGACY_CLASS_MAP } from "@/types/booking";
 
 // Helper to convert Firestore timestamps
@@ -55,6 +55,7 @@ const mapDocToBooking = (doc: any): Booking => {
     createdAt: toISOStringSafe(data.createdAt),
     updatedAt: toISOStringSafe(data.updatedAt),
     preparedAccounts: Array.isArray(data.preparedAccounts) ? (data.preparedAccounts as PreparedAccount[]) : undefined,
+    refundDetails: data.refundDetails as RefundDetails | undefined,
   };
 };
 

@@ -110,7 +110,7 @@ export function StatusReasonDialog({
 
           <div className="space-y-2">
             <Label htmlFor="status-reason">
-              Reason {status === "Missed" || status === "Booking Failed" ? "(Required)" : "(Optional)"}
+              Reason {status === "Missed" || status === "Failed" || status === "Failed (Paid)" ? "(Required)" : "(Optional)"}
             </Label>
             <Textarea
               id="status-reason"
@@ -135,7 +135,7 @@ export function StatusReasonDialog({
           <Button
             type="button"
             onClick={handleConfirm}
-            disabled={isLoading || ((status === "Missed" || status === "Booking Failed") && !reason.trim())}
+            disabled={isLoading || ((status === "Missed" || status === "Failed" || status === "Failed (Paid)") && !reason.trim())}
           >
             {isLoading ? "Updating..." : "Confirm"}
           </Button>
