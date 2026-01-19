@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   /* config options here */
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH || '',
   output: 'export', // Enable static export
   trailingSlash: true, // Required for static export routing
   typescript: {
