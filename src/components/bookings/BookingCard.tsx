@@ -241,20 +241,20 @@ export function BookingCard({ booking }: BookingCardProps) {
   };
 
   const handleEdit = () => {
-    router.push(`/bookings/edit/${booking.id}`);
+    router.push(`/bookings/edit?id=${booking.id}`);
   };
 
   const handleCopy = () => {
     router.push(`/bookings/new?copyFrom=${booking.id}`);
   };
 
-  const handleShare = async () => {
+  const handleShare = () => {
     const passengerDetailsText = booking.passengers.map((p, index) => `${index + 1}. ${p.name} ${p.age} ${p.gender.toUpperCase()}`).join('\n');
     const formattedJourney = formatDate(booking.journeyDate);
     const journeyDateFormatted = formattedJourney !== "N/A" ? formattedJourney : (booking.journeyDate || "N/A");
     const formattedBooking = formatDate(booking.bookingDate);
     const bookingDateFormatted = formattedBooking !== "N/A" ? formattedBooking : (booking.bookingDate || "N/A");
-    
+
     // Build prepared accounts section if exists
     let preparedAccountsText = '';
     if (booking.preparedAccounts && booking.preparedAccounts.length > 0) {
@@ -287,22 +287,23 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
     `.trim().replace(/^\n+|\n+$/g, '').replace(/\n\n+/g, '\n');
 
     if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `Booking: ${booking.source.toUpperCase()} to ${booking.destination.toUpperCase()}`,
-          text: bookingDetailsText,
+      navigator.share({
+        title: `Booking: ${booking.source.toUpperCase()} to ${booking.destination.toUpperCase()}`,
+        text: bookingDetailsText,
+      })
+        .then(() => {
+          toast({ title: "Booking Shared", description: "Details sent successfully." });
+        })
+        .catch((error: any) => {
+          // Only fallback to clipboard if it's not a user cancellation
+          if (error?.name === 'AbortError') {
+            // User cancelled the share dialog - do nothing
+            console.log("Share cancelled by user");
+          } else {
+            console.warn("Web Share API failed:", error);
+            copyToClipboard(bookingDetailsText);
+          }
         });
-        toast({ title: "Booking Shared", description: "Details sent successfully." });
-      } catch (error: any) {
-        // Only fallback to clipboard if it's not a user cancellation
-        if (error?.name === 'AbortError') {
-          // User cancelled the share dialog - do nothing
-          console.log("Share cancelled by user");
-        } else {
-          console.warn("Web Share API failed:", error);
-          copyToClipboard(bookingDetailsText);
-        }
-      }
     } else {
       copyToClipboard(bookingDetailsText);
     }

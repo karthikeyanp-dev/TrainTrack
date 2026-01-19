@@ -36,7 +36,7 @@ npm run typecheck
 - **Client components** - All pages and components use `"use client"` directive
 - **Direct Firestore access** - Uses Firestore client SDK for real-time data fetching
 - **React Query** - Data fetching and caching with `@tanstack/react-query`
-- **Dynamic routes** - Edit booking uses `src/app/bookings/edit/[id]/page.tsx`
+- **Query parameter routing** - Edit booking uses `src/app/bookings/edit/page.tsx` with `?id=` query param (compatible with static export)
 
 ### Data Fetching Pattern
 
