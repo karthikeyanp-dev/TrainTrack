@@ -4,25 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-TrainTrack is a Next.js 15 train booking management application with Firebase Firestore backend and Genkit AI integration. It uses the App Router with React Server Components, TypeScript, and a mobile-first design with Tailwind CSS and Radix UI (shadcn/ui).
+TrainTrack is a Next.js 15 train booking management application with Firebase Firestore backend and Genkit AI integration. It uses Client-Side Rendering (CSR) with Firestore client SDK, TypeScript, and a mobile-first design with Tailwind CSS and Radix UI (shadcn/ui). The app is deployed as a static site to Firebase Hosting.
 
 ## Development Commands
 
 ```bash
-# Start Next.js development server on port 9002
+# Start Next.js development server on port 9002 (use this for development)
 npm run dev
+
+# Build static export for production (only needed for deployment)
+npm run build
 
 # Start Genkit AI development server (run in separate terminal)
 npm run genkit:dev
 
 # Start Genkit with auto-reload on changes
 npm run genkit:watch
-
-# Build for production
-npm run build
-
-# Start production server
-npm start
 
 # Run ESLint
 npm run lint
@@ -33,28 +30,29 @@ npm run typecheck
 
 ## Architecture
 
-### App Router Structure
+### Client-Side Rendering (CSR) with Static Export
 
-- **Server Components by default** - Pages in `src/app/` are Server Components unless marked `"use client"`
+- **Static export** - Next.js configured with `output: 'export'` for static site generation
+- **Client components** - All pages and components use `"use client"` directive
+- **Direct Firestore access** - Uses Firestore client SDK for real-time data fetching
+- **React Query** - Data fetching and caching with `@tanstack/react-query`
 - **Dynamic routes** - Edit booking uses `src/app/bookings/edit/[id]/page.tsx`
-- **Force dynamic rendering** - Home page uses `export const dynamic = 'force-dynamic'` to prevent caching
-- **API routes** - Health check at `src/app/api/health/route.ts`
 
-### Server Actions Pattern
+### Data Fetching Pattern
 
-All data mutations go through Server Actions in `src/actions/`:
+All data operations use Firestore client SDK with React Query hooks:
 
-- `bookingActions.ts` - CRUD operations for bookings (20+ functions)
-- `accountActions.ts` - IRCTC account management
-- `bookingRecordActions.ts` - Booking completion records
-- `handlerActions.ts` - Handler/agent management
+**Custom hooks in `src/hooks/`:**
+- `useBookings.ts` - Real-time bookings data with infinite scroll
+- `useAccounts.ts` - IRCTC account management
+- `useBookingRecords.ts` - Booking completion records
+- `useHandlers.ts` - Handler/agent management
 
 **Important patterns:**
-- All actions marked with `"use server"`
-- Zod validation for all inputs
-- Firestore Timestamp conversion handled explicitly
-- Use `revalidatePath()` after mutations to invalidate cache
-- Return flattened errors for form display
+- Firestore client methods: `collection()`, `doc()`, `getDocs()`, `addDoc()`, `updateDoc()`, `deleteDoc()`
+- React Query for caching and automatic refetching
+- Real-time listeners with `onSnapshot()` for live updates
+- Firestore Timestamp conversion to ISO strings for client compatibility
 
 ### Firebase Integration
 
@@ -77,12 +75,13 @@ All data mutations go through Server Actions in `src/actions/`:
 
 ### Form Handling
 
-All forms use React Hook Form + Zod + Server Actions:
+All forms use React Hook Form + Zod + Firestore client SDK:
 
 1. Define Zod schema for validation
 2. Use `useForm` with zodResolver
-3. On submit, call Server Action
-4. Handle success/error with toast notifications
+3. On submit, call Firestore client methods directly (addDoc, updateDoc)
+4. React Query mutations invalidate cache automatically
+5. Handle success/error with toast notifications
 
 **Key forms:**
 - `BookingForm.tsx` - Complex form with dynamic passenger array, prepared accounts sheet
@@ -126,14 +125,14 @@ journeyDate: booking.journeyDate?.toDate?.()?.toISOString() || booking.journeyDa
 ### Adding New Features
 
 1. **Define type** in `src/types/`
-2. **Create Server Action** in `src/actions/` with Zod validation
+2. **Create custom hook** in `src/hooks/` using React Query and Firestore client SDK
 3. **Build component** in `src/components/`
-4. **Create/update page** in `src/app/`
-5. Use `revalidatePath()` after mutations
+4. **Create/update page** in `src/app/` with `"use client"` directive
+5. Use React Query mutations to invalidate cache after data changes
 
 ### Search Implementation
 
-The search bar (`SearchBarClient.tsx`) passes query to home page via URL params. Server component filters bookings on backend before rendering.
+The search bar (`SearchBarClient.tsx`) passes query to home page via URL params. Client-side filtering happens in the React Query hook.
 
 ### Infinite Scroll Pattern
 
@@ -162,19 +161,38 @@ Note: `NEXT_PUBLIC_` prefixed variables are exposed to the browser.
 
 ## Deployment
 
-### Cloud Run Configuration
+### Firebase Hosting (Static Export)
 
 Deployed via GitHub Actions (`.github/workflows/cloudrun-deploy.yml`) on push to `master`:
 
-- **Docker image** built from `Dockerfile`
-- **Memory**: 2Gi, **CPU**: 2
-- **Instances**: 1-10 with concurrency 80
-- **Region**: us-central1
-- **Service name**: studio
+**Build process:**
+1. Install dependencies with `npm ci`
+2. Create `.env` file from GitHub secrets
+3. Build static export with `npm run build` (outputs to `out/` directory)
+4. Deploy to Firebase Hosting using `FirebaseExtended/action-hosting-deploy@v0`
 
-### Firebase Hosting
+**Configuration files:**
+- `.firebaserc` - Firebase project configuration
+- `firebase.json` - Hosting configuration (serves from `out/` directory)
+- `next.config.mjs` - Next.js configured with `output: 'export'`
 
-`firebase.json` routes all requests to Cloud Run service "studio". Static files served from `public/`.
+**GitHub Secrets needed:**
+- `FIREBASE_SERVICE_ACCOUNT` - Service account JSON for Firebase deployment
+- `FIREBASE_PROJECT_ID` - Your Firebase project ID
+- All `NEXT_PUBLIC_*` Firebase config variables
+- `GEMINI_API_KEY` - For Genkit AI features
+
+### Local Deployment
+
+To deploy manually from your local machine:
+
+```bash
+# Build the static export
+npm run build
+
+# Deploy to Firebase Hosting
+firebase deploy --only hosting
+```
 
 ## Important Notes
 
@@ -187,16 +205,18 @@ Current Firestore rules (`firestore.rules`) allow unrestricted read/write. In pr
 
 ### Build Configuration
 
-- `next.config.mjs` - Uses .mjs extension to avoid TypeScript runtime dependency
+- `next.config.mjs` - Configured for static export with `output: 'export'`
 - TypeScript/ESLint errors ignored during builds (`ignoreBuildErrors: true`)
-- Server packages: `handlebars` externalized
+- Images unoptimized for static export (`images.unoptimized: true`)
+- Trailing slash enabled for proper routing (`trailingSlash: true`)
 
 ### Known Quirks
 
-- Home page uses `force-dynamic` to prevent caching issues with search
-- PORT must be 8080 for Cloud Run deployment
+- Development server runs on port 9002 (configured in `package.json`)
 - Date conversion required for all Firestore Timestamp fields
 - React Query stale time set to 60 seconds
+- All components must use `"use client"` directive for CSR
+- Firebase Hosting serves all routes to `/index.html` (SPA mode)
 
 ## Testing
 

@@ -22,7 +22,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { ArrowRightLeft, CalendarIcon, Loader2, UserPlus, Users, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
-import { addBooking, updateBookingById } from "@/actions/bookingActions";
+import { addBooking, updateBookingById } from "@/lib/firestoreClient";
 import type { BookingFormData, Passenger, PassengerGender, TrainClass, BookingType } from "@/types/booking";
 import { ALL_TRAIN_CLASSES, ALL_PASSENGER_GENDERS, ALL_BOOKING_TYPES } from "@/types/booking";
 import { useToast } from "@/hooks/use-toast";
@@ -148,54 +148,12 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
         title: isEditMode ? "Booking Updated!" : "Booking Request Added!",
         description: `Request for ${result.booking.userName} from ${result.booking.source} to ${result.booking.destination} ${isEditMode ? 'updated' : 'saved'}.`,
       });
-      router.push("/"); 
+      router.push("/");
     } else {
-      let errorToastMessage = "An unexpected error occurred. Please try again.";
-      if (result.errors) {
-        const { formErrors, fieldErrors } = result.errors as any;
-
-        if (formErrors && formErrors.length > 0) {
-          errorToastMessage = formErrors.join(" ");
-        } else if (fieldErrors && Object.keys(fieldErrors).length > 0) {
-          errorToastMessage = "Please check the form for specific errors highlighted below.";
-          if (fieldErrors.passengers && Array.isArray(fieldErrors.passengers)) {
-            fieldErrors.passengers.forEach((passengerError: any, index: number) => {
-              if (passengerError) {
-                (Object.keys(passengerError) as Array<keyof Passenger>).forEach(key => {
-                    if (passengerError[key]?._errors) {
-                         form.setError(`passengers.${index}.${key}`, {
-                            type: 'server',
-                            message: passengerError[key]._errors.join(', ')
-                        });
-                    }
-                });
-              }
-            });
-          } else if (typeof fieldErrors.passengers === 'object' && fieldErrors.passengers?._errors) {
-             form.setError('passengers', { type: 'server', message: fieldErrors.passengers._errors.join(', ') });
-          }
-
-          (Object.keys(fieldErrors) as Array<keyof FormValues | 'passengers'>).forEach((fieldName) => {
-            if (fieldName !== 'passengers') {
-              const messages = fieldErrors[fieldName as keyof FormValues]?._errors;
-              if (messages && messages.length > 0) {
-                form.setError(fieldName as keyof FormValues, {
-                  type: "server",
-                  message: messages.join(", "),
-                });
-              }
-            }
-          });
-        }
-
-        if (formErrors && formErrors.length > 0) {
-           form.setError("root.serverError", { type: "server", message: formErrors.join(", ") });
-        }
-      }
-
+      const errorMessage = result.error || "An unexpected error occurred. Please try again.";
       toast({
         title: `Error ${isEditMode ? 'Updating' : 'Adding'} Booking`,
-        description: errorToastMessage,
+        description: errorMessage,
         variant: "destructive",
       });
     }

@@ -9,8 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { StatusBadge } from "./StatusBadge";
 import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X, CreditCard, Receipt } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { updateBookingStatus, deleteBooking } from "@/actions/bookingActions";
-import { getBookingRecordByBookingId } from "@/actions/bookingRecordActions";
+import { updateBookingStatus, deleteBooking, getBookingRecordByBookingId } from "@/lib/firestoreClient";
 import type { BookingRecord } from "@/types/bookingRecord";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";

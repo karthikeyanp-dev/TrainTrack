@@ -1,6 +1,3 @@
-// 'use server'
-'use server';
-
 /**
  * @fileOverview An AI agent that suggests potential destinations and routes based on past booking data and popular travel trends.
  *

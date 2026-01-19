@@ -10,9 +10,13 @@ function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        // With SSR, we usually want to set some default staleTime
-        // above 0 to avoid refetching immediately on the client
-        staleTime: 60 * 1000, // 1 minute
+        // Optimized for private app with coordinated team usage
+        // Data only refetches on mutations or manual refresh
+        staleTime: 5 * 60 * 1000, // 5 minutes - data considered fresh
+        gcTime: 10 * 60 * 1000, // 10 minutes - cache kept in memory (renamed from cacheTime in v5)
+        refetchOnWindowFocus: false, // Don't refetch when user returns to tab
+        refetchOnMount: true, // Fetch on mount if data is stale
+        retry: 2, // Retry failed queries twice
       },
     },
   });

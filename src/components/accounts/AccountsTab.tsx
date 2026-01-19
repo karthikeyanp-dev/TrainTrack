@@ -8,9 +8,9 @@ import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Trash2, Edit3, Eye, EyeOff, Plus, X } from "lucide-react";
 import type { IrctcAccount } from "@/types/account";
-import { getAccounts, addAccount, deleteAccount, updateAccount, getAccountStats, type AccountStats } from "@/actions/accountActions";
+import { getAccounts, addAccount, deleteAccount, updateAccount, getAccountStats, type AccountStats } from "@/lib/accountsClient";
 import type { Handler } from "@/types/handler";
-import { getHandlers, addHandler, updateHandler, deleteHandler, getHandlerStats, type HandlerStats } from "@/actions/handlerActions";
+import { getHandlers, addHandler, updateHandler, deleteHandler } from "@/lib/handlersClient";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Dialog,
@@ -146,7 +146,7 @@ function AccountsManager() {
       });
       setShowAddForm(false);
     } else {
-      const errorMessage = result.errors?.formErrors?.[0] || "Failed to add account";
+      const errorMessage = result.error || "Failed to add account";
       toast({
         title: "Error Adding Account",
         description: errorMessage,
@@ -203,14 +203,12 @@ function AccountsManager() {
     
     // We need to pass all required fields to updateAccount
     const result = await updateAccount(accountToTopUp.id, {
-        username: accountToTopUp.username,
-        password: accountToTopUp.password,
         walletAmount: newWalletAmount,
-        lastBookedDate: accountToTopUp.lastBookedDate
     });
 
-    if (result.success && result.account) {
-      setAccounts(prev => prev.map(acc => acc.id === result.account!.id ? result.account! : acc).sort((a, b) => b.walletAmount - a.walletAmount));
+    if (result.success) {
+      const updatedAccount = { ...accountToTopUp, walletAmount: newWalletAmount };
+      setAccounts(prev => prev.map(acc => acc.id === accountToTopUp.id ? updatedAccount : acc).sort((a, b) => b.walletAmount - a.walletAmount));
       toast({
         title: "Wallet Updated",
         description: `Added ₹${amountToAdd} to wallet. New balance: ₹${newWalletAmount.toFixed(2)}`,
@@ -220,7 +218,7 @@ function AccountsManager() {
     } else {
       toast({
         title: "Update Failed",
-        description: result.errors?.formErrors?.[0] || "Failed to update wallet amount.",
+        description: result.error || "Failed to update wallet amount.",
         variant: "destructive",
       });
     }
@@ -275,16 +273,23 @@ function AccountsManager() {
       lastBookedDate: editForm.lastBookedDate || "",
     });
 
-    if (result.success && result.account) {
+    if (result.success) {
+      const updatedAccount = {
+        ...accountToEdit,
+        username: editForm.username.trim(),
+        password: editForm.password.trim(),
+        walletAmount: walletAmountNum,
+        lastBookedDate: editForm.lastBookedDate || "",
+      };
       toast({
         title: "Account Updated",
-        description: `IRCTC account ${result.account.username} has been updated.`,
+        description: `IRCTC account ${updatedAccount.username} has been updated.`,
       });
 
-      setAccounts(prev => prev.map(acc => acc.id === result.account!.id ? result.account! : acc).sort((a, b) => b.walletAmount - a.walletAmount));
+      setAccounts(prev => prev.map(acc => acc.id === accountToEdit.id ? updatedAccount : acc).sort((a, b) => b.walletAmount - a.walletAmount));
       setAccountToEdit(null);
     } else {
-      const errorMessage = result.errors?.formErrors?.[0] || "Failed to update account";
+      const errorMessage = result.error || "Failed to update account";
       toast({
         title: "Error Updating Account",
         description: errorMessage,
@@ -478,7 +483,7 @@ function AccountsManager() {
               </div>
               <div>
                 <span style={labelHighlightStyle}>Booked (30d): </span>
-                {stats?.bookingsCount ?? 0}
+                {stats?.bookingCount ?? 0}
               </div>
               <div>
                 <span style={labelHighlightStyle}>Last Booked: </span>
@@ -636,7 +641,6 @@ function AccountsManager() {
 
 function HandlersManager() {
   const [handlers, setHandlers] = useState<Handler[]>([]);
-  const [handlerStats, setHandlerStats] = useState<HandlerStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -654,12 +658,8 @@ function HandlersManager() {
   const loadHandlers = async () => {
     setIsLoading(true);
     try {
-      const [fetchedHandlers, fetchedStats] = await Promise.all([
-        getHandlers(),
-        getHandlerStats()
-      ]);
+      const fetchedHandlers = await getHandlers();
       setHandlers(fetchedHandlers);
-      setHandlerStats(fetchedStats);
     } catch (error) {
       toast({
         title: "Error Loading Handlers",
@@ -699,7 +699,7 @@ function HandlersManager() {
       setName("");
       setShowAddForm(false);
     } else {
-      const errorMessage = result.errors?.formErrors?.[0] || "Failed to add handler";
+      const errorMessage = result.error || "Failed to add handler";
       toast({
         title: "Error Adding Handler",
         description: errorMessage,
@@ -760,20 +760,21 @@ function HandlersManager() {
       name: editName.trim(),
     });
 
-    if (result.success && result.handler) {
+    if (result.success) {
+      const updatedHandler = { ...handlerToEdit, name: editName.trim() };
       toast({
         title: "Handler Updated",
-        description: `Handler ${result.handler.name} has been updated.`,
+        description: `Handler ${updatedHandler.name} has been updated.`,
       });
 
       setHandlers(prev =>
         prev
-          .map(h => (h.id === result.handler!.id ? result.handler! : h))
+          .map(h => (h.id === handlerToEdit.id ? updatedHandler : h))
           .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       );
       setHandlerToEdit(null);
     } else {
-      const errorMessage = result.errors?.formErrors?.[0] || "Failed to update handler";
+      const errorMessage = result.error || "Failed to update handler";
       toast({
         title: "Error Updating Handler",
         description: errorMessage,
@@ -837,9 +838,7 @@ function HandlersManager() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {handlers.map(handler => {
-          const stats = handlerStats.find(s => s.handlerId === handler.id);
-          return (
+        {handlers.map(handler => (
             <Card key={handler.id}>
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start">
@@ -869,23 +868,12 @@ function HandlersManager() {
                 </div>
               </CardHeader>
               <CardContent className="space-y-2 text-sm">
-                <div className="grid grid-cols-2 gap-2 pb-2 border-b">
-                  <div className="text-xs">
-                    <span style={labelHighlightStyle}>Handled:</span>
-                    <span className="ml-1 font-medium text-foreground">{stats?.mappedBookings ?? 0}</span>
-                  </div>
-                  <div className="text-xs">
-                    <span style={labelHighlightStyle}>Booked:</span>
-                    <span className="ml-1 font-medium text-foreground">{stats?.bookedByHandler ?? 0}</span>
-                  </div>
-                </div>
                 <div className="text-xs text-muted-foreground">
                   Last Updated: {new Date(handler.updatedAt).toLocaleDateString()}
                 </div>
               </CardContent>
             </Card>
-          );
-        })}
+          ))}
         {handlers.length === 0 && (
           <p className="text-sm text-muted-foreground col-span-full">
             No handlers added yet. Click &apos;Add Handler&apos; to add your first handler.
