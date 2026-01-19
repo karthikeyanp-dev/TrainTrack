@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Dialog,
   DialogContent,
@@ -12,6 +13,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import type { BookingStatus } from "@/types/booking";
+import { ALL_PAYMENT_METHODS } from "@/types/bookingRecord";
 import {
   Select,
   SelectContent,
@@ -20,15 +22,24 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { getHandlers } from "@/lib/handlersClient";
+import { getAccounts } from "@/lib/accountsClient";
 import type { Handler } from "@/types/handler";
+import type { IrctcAccount } from "@/types/account";
 
 interface StatusReasonDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   status: BookingStatus;
   bookingDetails: string;
-  onConfirm: (reason: string, handler?: string) => void;
+  onConfirm: (reason: string, handler?: string, paymentDetails?: PaymentDetails) => void;
   isLoading?: boolean;
+}
+
+interface PaymentDetails {
+  bookedBy: string;
+  bookedAccountUsername: string;
+  amountCharged: number;
+  methodUsed: string;
 }
 
 export function StatusReasonDialog({
@@ -43,6 +54,16 @@ export function StatusReasonDialog({
   const [handler, setHandler] = useState("");
   const [handlers, setHandlers] = useState<Handler[]>([]);
   const [isLoadingHandlers, setIsLoadingHandlers] = useState(false);
+  
+  // Payment details state (for Failed (Paid) and Cancelled (Booked))
+  const [bookedBy, setBookedBy] = useState("");
+  const [bookedAccount, setBookedAccount] = useState("");
+  const [amountCharged, setAmountCharged] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("");
+  const [accounts, setAccounts] = useState<IrctcAccount[]>([]);
+  const [isLoadingAccounts, setIsLoadingAccounts] = useState(false);
+
+  const requiresPaymentDetails = status === "Failed (Paid)" || status === "Cancelled (Booked)";
 
   useEffect(() => {
     if (!open) return;
@@ -59,21 +80,66 @@ export function StatusReasonDialog({
           setIsLoadingHandlers(false);
         }
       });
+    
+    // Load accounts if payment details are required
+    if (requiresPaymentDetails) {
+      setIsLoadingAccounts(true);
+      getAccounts()
+        .then((fetchedAccounts) => {
+          if (isMounted) {
+            setAccounts(fetchedAccounts);
+          }
+        })
+        .finally(() => {
+          if (isMounted) {
+            setIsLoadingAccounts(false);
+          }
+        });
+    }
+    
     return () => {
       isMounted = false;
     };
-  }, [open]);
+  }, [open, requiresPaymentDetails]);
 
   const handleConfirm = () => {
-    onConfirm(reason.trim(), handler || undefined);
+    const paymentDetails = requiresPaymentDetails ? {
+      bookedBy: bookedBy.trim(),
+      bookedAccountUsername: bookedAccount,
+      amountCharged: parseFloat(amountCharged),
+      methodUsed: paymentMethod,
+    } : undefined;
+    
+    onConfirm(reason.trim(), handler || undefined, paymentDetails);
+    
+    // Reset all fields
     setReason("");
     setHandler("");
+    setBookedBy("");
+    setBookedAccount("");
+    setAmountCharged("");
+    setPaymentMethod("");
   };
 
   const handleCancel = () => {
     setReason("");
     setHandler("");
+    setBookedBy("");
+    setBookedAccount("");
+    setAmountCharged("");
+    setPaymentMethod("");
     onOpenChange(false);
+  };
+
+  const isFormValid = () => {
+    const reasonRequired = status === "Missed" || status === "Failed (Paid)" || status === "Failed (Unpaid)" || status === "Cancelled (Booked)" || status === "Cancelled (Pre-book)";
+    if (reasonRequired && !reason.trim()) return false;
+    
+    if (requiresPaymentDetails) {
+      return bookedBy.trim() && bookedAccount && amountCharged && parseFloat(amountCharged) > 0 && paymentMethod;
+    }
+    
+    return true;
   };
 
   return (
@@ -87,6 +153,86 @@ export function StatusReasonDialog({
           <p className="text-sm text-muted-foreground">
             {bookingDetails}
           </p>
+
+          {requiresPaymentDetails && (
+            <div className="rounded-lg bg-blue-50 dark:bg-blue-900/20 p-3 mb-4">
+              <p className="text-sm font-semibold text-blue-700 dark:text-blue-400 mb-1">
+                Payment Details Required
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Since payment was made, please provide the booking details for refund tracking.
+              </p>
+            </div>
+          )}
+
+          {requiresPaymentDetails && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="booked-by">Booked By <span className="text-destructive">*</span></Label>
+                <Input
+                  id="booked-by"
+                  placeholder="Name of person who booked"
+                  value={bookedBy}
+                  onChange={(e) => setBookedBy(e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="booked-account">Account Used <span className="text-destructive">*</span></Label>
+                <Select
+                  value={bookedAccount}
+                  onValueChange={setBookedAccount}
+                  disabled={isLoading || isLoadingAccounts}
+                >
+                  <SelectTrigger id="booked-account">
+                    <SelectValue placeholder="Select account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {accounts.map((acc) => (
+                      <SelectItem key={acc.id} value={acc.username}>
+                        {acc.username}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="amount-charged">Amount Charged (₹) <span className="text-destructive">*</span></Label>
+                <Input
+                  id="amount-charged"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={amountCharged}
+                  onChange={(e) => setAmountCharged(e.target.value)}
+                  disabled={isLoading}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="payment-method">Payment Method <span className="text-destructive">*</span></Label>
+                <Select
+                  value={paymentMethod}
+                  onValueChange={setPaymentMethod}
+                  disabled={isLoading}
+                >
+                  <SelectTrigger id="payment-method">
+                    <SelectValue placeholder="Select payment method" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ALL_PAYMENT_METHODS.map((method) => (
+                      <SelectItem key={method} value={method}>
+                        {method}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </>
+          )}
 
           <div className="space-y-2">
             <Label htmlFor="status-handler">Handler</Label>
@@ -110,7 +256,7 @@ export function StatusReasonDialog({
 
           <div className="space-y-2">
             <Label htmlFor="status-reason">
-              Reason {status === "Missed" || status === "Booking Failed" ? "(Required)" : "(Optional)"}
+              Reason {requiresPaymentDetails || status === "Missed" || status === "Failed (Unpaid)" || status === "Cancelled (Pre-book)" ? "(Required)" : "(Optional)"}
             </Label>
             <Textarea
               id="status-reason"
@@ -135,7 +281,7 @@ export function StatusReasonDialog({
           <Button
             type="button"
             onClick={handleConfirm}
-            disabled={isLoading || ((status === "Missed" || status === "Booking Failed") && !reason.trim())}
+            disabled={isLoading || !isFormValid()}
           >
             {isLoading ? "Updating..." : "Confirm"}
           </Button>

@@ -10,6 +10,7 @@ import { AlertCircle, Search, Loader2 } from "lucide-react";
 import { DateGroupHeading } from "@/components/bookings/DateGroupHeading";
 import { BookingList } from "@/components/bookings/BookingList";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { RefundsTab } from "@/components/bookings/RefundsTab";
 
 interface BookingsViewProps {
   allBookings: Booking[];
@@ -82,11 +83,13 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
 
 
         // --- Completed Bookings Logic ---
+        // Exclude refund-eligible statuses from completed tab
+        const refundEligibleStatuses = ['Failed (Paid)', 'Cancelled (Booked)'];
         const completedBookingsToDisplay = searchQuery 
-            ? sourceBookings.filter(b => b.status !== 'Requested')
+            ? sourceBookings.filter(b => b.status !== 'Requested' && !refundEligibleStatuses.includes(b.status))
             : sourceBookings.filter(b => {
                 const visibleDateSet = new Set(visibleDates);
-                return b.status !== 'Requested' && visibleDateSet.has(b.bookingDate);
+                return b.status !== 'Requested' && !refundEligibleStatuses.includes(b.status) && visibleDateSet.has(b.bookingDate);
             });
             
         const completedBookingsByDate = groupBookingsByDate(
@@ -147,14 +150,15 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
         : "No bookings are currently in 'Requested' status. Add a new one!";
     const noCompletedMessage = searchQuery
         ? "No completed bookings found matching your search."
-        : "No bookings have been marked as 'Booked', 'Missed', 'Booking Failed', or 'User Cancelled' yet.";
+        : "No bookings have been marked as 'Booked', 'Missed', 'Failed (Unpaid)', or 'Cancelled (Pre-book)' yet.";
 
     return (
         <>
             <Tabs defaultValue="pending" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 md:w-[400px]">
+              <TabsList className="grid w-full grid-cols-3 md:w-[600px]">
                 <TabsTrigger value="pending">Pending</TabsTrigger>
                 <TabsTrigger value="completed">Completed</TabsTrigger>
+                <TabsTrigger value="refunds">Refunds</TabsTrigger>
               </TabsList>
 
               <TabsContent value="pending" className="mt-6">
@@ -203,6 +207,11 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
                     ))}
                   </Accordion>
                 )}
+              </TabsContent>
+
+              <TabsContent value="refunds" className="mt-6">
+                <h2 className="text-2xl font-semibold mb-4">Refund Tracking</h2>
+                <RefundsTab />
               </TabsContent>
             </Tabs>
 

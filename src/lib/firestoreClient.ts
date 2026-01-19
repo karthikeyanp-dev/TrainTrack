@@ -30,7 +30,7 @@ import type {
   PreparedAccount,
   TrainClass 
 } from "@/types/booking";
-import { LEGACY_CLASS_MAP } from "@/types/booking";
+import { LEGACY_CLASS_MAP, LEGACY_STATUS_MAP } from "@/types/booking";
 
 // Helper to convert Firestore timestamps
 const toISOStringSafe = (value: any, fieldName: string, bookingId: string): string => {
@@ -65,6 +65,14 @@ const normalizeClassType = (classType: string): TrainClass => {
   return classType as TrainClass;
 };
 
+// Migrate old booking statuses to new format
+const migrateStatus = (oldStatus: string): BookingStatus => {
+  if (oldStatus in LEGACY_STATUS_MAP) {
+    return LEGACY_STATUS_MAP[oldStatus as keyof typeof LEGACY_STATUS_MAP];
+  }
+  return oldStatus as BookingStatus;
+};
+
 // Map Firestore document to Booking type
 const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): Booking => {
   const data = document.data();
@@ -84,12 +92,17 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     bookingType: data.bookingType || "Tatkal",
     trainPreference: data.trainPreference as string | undefined,
     remarks: (data.remarks || data.timePreference) as string | undefined,
-    status: data.status as BookingStatus,
+    status: migrateStatus(data.status),
     statusReason: data.statusReason as string | undefined,
     statusHandler: data.statusHandler as string | undefined,
     createdAt: toISOStringSafe(data.createdAt, "createdAt", id),
     updatedAt: toISOStringSafe(data.updatedAt, "updatedAt", id),
     preparedAccounts: Array.isArray(data.preparedAccounts) ? (data.preparedAccounts as PreparedAccount[]) : undefined,
+    // Refund tracking fields
+    refundAmount: data.refundAmount as number | undefined,
+    refundReceived: data.refundReceived as boolean | undefined,
+    refundReceivedDate: data.refundReceivedDate as string | undefined,
+    refundNotes: data.refundNotes as string | undefined,
   };
 };
 
@@ -605,5 +618,132 @@ export async function deleteBookingRecord(id: string): Promise<{ success: boolea
   } catch (error: any) {
     console.error(`[Firestore Error] deleteBookingRecord (${id}):`, error);
     return { success: false, error: error.message || "Failed to delete booking record" };
+  }
+}
+
+// ============= REFUND TRACKING OPERATIONS =============
+
+export async function getRefundEligibleBookings(): Promise<Booking[]> {
+  if (!db) {
+    console.error("[Firestore Error] Database not initialized");
+    return [];
+  }
+
+  try {
+    const bookingsCollection = collection(db, "bookings");
+    // Query for bookings with refund-eligible statuses
+    const q1 = query(bookingsCollection, where("status", "==", "Failed (Paid)"));
+    const q2 = query(bookingsCollection, where("status", "==", "Cancelled (Booked)"));
+    
+    const [snapshot1, snapshot2] = await Promise.all([
+      getDocs(q1),
+      getDocs(q2)
+    ]);
+
+    const allDocs = [...snapshot1.docs, ...snapshot2.docs];
+    
+    const bookings = allDocs
+      .map(doc => {
+        try {
+          return mapDocToBooking(doc, doc.id);
+        } catch (error) {
+          console.error(`Failed to map document ${doc.id}:`, error);
+          return null;
+        }
+      })
+      .filter(booking => booking !== null && !booking.refundReceived) as Booking[];
+
+    // Sort by updatedAt descending
+    bookings.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+    return bookings;
+  } catch (error) {
+    console.error("[Firestore Error] getRefundEligibleBookings:", error);
+    return [];
+  }
+}
+
+export async function processRefund(
+  bookingId: string,
+  refundAmount: number,
+  refundNotes?: string
+): Promise<{ success: boolean; error?: string; booking?: Booking }> {
+  if (!db) {
+    return { success: false, error: "Firestore database is not configured" };
+  }
+
+  try {
+    // Get the booking
+    const bookingRef = doc(db, "bookings", bookingId);
+    const bookingSnap = await getDoc(bookingRef);
+    
+    if (!bookingSnap.exists()) {
+      return { success: false, error: "Booking not found" };
+    }
+
+    const booking = mapDocToBooking(bookingSnap, bookingSnap.id);
+
+    // Validate booking status
+    if (booking.status !== "Failed (Paid)" && booking.status !== "Cancelled (Booked)") {
+      return { 
+        success: false, 
+        error: `Cannot process refund for booking with status "${booking.status}"` 
+      };
+    }
+
+    // Check if refund already processed
+    if (booking.refundReceived) {
+      return { success: false, error: "Refund has already been processed for this booking" };
+    }
+
+    // Get booking record to find the account used
+    const bookingRecord = await getBookingRecordByBookingId(bookingId);
+    if (!bookingRecord) {
+      return { success: false, error: "Booking record not found. Cannot determine account for refund." };
+    }
+
+    const accountUsername = bookingRecord.bookedAccountUsername;
+
+    // Find the account by username
+    const accountsCollection = collection(db, "irctcAccounts");
+    const accountQuery = query(accountsCollection, where("username", "==", accountUsername));
+    const accountSnapshot = await getDocs(accountQuery);
+
+    if (accountSnapshot.empty) {
+      return { success: false, error: `Account "${accountUsername}" not found` };
+    }
+
+    const accountDoc = accountSnapshot.docs[0];
+    const accountData = accountDoc.data();
+    const currentWalletAmount = accountData.walletAmount || 0;
+    const newWalletAmount = currentWalletAmount + refundAmount;
+
+    // Update account wallet
+    await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
+      walletAmount: newWalletAmount,
+      updatedAt: serverTimestamp(),
+    });
+
+    // Update booking with refund details
+    const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+    await updateDoc(bookingRef, {
+      refundAmount,
+      refundReceived: true,
+      refundReceivedDate: today,
+      refundNotes: refundNotes || deleteField(),
+      updatedAt: serverTimestamp(),
+    });
+
+    // Get updated booking
+    const updatedBookingSnap = await getDoc(bookingRef);
+    if (updatedBookingSnap.exists()) {
+      const updatedBooking = mapDocToBooking(updatedBookingSnap, updatedBookingSnap.id);
+      return { success: true, booking: updatedBooking };
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    console.error("[Firestore Error] processRefund:", error);
+    return { success: false, error: error.message || "Failed to process refund" };
   }
 }

@@ -1,7 +1,21 @@
 
 
-export const ALL_BOOKING_STATUSES = ["Requested", "Booked", "Missed", "Booking Failed", "User Cancelled"] as const;
+export const ALL_BOOKING_STATUSES = [
+  "Requested", 
+  "Booked", 
+  "Missed", 
+  "Failed (Paid)",
+  "Failed (Unpaid)",
+  "Cancelled (Booked)",
+  "Cancelled (Pre-book)"
+] as const;
 export type BookingStatus = typeof ALL_BOOKING_STATUSES[number];
+
+// Legacy status mapping for backward compatibility
+export const LEGACY_STATUS_MAP: Record<string, BookingStatus> = {
+  "Booking Failed": "Failed (Unpaid)",
+  "User Cancelled": "Cancelled (Pre-book)",
+} as const;
 
 export const ALL_TRAIN_CLASSES = ["SL", "3A", "2A", "1A", "2S", "EC", "CC", "CC (Veg)", "CC (Non Veg)", "CC (No Food)", "UR"] as const;
 export type TrainClass = typeof ALL_TRAIN_CLASSES[number];
@@ -53,6 +67,11 @@ export interface Booking {
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
   preparedAccounts?: PreparedAccount[]; // Optional array of prepared accounts for booking requirements
+  // Refund tracking fields
+  refundAmount?: number;        // Amount to be refunded
+  refundReceived?: boolean;     // Whether refund was received
+  refundReceivedDate?: string;  // ISO date when refund was received
+  refundNotes?: string;         // Optional notes about the refund
 }
 
 export type BookingFormData = Omit<Booking, "id" | "createdAt" | "updatedAt" | "status" | "preparedAccounts">;
