@@ -90,7 +90,7 @@ export function StatusReasonDialog({
 
           <div className="space-y-2">
             <Label htmlFor="status-handler">
-              {status === "Cancelled" || status === "Cancelled (Booked)" ? "Cancelling person" : "Handler"}
+              {status === "User Cancelled" || status === "CNF & Cancelled" ? "Cancelling person" : "Handler"}
             </Label>
             <Select
               value={handler}
@@ -100,7 +100,7 @@ export function StatusReasonDialog({
               <SelectTrigger id="status-handler">
                 <SelectValue
                   placeholder={
-                    status === "Cancelled" || status === "Cancelled (Booked)"
+                    status === "User Cancelled" || status === "CNF & Cancelled"
                       ? "Select cancelling person"
                       : "Select handler"
                   }
@@ -118,7 +118,7 @@ export function StatusReasonDialog({
 
           <div className="space-y-2">
             <Label htmlFor="status-reason">
-              Reason {status === "Missed" || status === "Failed" || status === "Failed (Paid)" ? "(Required)" : "(Optional)"}
+              Reason {status === "Missed" || status === "Booking Failed (Unpaid)" || status === "Booking Failed (Paid)" ? "(Required)" : "(Optional)"}
             </Label>
             <Textarea
               id="status-reason"
@@ -143,7 +143,7 @@ export function StatusReasonDialog({
           <Button
             type="button"
             onClick={handleConfirm}
-            disabled={isLoading || ((status === "Missed" || status === "Failed" || status === "Failed (Paid)") && !reason.trim())}
+            disabled={isLoading || ((status === "Missed" || status === "Booking Failed (Unpaid)" || status === "Booking Failed (Paid)") && !reason.trim())}
           >
             {isLoading ? "Updating..." : "Confirm"}
           </Button>

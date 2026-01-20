@@ -22,13 +22,14 @@ import {
   type DocumentData,
   deleteField
 } from "firebase/firestore";
-import type { 
-  Booking, 
-  BookingFormData, 
-  BookingStatus, 
+import type {
+  Booking,
+  BookingFormData,
+  BookingStatus,
   Passenger,
   PreparedAccount,
-  TrainClass 
+  TrainClass,
+  RefundDetails
 } from "@/types/booking";
 import { LEGACY_CLASS_MAP } from "@/types/booking";
 
@@ -90,6 +91,7 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     createdAt: toISOStringSafe(data.createdAt, "createdAt", id),
     updatedAt: toISOStringSafe(data.updatedAt, "updatedAt", id),
     preparedAccounts: Array.isArray(data.preparedAccounts) ? (data.preparedAccounts as PreparedAccount[]) : undefined,
+    refundDetails: data.refundDetails as RefundDetails | undefined,
   };
 };
 

@@ -89,9 +89,9 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
             : sourceBookings.filter(b => {
                 const visibleDateSet = new Set(visibleDates);
                 // Completed bookings exclude Requested
-                // Exclude Failed (Paid) and Cancelled (Booked) IF they don't have refundDetails (those go to Refunds tab)
-                if (b.status === 'Failed (Paid)' && !b.refundDetails) return false;
-                if (b.status === 'Cancelled (Booked)' && !b.refundDetails) return false;
+                // Exclude Booking Failed (Paid) and CNF & Cancelled IF they don't have refundDetails (those go to Refunds tab)
+                if (b.status === 'Booking Failed (Paid)' && !b.refundDetails) return false;
+                if (b.status === 'CNF & Cancelled' && !b.refundDetails) return false;
                 
                 return b.status !== 'Requested' && visibleDateSet.has(b.bookingDate);
             });

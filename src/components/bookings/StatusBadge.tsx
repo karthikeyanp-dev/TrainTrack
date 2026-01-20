@@ -24,12 +24,12 @@ export function StatusBadge({ status }: StatusBadgeProps) {
       variant = "secondary";
       className = "bg-yellow-500 hover:bg-yellow-600 text-black";
       break;
-    case "Failed":
-    case "Failed (Paid)":
+    case "Booking Failed (Unpaid)":
+    case "Booking Failed (Paid)":
       variant = "destructive"; // Uses destructive theme color (red)
       break;
-    case "Cancelled":
-    case "Cancelled (Booked)":
+    case "User Cancelled":
+    case "CNF & Cancelled":
       variant = "secondary"; // Using secondary as a base for custom orange
       className = "bg-orange-500 hover:bg-orange-600 text-white";
       break;

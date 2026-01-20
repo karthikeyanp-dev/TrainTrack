@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { StatusBadge } from "./StatusBadge";
 import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X, CreditCard, Receipt, Loader2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { updateBookingStatus, deleteBooking, getBookingRecordByBookingId, deleteBookingRefundDetails } from "@/lib/firestoreClient";
+import { updateBookingStatus, deleteBooking, getBookingRecordByBookingId, deleteBookingRefundDetails, deleteBookingRecord } from "@/lib/firestoreClient";
 import type { BookingRecord } from "@/types/bookingRecord";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -58,10 +58,10 @@ function getStatusIcon(status: BookingStatus) {
     case "Requested": return <Info className="h-4 w-4 text-blue-500" />;
     case "Booked": return <CheckCircle2 className="h-4 w-4 text-green-600" />;
     case "Missed": return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
-    case "Failed":
-    case "Failed (Paid)": return <XCircle className="h-4 w-4 text-red-600" />;
-    case "Cancelled":
-    case "Cancelled (Booked)": return <UserX className="h-4 w-4 text-orange-500" />;
+    case "Booking Failed (Unpaid)":
+    case "Booking Failed (Paid)": return <XCircle className="h-4 w-4 text-red-600" />;
+    case "User Cancelled":
+    case "CNF & Cancelled": return <UserX className="h-4 w-4 text-orange-500" />;
     default: return <Info className="h-4 w-4" />;
   }
 }
@@ -215,15 +215,19 @@ export function BookingCard({ booking }: BookingCardProps) {
   });
 
   const handleStatusSelect = (newStatus: string) => {
-    if (newStatus === "Booked" || newStatus === "Failed (Paid)") {
+    if (newStatus === "Booked" || newStatus === "Booking Failed (Paid)") {
       // Show the booked details dialog (or failed payment dialog) instead of confirmation
-      // We can reuse the BookingRecordForm for "Failed (Paid)" as well since we need the same details
+      // We can reuse the BookingRecordForm for "Booking Failed (Paid)" as well since we need the same details
       setStatusToConfirm(newStatus as BookingStatus);
       setShowBookedDetailsDialog(true);
-    } else if (newStatus === "Missed" || newStatus === "Failed" || newStatus === "Cancelled (Booked)" || newStatus === "Cancelled") {
+    } else if (newStatus === "Missed" || newStatus === "Booking Failed (Unpaid)" || newStatus === "CNF & Cancelled" || newStatus === "User Cancelled") {
       // Show reason dialog for Missed, Failed, and Cancelled statuses
       setStatusToConfirm(newStatus as BookingStatus);
       setShowReasonDialog(true);
+    } else if (newStatus === "Requested" && booking.status !== "Requested") {
+      // Reverting to Requested - need to clean up statusReason, statusHandler, and booking record
+      setStatusToConfirm(newStatus as BookingStatus);
+      setShowStatusConfirmDialog(true);
     } else {
       // Show regular confirmation dialog for other statuses
       setStatusToConfirm(newStatus as BookingStatus);
@@ -248,9 +252,43 @@ export function BookingCard({ booking }: BookingCardProps) {
     }
   };
 
-  const handleConfirmStatusUpdate = () => {
+  const handleConfirmStatusUpdate = async () => {
     if (statusToConfirm) {
-      statusUpdateMutation.mutate({ id: booking.id, status: statusToConfirm });
+      // If reverting to "Requested", delete booking record and clear reason/handler
+      if (statusToConfirm === "Requested" && booking.status !== "Requested") {
+        try {
+          // Delete booking record if it exists
+          if (bookingRecord) {
+            const deleteResult = await deleteBookingRecord(bookingRecord.id);
+            if (!deleteResult.success) {
+              toast({
+                title: "Warning",
+                description: `Failed to delete booking record: ${deleteResult.error}`,
+                variant: "destructive",
+              });
+            }
+          }
+
+          // Update status and clear reason/handler by passing empty strings
+          statusUpdateMutation.mutate({
+            id: booking.id,
+            status: statusToConfirm,
+            reason: "",
+            handler: ""
+          });
+        } catch (error: any) {
+          toast({
+            title: "Error",
+            description: `Failed to revert to Requested: ${error.message}`,
+            variant: "destructive",
+          });
+          setShowStatusConfirmDialog(false);
+          setStatusToConfirm(null);
+        }
+      } else {
+        // Regular status update
+        statusUpdateMutation.mutate({ id: booking.id, status: statusToConfirm });
+      }
     }
   };
 
@@ -611,7 +649,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
           </div>
         )}
         
-        {booking.statusReason && (booking.status === "Missed" || booking.status === "Failed" || booking.status === "Failed (Paid)" || booking.status === "Cancelled (Booked)" || booking.status === "Cancelled") && (
+        {booking.statusReason && (booking.status === "Missed" || booking.status === "Booking Failed (Unpaid)" || booking.status === "Booking Failed (Paid)" || booking.status === "CNF & Cancelled" || booking.status === "User Cancelled") && (
           <div className="flex items-start gap-2 bg-muted/50 rounded-md p-2">
             <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-500 mt-0.5" />
             <span className="flex-1">
@@ -832,7 +870,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
            </Button>
            
            {/* Show Refund Button if applicable */}
-           {((booking.status === "Failed (Paid)" || booking.status === "Cancelled (Booked)") && !booking.refundDetails) && (
+           {((booking.status === "Booking Failed (Paid)" || booking.status === "CNF & Cancelled") && !booking.refundDetails) && (
              <Button
                 variant="outline"
                 size="sm"
@@ -870,7 +908,37 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                     <SelectValue placeholder="Update status" />
                 </SelectTrigger>
                 <SelectContent>
-                    {ALL_BOOKING_STATUSES.map((statusOption) => (
+                    {ALL_BOOKING_STATUSES.filter((statusOption) => {
+                      const currentStatus = booking.status;
+
+                      // If Requested - show: Requested, Booked, Booking Failed (Paid), Booking Failed (Unpaid), Missed, User Cancelled
+                      if (currentStatus === "Requested") {
+                        return ["Requested", "Booked", "Booking Failed (Paid)", "Booking Failed (Unpaid)", "Missed", "User Cancelled"].includes(statusOption);
+                      }
+
+                      // If Booked - show: Booked, Requested, CNF & Cancelled
+                      if (currentStatus === "Booked") {
+                        return ["Booked", "Requested", "CNF & Cancelled"].includes(statusOption);
+                      }
+
+                      // If CNF & Cancelled - show: CNF & Cancelled, Requested
+                      if (currentStatus === "CNF & Cancelled") {
+                        return ["CNF & Cancelled", "Requested"].includes(statusOption);
+                      }
+
+                      // If Booking Failed (Unpaid), Missed, User Cancelled - show: current status and Requested
+                      if (["Booking Failed (Unpaid)", "Missed", "User Cancelled"].includes(currentStatus)) {
+                        return [currentStatus, "Requested"].includes(statusOption);
+                      }
+
+                      // If Booking Failed (Paid) - show: current status and Requested (handled in refund flow)
+                      if (currentStatus === "Booking Failed (Paid)") {
+                        return [currentStatus, "Requested"].includes(statusOption);
+                      }
+
+                      // Default fallback
+                      return true;
+                    }).map((statusOption) => (
                     <SelectItem key={statusOption} value={statusOption}>
                         {statusOption}
                     </SelectItem>
@@ -884,8 +952,20 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             <AlertDialogHeader>
               <AlertDialogTitle>Confirm Status Change</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to change the status to "{statusToConfirm}" for the booking
-                from {booking.source.toUpperCase()} to {booking.destination.toUpperCase()} for {booking.userName}?
+                {statusToConfirm === "Requested" && booking.status !== "Requested" ? (
+                  <>
+                    Are you sure you want to revert to "Requested" status for the booking
+                    from {booking.source.toUpperCase()} to {booking.destination.toUpperCase()} for {booking.userName}?
+                    <span className="block mt-2 font-medium text-amber-600 dark:text-amber-500">
+                      This will clear the status reason, handler, and booked details (if any), returning the booking to pending state.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    Are you sure you want to change the status to "{statusToConfirm}" for the booking
+                    from {booking.source.toUpperCase()} to {booking.destination.toUpperCase()} for {booking.userName}?
+                  </>
+                )}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -912,7 +992,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
         <Dialog open={showBookedDetailsDialog} onOpenChange={setShowBookedDetailsDialog}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>{statusToConfirm === "Failed (Paid)" ? "Add Payment Details" : "Add Booked Details"}</DialogTitle>
+              <DialogTitle>{statusToConfirm === "Booking Failed (Paid)" ? "Add Payment Details" : "Add Booked Details"}</DialogTitle>
             </DialogHeader>
             <BookingRecordForm 
               bookingId={booking.id} 
