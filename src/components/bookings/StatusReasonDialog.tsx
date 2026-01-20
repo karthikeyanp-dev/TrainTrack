@@ -89,14 +89,22 @@ export function StatusReasonDialog({
           </p>
 
           <div className="space-y-2">
-            <Label htmlFor="status-handler">Handler</Label>
+            <Label htmlFor="status-handler">
+              {status === "Cancelled" || status === "Cancelled (Booked)" ? "Cancelling person" : "Handler"}
+            </Label>
             <Select
               value={handler}
               onValueChange={setHandler}
               disabled={isLoading || isLoadingHandlers || handlers.length === 0}
             >
               <SelectTrigger id="status-handler">
-                <SelectValue placeholder="Select handler" />
+                <SelectValue
+                  placeholder={
+                    status === "Cancelled" || status === "Cancelled (Booked)"
+                      ? "Select cancelling person"
+                      : "Select handler"
+                  }
+                />
               </SelectTrigger>
               <SelectContent>
                 {handlers.map((h) => (
