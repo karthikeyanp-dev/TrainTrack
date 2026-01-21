@@ -31,11 +31,11 @@ export function RefundsManager() {
           <p className="text-sm mt-1">Bookings with status "Booking Failed (Paid)" or "CNF & Cancelled" will appear here.</p>
         </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-2">
-          {refundableBookings.map(booking => (
-            <BookingCard key={booking.id} booking={booking} />
-          ))}
-        </div>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {refundableBookings.map(booking => (
+              <BookingCard key={booking.id} booking={booking} isRefundMode={true} />
+            ))}
+          </div>
       )}
     </div>
   );

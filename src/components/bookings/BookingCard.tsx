@@ -51,6 +51,7 @@ import { Input } from "@/components/ui/input";
 
 interface BookingCardProps {
   booking: Booking;
+  isRefundMode?: boolean;
 }
 
 function getStatusIcon(status: BookingStatus) {
@@ -66,7 +67,7 @@ function getStatusIcon(status: BookingStatus) {
   }
 }
 
-export function BookingCard({ booking }: BookingCardProps) {
+export function BookingCard({ booking, isRefundMode = false }: BookingCardProps) {
   const labelHighlightStyle = { color: '#AB945E', fontWeight: 700 };
   const sourceDestStyle = { color: '#dfa92a', fontWeight: 700 };
   const queryClient = useQueryClient();
@@ -840,59 +841,82 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
         </div>
         
         {/* Action buttons with icons only for mobile compatibility */}
-         <div className="flex gap-1">
-           <Button 
-             variant="outline" 
-             size="sm" 
-             onClick={handleCopy}
-             className="flex-1 aspect-square p-2"
-             title="Duplicate"
-           >
-             <Copy className="h-4 w-4" />
-           </Button>
-           <Button 
-             variant="outline" 
-             size="sm" 
-             onClick={handleEdit}
-             className="flex-1 aspect-square p-2"
-             title="Edit"
-           >
-             <Edit3 className="h-4 w-4" />
-           </Button>
-           <Button 
-             variant="outline" 
-             size="sm" 
-             onClick={handleShare}
-             className="flex-1 aspect-square p-2"
-             title="Share"
-           >
-             <Share2 className="h-4 w-4" />
-           </Button>
-           
-           {/* Show Refund Button if applicable */}
-           {((booking.status === "Booking Failed (Paid)" || booking.status === "CNF & Cancelled") && !booking.refundDetails) && (
-             <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRefundClick}
-                className="flex-1 aspect-square p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                title="Process Refund"
-             >
-                <Receipt className="h-4 w-4" />
-             </Button>
-           )}
+         {!isRefundMode ? (
+          <div className="flex gap-1">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleCopy}
+              className="flex-1 aspect-square p-2"
+              title="Duplicate"
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleEdit}
+              className="flex-1 aspect-square p-2"
+              title="Edit"
+            >
+              <Edit3 className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleShare}
+              className="flex-1 aspect-square p-2"
+              title="Share"
+            >
+              <Share2 className="h-4 w-4" />
+            </Button>
+            
+            {/* Show Refund Button if applicable */}
+            {((booking.status === "Booking Failed (Paid)" || booking.status === "CNF & Cancelled") && !booking.refundDetails) && (
+              <Button
+                 variant="outline"
+                 size="sm"
+                 onClick={handleRefundClick}
+                 className="flex-1 aspect-square p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                 title="Process Refund"
+              >
+                 <Receipt className="h-4 w-4" />
+              </Button>
+            )}
 
-           <BookingRequirementsSheet booking={booking} iconComponent={CreditCard} />
-           <Button 
-             variant="outline" 
-             size="sm" 
-             onClick={() => setShowDeleteDialog(true)}
-             className="flex-1 aspect-square p-2 text-destructive hover:text-destructive"
-             title="Delete"
-           >
-             <Trash2 className="h-4 w-4" />
-           </Button>
-         </div>
+            <BookingRequirementsSheet booking={booking} iconComponent={CreditCard} />
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setShowDeleteDialog(true)}
+              className="flex-1 aspect-square p-2 text-destructive hover:text-destructive"
+              title="Delete"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+         ) : (
+          <div className="flex gap-1">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={booking.refundDetails ? handleEditRefund : handleRefundClick}
+              className="flex-1"
+            >
+              <Receipt className="mr-2 h-4 w-4" />
+              {booking.refundDetails ? "Update Refund" : "Process Refund"}
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setShowDeleteDialog(true)}
+              className="aspect-square p-2 text-destructive hover:text-destructive"
+              title="Delete"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+         )}
         
 
         <div className="flex flex-col gap-1.5">
