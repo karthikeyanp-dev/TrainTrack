@@ -1,6 +1,6 @@
 
 
-export const ALL_BOOKING_STATUSES = ["Requested", "Booked", "Missed", "Booking Failed", "User Cancelled"] as const;
+export const ALL_BOOKING_STATUSES = ["Requested", "Booked", "Missed", "Booking Failed (Paid)", "Booking Failed (Unpaid)", "CNF & Cancelled", "User Cancelled"] as const;
 export type BookingStatus = typeof ALL_BOOKING_STATUSES[number];
 
 export const ALL_TRAIN_CLASSES = ["SL", "3A", "2A", "1A", "2S", "EC", "CC", "CC (Veg)", "CC (Non Veg)", "CC (No Food)", "UR"] as const;
@@ -35,6 +35,13 @@ export interface PreparedAccount {
   handlingBy?: string;
 }
 
+export interface RefundDetails {
+  amount: number;
+  date: string; // ISO string YYYY-MM-DD
+  method: string;
+  accountId: string;
+}
+
 export interface Booking {
   id: string;
   source: string;
@@ -53,6 +60,7 @@ export interface Booking {
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
   preparedAccounts?: PreparedAccount[]; // Optional array of prepared accounts for booking requirements
+  refundDetails?: RefundDetails;
 }
 
 export type BookingFormData = Omit<Booking, "id" | "createdAt" | "updatedAt" | "status" | "preparedAccounts">;

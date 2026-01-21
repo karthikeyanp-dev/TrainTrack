@@ -18,6 +18,8 @@ interface BookingsViewProps {
   searchQuery?: string;
 }
 
+import { RefundsManager } from "@/components/accounts/RefundsManager";
+
 const DATES_PER_PAGE = 10;
 
 const groupBookingsByDate = (bookings: Booking[], dateKey: 'bookingDate' | 'journeyDate'): Record<string, Booking[]> => {
@@ -86,6 +88,11 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
             ? sourceBookings.filter(b => b.status !== 'Requested')
             : sourceBookings.filter(b => {
                 const visibleDateSet = new Set(visibleDates);
+                // Completed bookings exclude Requested
+                // Exclude Booking Failed (Paid) and CNF & Cancelled IF they don't have refundDetails (those go to Refunds tab)
+                if (b.status === 'Booking Failed (Paid)' && !b.refundDetails) return false;
+                if (b.status === 'CNF & Cancelled' && !b.refundDetails) return false;
+                
                 return b.status !== 'Requested' && visibleDateSet.has(b.bookingDate);
             });
             
@@ -147,13 +154,14 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
         : "No bookings are currently in 'Requested' status. Add a new one!";
     const noCompletedMessage = searchQuery
         ? "No completed bookings found matching your search."
-        : "No bookings have been marked as 'Booked', 'Missed', 'Booking Failed', or 'User Cancelled' yet.";
+        : "No bookings have been marked as 'Booked', 'Missed', 'Failed', 'Cancelled' etc. yet.";
 
     return (
         <>
             <Tabs defaultValue="pending" className="w-full">
-              <TabsList className="grid w-full grid-cols-2 md:w-[400px]">
+              <TabsList className="grid w-full grid-cols-3 md:w-[400px]">
                 <TabsTrigger value="pending">Pending</TabsTrigger>
+                <TabsTrigger value="refunds">Refunds</TabsTrigger>
                 <TabsTrigger value="completed">Completed</TabsTrigger>
               </TabsList>
 
@@ -179,6 +187,10 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
                     ))}
                   </Accordion>
                 )}
+              </TabsContent>
+
+              <TabsContent value="refunds" className="mt-6">
+                <RefundsManager />
               </TabsContent>
 
               <TabsContent value="completed" className="mt-6">

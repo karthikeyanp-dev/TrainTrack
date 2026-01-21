@@ -7,9 +7,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "./StatusBadge";
-import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X, CreditCard, Receipt } from "lucide-react";
+import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X, CreditCard, Receipt, Loader2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { updateBookingStatus, deleteBooking, getBookingRecordByBookingId } from "@/lib/firestoreClient";
+import { updateBookingStatus, deleteBooking, getBookingRecordByBookingId, deleteBookingRefundDetails, deleteBookingRecord } from "@/lib/firestoreClient";
 import type { BookingRecord } from "@/types/bookingRecord";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -43,10 +43,15 @@ import { cn } from "@/lib/utils";
 import { BookingRequirementsSheet } from "./BookingRequirementsSheet";
 import { BookingRecordForm } from "./BookingRecordForm";
 import { StatusReasonDialog } from "./StatusReasonDialog";
+import { getAccountByUsername, updateAccount } from "@/lib/accountsClient";
+import { updateBookingRefundDetails } from "@/lib/firestoreClient";
+import type { RefundDetails } from "@/types/booking";
+import { Input } from "@/components/ui/input";
 
 
 interface BookingCardProps {
   booking: Booking;
+  isRefundMode?: boolean;
 }
 
 function getStatusIcon(status: BookingStatus) {
@@ -54,13 +59,15 @@ function getStatusIcon(status: BookingStatus) {
     case "Requested": return <Info className="h-4 w-4 text-blue-500" />;
     case "Booked": return <CheckCircle2 className="h-4 w-4 text-green-600" />;
     case "Missed": return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
-    case "Booking Failed": return <XCircle className="h-4 w-4 text-red-600" />;
-    case "User Cancelled": return <UserX className="h-4 w-4 text-orange-500" />;
+    case "Booking Failed (Unpaid)":
+    case "Booking Failed (Paid)": return <XCircle className="h-4 w-4 text-red-600" />;
+    case "User Cancelled":
+    case "CNF & Cancelled": return <UserX className="h-4 w-4 text-orange-500" />;
     default: return <Info className="h-4 w-4" />;
   }
 }
 
-export function BookingCard({ booking }: BookingCardProps) {
+export function BookingCard({ booking, isRefundMode = false }: BookingCardProps) {
   const labelHighlightStyle = { color: '#AB945E', fontWeight: 700 };
   const sourceDestStyle = { color: '#dfa92a', fontWeight: 700 };
   const queryClient = useQueryClient();
@@ -77,7 +84,15 @@ export function BookingCard({ booking }: BookingCardProps) {
   const [showRecordForm, setShowRecordForm] = useState(false);
   const [showBookedDetailsDialog, setShowBookedDetailsDialog] = useState(false);
   const [showReasonDialog, setShowReasonDialog] = useState(false);
+  const [showRefundDialog, setShowRefundDialog] = useState(false);
   const [bookingRecord, setBookingRecord] = useState<BookingRecord | null>(null);
+  
+  // Refund state
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refundDate, setRefundDate] = useState(new Date().toISOString().split('T')[0]);
+  const [isProcessingRefund, setIsProcessingRefund] = useState(false);
+
+  const [showRefundDeleteDialog, setShowRefundDeleteDialog] = useState(false);
 
   const fetchBookingRecord = useCallback(async () => {
     try {
@@ -201,13 +216,19 @@ export function BookingCard({ booking }: BookingCardProps) {
   });
 
   const handleStatusSelect = (newStatus: string) => {
-    if (newStatus === "Booked") {
-      // Show the booked details dialog instead of confirmation
+    if (newStatus === "Booked" || newStatus === "Booking Failed (Paid)") {
+      // Show the booked details dialog (or failed payment dialog) instead of confirmation
+      // We can reuse the BookingRecordForm for "Booking Failed (Paid)" as well since we need the same details
+      setStatusToConfirm(newStatus as BookingStatus);
       setShowBookedDetailsDialog(true);
-    } else if (newStatus === "Missed" || newStatus === "Booking Failed") {
-      // Show reason dialog for Missed and Booking Failed
+    } else if (newStatus === "Missed" || newStatus === "Booking Failed (Unpaid)" || newStatus === "CNF & Cancelled" || newStatus === "User Cancelled") {
+      // Show reason dialog for Missed, Failed, and Cancelled statuses
       setStatusToConfirm(newStatus as BookingStatus);
       setShowReasonDialog(true);
+    } else if (newStatus === "Requested" && booking.status !== "Requested") {
+      // Reverting to Requested - need to clean up statusReason, statusHandler, and booking record
+      setStatusToConfirm(newStatus as BookingStatus);
+      setShowStatusConfirmDialog(true);
     } else {
       // Show regular confirmation dialog for other statuses
       setStatusToConfirm(newStatus as BookingStatus);
@@ -216,10 +237,12 @@ export function BookingCard({ booking }: BookingCardProps) {
   };
 
   const handleBookedDetailsSuccess = () => {
-    // Update the status to Booked after record is saved
-    statusUpdateMutation.mutate({ id: booking.id, status: "Booked" });
+    // Update the status to Booked or Failed (Paid) after record is saved
+    const status = statusToConfirm || "Booked";
+    statusUpdateMutation.mutate({ id: booking.id, status: status });
     setShowBookedDetailsDialog(false);
     fetchBookingRecord();
+    setStatusToConfirm(null);
   };
 
   const handleReasonConfirm = (reason: string, handler?: string) => {
@@ -230,9 +253,43 @@ export function BookingCard({ booking }: BookingCardProps) {
     }
   };
 
-  const handleConfirmStatusUpdate = () => {
+  const handleConfirmStatusUpdate = async () => {
     if (statusToConfirm) {
-      statusUpdateMutation.mutate({ id: booking.id, status: statusToConfirm });
+      // If reverting to "Requested", delete booking record and clear reason/handler
+      if (statusToConfirm === "Requested" && booking.status !== "Requested") {
+        try {
+          // Delete booking record if it exists
+          if (bookingRecord) {
+            const deleteResult = await deleteBookingRecord(bookingRecord.id);
+            if (!deleteResult.success) {
+              toast({
+                title: "Warning",
+                description: `Failed to delete booking record: ${deleteResult.error}`,
+                variant: "destructive",
+              });
+            }
+          }
+
+          // Update status and clear reason/handler by passing empty strings
+          statusUpdateMutation.mutate({
+            id: booking.id,
+            status: statusToConfirm,
+            reason: "",
+            handler: ""
+          });
+        } catch (error: any) {
+          toast({
+            title: "Error",
+            description: `Failed to revert to Requested: ${error.message}`,
+            variant: "destructive",
+          });
+          setShowStatusConfirmDialog(false);
+          setStatusToConfirm(null);
+        }
+      } else {
+        // Regular status update
+        statusUpdateMutation.mutate({ id: booking.id, status: statusToConfirm });
+      }
     }
   };
 
@@ -242,6 +299,143 @@ export function BookingCard({ booking }: BookingCardProps) {
 
   const handleEdit = () => {
     router.push(`/bookings/edit?id=${booking.id}`);
+  };
+
+  const handleRefundClick = () => {
+    if (bookingRecord) {
+      // Pre-fill amount if available (though usually partial refunds, so maybe empty is better or full amount)
+      // Let's leave amount empty for user to input
+      setRefundAmount("");
+      setRefundDate(new Date().toISOString().split('T')[0]);
+      setShowRefundDialog(true);
+    } else {
+        toast({
+            title: "Missing Details",
+            description: "No booking record found. Cannot process refund without payment details.",
+            variant: "destructive"
+        });
+    }
+  };
+
+  const handleEditRefund = () => {
+    if (booking.refundDetails) {
+        setRefundAmount(booking.refundDetails.amount.toString());
+        setRefundDate(booking.refundDetails.date);
+        setShowRefundDialog(true);
+    }
+  };
+
+  const handleDeleteRefund = async () => {
+    setIsProcessingRefund(true);
+    try {
+        // 1. If original payment was Wallet, revert the amount (deduct from wallet)
+        if (booking.refundDetails?.method === "Wallet" && booking.refundDetails.accountId) {
+             const accountId = booking.refundDetails.accountId;
+             // We need to fetch the account first to get current balance
+             // Since we don't have getAccountById, we can try to find it via username if we have it, 
+             // OR we just use updateAccount which merges. But we need current balance to subtract.
+             // Wait, the accountId IS the document ID in Firestore.
+             // We can fetch the account by ID (if we had a method) or just rely on the fact that we have the account details in preparedAccounts or bookingRecord?
+             // Actually, we stored accountId in refundDetails. 
+             // We need a way to get account by ID to read balance.
+             // Let's assume we can fetch all accounts and find it, or add getAccountById.
+             // For now, let's use the accountsClient's updateAccount but we need the current balance.
+             // Let's fetch all accounts (cached usually) or add a helper. 
+             // Or better, let's just use the bookingRecord which has the username, and fetch by username.
+             
+             // If we have bookingRecord loaded
+             if (bookingRecord) {
+                 const account = await getAccountByUsername(bookingRecord.bookedAccountUsername);
+                 if (account) {
+                     const currentBalance = account.walletAmount;
+                     const refundAmount = booking.refundDetails.amount;
+                     const newBalance = currentBalance - refundAmount;
+                     
+                     if (newBalance < 0) {
+                         // Warning? But we must revert.
+                         console.warn("Reverting refund results in negative balance.");
+                     }
+                     
+                     await updateAccount(account.id, { walletAmount: newBalance });
+                 }
+             }
+        }
+
+        // 2. Delete refund details from booking
+        const result = await deleteBookingRefundDetails(booking.id);
+        if (!result.success) throw new Error(result.error);
+
+        toast({ title: "Refund Deleted", description: "Refund record removed and wallet balance reverted (if applicable)." });
+        setShowRefundDeleteDialog(false);
+        queryClient.invalidateQueries({ queryKey: ["bookings"] });
+        queryClient.invalidateQueries({queryKey: ['booking', booking.id]});
+    } catch (error: any) {
+        toast({ title: "Error", description: error.message || "Failed to delete refund", variant: "destructive" });
+    } finally {
+        setIsProcessingRefund(false);
+    }
+  };
+
+  const handleRefundConfirm = async () => {
+    if (!bookingRecord) return;
+    
+    const amount = Number(refundAmount);
+    if (isNaN(amount) || amount <= 0) {
+      toast({ title: "Invalid Amount", description: "Please enter a valid refund amount", variant: "destructive" });
+      return;
+    }
+
+    setIsProcessingRefund(true);
+    try {
+        const account = await getAccountByUsername(bookingRecord.bookedAccountUsername);
+        
+        // 1. If Wallet, update account balance
+        // Logic for EDIT vs NEW
+        if (bookingRecord.methodUsed === "Wallet" && account) {
+            let newWalletAmount = account.walletAmount;
+            
+            if (booking.refundDetails) {
+                // EDIT MODE: 
+                // First, revert the OLD refund amount
+                newWalletAmount -= booking.refundDetails.amount;
+                // Then, add the NEW refund amount
+                newWalletAmount += amount;
+            } else {
+                // NEW MODE: Just add the refund amount
+                newWalletAmount += amount;
+            }
+            
+            const accountResult = await updateAccount(account.id, { walletAmount: newWalletAmount });
+            if (!accountResult.success) throw new Error(accountResult.error);
+        }
+
+        // 2. Update Booking with refund details
+        const accountId = account ? account.id : "unknown_account";
+
+        const refundDetails: RefundDetails = {
+            amount,
+            date: refundDate,
+            method: bookingRecord.methodUsed,
+            accountId: accountId
+        };
+        
+        const bookingResult = await updateBookingRefundDetails(booking.id, refundDetails);
+        if (!bookingResult.success) throw new Error(bookingResult.error);
+
+        toast({ 
+            title: "Refund Processed", 
+            description: bookingRecord.methodUsed === "Wallet" 
+                ? "Wallet balance updated and refund saved." 
+                : "Refund details saved successfully." 
+        });
+        setShowRefundDialog(false);
+        queryClient.invalidateQueries({ queryKey: ["bookings"] });
+        queryClient.invalidateQueries({queryKey: ['booking', booking.id]});
+    } catch (error: any) {
+        toast({ title: "Error", description: error.message || "Failed to process refund", variant: "destructive" });
+    } finally {
+        setIsProcessingRefund(false);
+    }
   };
 
   const handleCopy = () => {
@@ -456,7 +650,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
           </div>
         )}
         
-        {booking.statusReason && (booking.status === "Missed" || booking.status === "Booking Failed") && (
+        {booking.statusReason && (booking.status === "Missed" || booking.status === "Booking Failed (Unpaid)" || booking.status === "Booking Failed (Paid)" || booking.status === "CNF & Cancelled" || booking.status === "User Cancelled") && (
           <div className="flex items-start gap-2 bg-muted/50 rounded-md p-2">
             <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-500 mt-0.5" />
             <span className="flex-1">
@@ -468,6 +662,41 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                 </span>
               )}
             </span>
+          </div>
+        )}
+        
+        {booking.refundDetails && (
+          <div className="flex items-start gap-2 bg-green-50 dark:bg-green-900/20 rounded-md p-2 border border-green-200 dark:border-green-900 relative">
+            <Receipt className="h-4 w-4 text-green-600 dark:text-green-500 mt-0.5" />
+            <span className="flex-1">
+              <span className="font-semibold text-green-700 dark:text-green-500">Refund Received:</span>
+              <span className="block mt-0.5 text-sm">
+                ₹{booking.refundDetails.amount} on {formatDate(booking.refundDetails.date)}
+              </span>
+              <span className="block text-xs text-muted-foreground">
+                via {booking.refundDetails.method}
+              </span>
+            </span>
+            <div className="flex flex-col gap-1">
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                    onClick={handleEditRefund}
+                    title="Edit Refund"
+                >
+                    <Edit3 className="h-3 w-3" />
+                </Button>
+                <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
+                    onClick={() => setShowRefundDeleteDialog(true)}
+                    title="Delete Refund"
+                >
+                    <Trash2 className="h-3 w-3" />
+                </Button>
+            </div>
           </div>
         )}
 
@@ -612,45 +841,82 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
         </div>
         
         {/* Action buttons with icons only for mobile compatibility */}
-         <div className="flex gap-1">
-           <Button 
-             variant="outline" 
-             size="sm" 
-             onClick={handleCopy}
-             className="flex-1 aspect-square p-2"
-             title="Duplicate"
-           >
-             <Copy className="h-4 w-4" />
-           </Button>
-           <Button 
-             variant="outline" 
-             size="sm" 
-             onClick={handleEdit}
-             className="flex-1 aspect-square p-2"
-             title="Edit"
-           >
-             <Edit3 className="h-4 w-4" />
-           </Button>
-           <Button 
-             variant="outline" 
-             size="sm" 
-             onClick={handleShare}
-             className="flex-1 aspect-square p-2"
-             title="Share"
-           >
-             <Share2 className="h-4 w-4" />
-           </Button>
-           <BookingRequirementsSheet booking={booking} iconComponent={CreditCard} />
-           <Button 
-             variant="outline" 
-             size="sm" 
-             onClick={() => setShowDeleteDialog(true)}
-             className="flex-1 aspect-square p-2 text-destructive hover:text-destructive"
-             title="Delete"
-           >
-             <Trash2 className="h-4 w-4" />
-           </Button>
-         </div>
+         {!isRefundMode ? (
+          <div className="flex gap-1">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleCopy}
+              className="flex-1 aspect-square p-2"
+              title="Duplicate"
+            >
+              <Copy className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleEdit}
+              className="flex-1 aspect-square p-2"
+              title="Edit"
+            >
+              <Edit3 className="h-4 w-4" />
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleShare}
+              className="flex-1 aspect-square p-2"
+              title="Share"
+            >
+              <Share2 className="h-4 w-4" />
+            </Button>
+            
+            {/* Show Refund Button if applicable */}
+            {((booking.status === "Booking Failed (Paid)" || booking.status === "CNF & Cancelled") && !booking.refundDetails) && (
+              <Button
+                 variant="outline"
+                 size="sm"
+                 onClick={handleRefundClick}
+                 className="flex-1 aspect-square p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                 title="Process Refund"
+              >
+                 <Receipt className="h-4 w-4" />
+              </Button>
+            )}
+
+            <BookingRequirementsSheet booking={booking} iconComponent={CreditCard} />
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setShowDeleteDialog(true)}
+              className="flex-1 aspect-square p-2 text-destructive hover:text-destructive"
+              title="Delete"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+         ) : (
+          <div className="flex gap-1">
+            <Button
+              variant="default"
+              size="sm"
+              onClick={booking.refundDetails ? handleEditRefund : handleRefundClick}
+              className="flex-1"
+            >
+              <Receipt className="mr-2 h-4 w-4" />
+              {booking.refundDetails ? "Update Refund" : "Process Refund"}
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setShowDeleteDialog(true)}
+              className="aspect-square p-2 text-destructive hover:text-destructive"
+              title="Delete"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </div>
+         )}
         
 
         <div className="flex flex-col gap-1.5">
@@ -666,7 +932,37 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                     <SelectValue placeholder="Update status" />
                 </SelectTrigger>
                 <SelectContent>
-                    {ALL_BOOKING_STATUSES.map((statusOption) => (
+                    {ALL_BOOKING_STATUSES.filter((statusOption) => {
+                      const currentStatus = booking.status;
+
+                      // If Requested - show: Requested, Booked, Booking Failed (Paid), Booking Failed (Unpaid), Missed, User Cancelled
+                      if (currentStatus === "Requested") {
+                        return ["Requested", "Booked", "Booking Failed (Paid)", "Booking Failed (Unpaid)", "Missed", "User Cancelled"].includes(statusOption);
+                      }
+
+                      // If Booked - show: Booked, Requested, CNF & Cancelled
+                      if (currentStatus === "Booked") {
+                        return ["Booked", "Requested", "CNF & Cancelled"].includes(statusOption);
+                      }
+
+                      // If CNF & Cancelled - show: CNF & Cancelled, Requested
+                      if (currentStatus === "CNF & Cancelled") {
+                        return ["CNF & Cancelled", "Requested"].includes(statusOption);
+                      }
+
+                      // If Booking Failed (Unpaid), Missed, User Cancelled - show: current status and Requested
+                      if (["Booking Failed (Unpaid)", "Missed", "User Cancelled"].includes(currentStatus)) {
+                        return [currentStatus, "Requested"].includes(statusOption);
+                      }
+
+                      // If Booking Failed (Paid) - show: current status and Requested (handled in refund flow)
+                      if (currentStatus === "Booking Failed (Paid)") {
+                        return [currentStatus, "Requested"].includes(statusOption);
+                      }
+
+                      // Default fallback
+                      return true;
+                    }).map((statusOption) => (
                     <SelectItem key={statusOption} value={statusOption}>
                         {statusOption}
                     </SelectItem>
@@ -680,8 +976,20 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             <AlertDialogHeader>
               <AlertDialogTitle>Confirm Status Change</AlertDialogTitle>
               <AlertDialogDescription>
-                Are you sure you want to change the status to "{statusToConfirm}" for the booking
-                from {booking.source.toUpperCase()} to {booking.destination.toUpperCase()} for {booking.userName}?
+                {statusToConfirm === "Requested" && booking.status !== "Requested" ? (
+                  <>
+                    Are you sure you want to revert to "Requested" status for the booking
+                    from {booking.source.toUpperCase()} to {booking.destination.toUpperCase()} for {booking.userName}?
+                    <span className="block mt-2 font-medium text-amber-600 dark:text-amber-500">
+                      This will clear the status reason, handler, and booked details (if any), returning the booking to pending state.
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    Are you sure you want to change the status to "{statusToConfirm}" for the booking
+                    from {booking.source.toUpperCase()} to {booking.destination.toUpperCase()} for {booking.userName}?
+                  </>
+                )}
               </AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
@@ -708,7 +1016,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
         <Dialog open={showBookedDetailsDialog} onOpenChange={setShowBookedDetailsDialog}>
           <DialogContent className="sm:max-w-md">
             <DialogHeader>
-              <DialogTitle>Add Booked Details</DialogTitle>
+              <DialogTitle>{statusToConfirm === "Booking Failed (Paid)" ? "Add Payment Details" : "Add Booked Details"}</DialogTitle>
             </DialogHeader>
             <BookingRecordForm 
               bookingId={booking.id} 
@@ -718,6 +1026,96 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             />
           </DialogContent>
         </Dialog>
+
+        <Dialog open={showRefundDialog} onOpenChange={setShowRefundDialog}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Process Refund</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+                {bookingRecord && (
+                    <div className="bg-muted/50 p-3 rounded-md text-sm space-y-2">
+                        <div className="grid grid-cols-2 gap-2">
+                            <div>
+                                <span className="text-muted-foreground block text-xs">Payment Method</span>
+                                <span className="font-medium">{bookingRecord.methodUsed}</span>
+                            </div>
+                            <div>
+                                <span className="text-muted-foreground block text-xs">Account</span>
+                                <span className="font-medium">{bookingRecord.bookedAccountUsername}</span>
+                            </div>
+                        </div>
+                        <div>
+                            <span className="text-muted-foreground block text-xs">Original Amount</span>
+                            <span className="font-medium">₹{bookingRecord.amountCharged}</span>
+                        </div>
+                        {bookingRecord.methodUsed === "Wallet" && (
+                            <div className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1 mt-1">
+                                <Info className="h-3 w-3" />
+                                Refund will be credited back to wallet
+                            </div>
+                        )}
+                    </div>
+                )}
+                
+                <div className="space-y-2">
+                    <Label htmlFor="refund-amount">Refund Amount (₹)</Label>
+                    <Input
+                        id="refund-amount"
+                        type="number"
+                        placeholder="e.g. 1200"
+                        value={refundAmount}
+                        onChange={(e) => setRefundAmount(e.target.value)}
+                        min="0"
+                        step="0.01"
+                    />
+                </div>
+                
+                <div className="space-y-2">
+                    <Label htmlFor="refund-date">Date Received</Label>
+                    <Input
+                        id="refund-date"
+                        type="date"
+                        value={refundDate}
+                        onChange={(e) => setRefundDate(e.target.value)}
+                    />
+                </div>
+            </div>
+            <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowRefundDialog(false)}>Cancel</Button>
+                <Button onClick={handleRefundConfirm} disabled={isProcessingRefund}>
+                    {isProcessingRefund ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Receipt className="mr-2 h-4 w-4" />}
+                    Confirm Refund
+                </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        <AlertDialog open={showRefundDeleteDialog} onOpenChange={setShowRefundDeleteDialog}>
+            <AlertDialogContent>
+            <AlertDialogHeader>
+                <AlertDialogTitle>Delete Refund Details?</AlertDialogTitle>
+                <AlertDialogDescription>
+                This will remove the refund record from this booking.
+                {booking.refundDetails?.method === "Wallet" && (
+                    <span className="block mt-2 font-medium text-destructive">
+                        Note: This will also revert (deduct) the refunded amount of ₹{booking.refundDetails.amount} from the wallet.
+                    </span>
+                )}
+                </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                onClick={handleDeleteRefund}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                disabled={isProcessingRefund}
+                >
+                {isProcessingRefund ? "Deleting..." : "Delete Refund"}
+                </AlertDialogAction>
+            </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
 
         <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
             <AlertDialogContent>

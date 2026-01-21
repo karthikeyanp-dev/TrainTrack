@@ -14,7 +14,7 @@ const openSans = Open_Sans({
 export const metadata: Metadata = {
   title: 'TrainTrack - Manage Your Bookings',
   description: 'Efficiently manage and track train booking requests.',
-  manifest: '/manifest.json', // Added for PWA
+  manifest: 'manifest.json', // Added for PWA
 };
 
 export default function RootLayout({

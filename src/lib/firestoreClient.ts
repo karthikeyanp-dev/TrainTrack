@@ -22,13 +22,14 @@ import {
   type DocumentData,
   deleteField
 } from "firebase/firestore";
-import type { 
-  Booking, 
-  BookingFormData, 
-  BookingStatus, 
+import type {
+  Booking,
+  BookingFormData,
+  BookingStatus,
   Passenger,
   PreparedAccount,
-  TrainClass 
+  TrainClass,
+  RefundDetails
 } from "@/types/booking";
 import { LEGACY_CLASS_MAP } from "@/types/booking";
 
@@ -90,6 +91,7 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     createdAt: toISOStringSafe(data.createdAt, "createdAt", id),
     updatedAt: toISOStringSafe(data.updatedAt, "updatedAt", id),
     preparedAccounts: Array.isArray(data.preparedAccounts) ? (data.preparedAccounts as PreparedAccount[]) : undefined,
+    refundDetails: data.refundDetails as RefundDetails | undefined,
   };
 };
 
@@ -347,10 +349,62 @@ export async function updateBookingRequirements(
     return { success: false, error: "Failed to retrieve booking after update" };
   } catch (error: any) {
     console.error(`[Firestore Error] updateBookingRequirements (${id}):`, error);
-    return { 
-      success: false, 
-      error: error.message || "Failed to update booking requirements" 
+    return { success: false, error: error.message || "Failed to update booking requirements" };
+  }
+}
+
+export async function updateBookingRefundDetails(
+  id: string,
+  refundDetails: RefundDetails
+): Promise<{ success: boolean; error?: string; booking?: Booking }> {
+  if (!db) {
+    return { success: false, error: "Firestore database is not configured" };
+  }
+
+  try {
+    const docRef = doc(db, "bookings", id);
+    const updateData: Record<string, any> = {
+      refundDetails,
+      updatedAt: serverTimestamp(),
     };
+
+    await updateDoc(docRef, updateData);
+
+    const updatedDocSnap = await getDoc(docRef);
+    if (updatedDocSnap.exists()) {
+      return { success: true, booking: mapDocToBooking(updatedDocSnap, updatedDocSnap.id) };
+    }
+    return { success: false, error: "Failed to retrieve booking after update" };
+  } catch (error: any) {
+    console.error(`[Firestore Error] updateBookingRefundDetails (${id}):`, error);
+    return { success: false, error: error.message || "Failed to update refund details" };
+  }
+}
+
+export async function deleteBookingRefundDetails(
+  id: string
+): Promise<{ success: boolean; error?: string; booking?: Booking }> {
+  if (!db) {
+    return { success: false, error: "Firestore database is not configured" };
+  }
+
+  try {
+    const docRef = doc(db, "bookings", id);
+    const updateData: Record<string, any> = {
+      refundDetails: deleteField(),
+      updatedAt: serverTimestamp(),
+    };
+
+    await updateDoc(docRef, updateData);
+
+    const updatedDocSnap = await getDoc(docRef);
+    if (updatedDocSnap.exists()) {
+      return { success: true, booking: mapDocToBooking(updatedDocSnap, updatedDocSnap.id) };
+    }
+    return { success: false, error: "Failed to retrieve booking after delete" };
+  } catch (error: any) {
+    console.error(`[Firestore Error] deleteBookingRefundDetails (${id}):`, error);
+    return { success: false, error: error.message || "Failed to delete refund details" };
   }
 }
 
