@@ -161,8 +161,8 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
             <Tabs defaultValue="pending" className="w-full">
               <TabsList className="grid w-full grid-cols-3 md:w-[400px]">
                 <TabsTrigger value="pending">Pending</TabsTrigger>
-                <TabsTrigger value="refunds">Refunds</TabsTrigger>
                 <TabsTrigger value="completed">Completed</TabsTrigger>
+                <TabsTrigger value="refunds">Refunds</TabsTrigger>
               </TabsList>
 
               <TabsContent value="pending" className="mt-6">
@@ -189,10 +189,6 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
                 )}
               </TabsContent>
 
-              <TabsContent value="refunds" className="mt-6">
-                <RefundsManager />
-              </TabsContent>
-
               <TabsContent value="completed" className="mt-6">
                 <h2 className="text-2xl font-semibold mb-4">Completed Bookings</h2>
                 {completedDates.length === 0 ? (
@@ -215,6 +211,10 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
                     ))}
                   </Accordion>
                 )}
+              </TabsContent>
+
+              <TabsContent value="refunds" className="mt-6">
+                <RefundsManager />
               </TabsContent>
             </Tabs>
 
