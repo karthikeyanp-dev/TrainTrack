@@ -3,7 +3,7 @@
 export const ALL_BOOKING_STATUSES = ["Requested", "Booked", "Missed", "Booking Failed (Paid)", "Booking Failed (Unpaid)", "CNF & Cancelled", "User Cancelled"] as const;
 export type BookingStatus = typeof ALL_BOOKING_STATUSES[number];
 
-export const ALL_TRAIN_CLASSES = ["SL", "3A", "2A", "1A", "2S", "EC", "CC", "CC (Veg)", "CC (Non Veg)", "CC (No Food)", "UR"] as const;
+export const ALL_TRAIN_CLASSES = ["SL", "3A", "2A", "1A", "2S", "3E", "EC", "CC", "CC (Veg)", "CC (Non Veg)", "CC (No Food)", "UR"] as const;
 export type TrainClass = typeof ALL_TRAIN_CLASSES[number];
 
 // Legacy class names for backward compatibility with existing bookings
