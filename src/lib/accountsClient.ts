@@ -173,14 +173,14 @@ export async function getAccountStats(): Promise<AccountStats[]> {
     // Get all accounts
     const accounts = await getAccounts();
     
-    // Get booking records from the last 30 days
+    // Get booking records from the current month
     const bookingRecordsCollection = collection(db, "bookingRecords");
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const now = new Date();
+    const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     
     const bookingRecordsSnapshot = await getDocs(bookingRecordsCollection);
     
-    // Count bookings per account from last 30 days
+    // Count bookings per account from current month
     const accountUsage = new Map<string, { count: number; lastDate?: string }>();
     
     bookingRecordsSnapshot.docs.forEach(doc => {
@@ -188,8 +188,8 @@ export async function getAccountStats(): Promise<AccountStats[]> {
       const username = data.bookedAccountUsername;
       const createdAt = data.createdAt?.toDate?.();
       
-      // Only count bookings from last 30 days
-      if (username && createdAt && createdAt >= thirtyDaysAgo) {
+      // Only count bookings from current month
+      if (username && createdAt && createdAt >= startOfCurrentMonth) {
         const existing = accountUsage.get(username) || { count: 0 };
         const existingDate = existing.lastDate ? new Date(existing.lastDate) : null;
         const currentDate = createdAt;

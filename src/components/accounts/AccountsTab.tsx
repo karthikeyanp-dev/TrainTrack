@@ -482,7 +482,7 @@ function AccountsManager() {
                 </Button>
               </div>
               <div>
-                <span style={labelHighlightStyle}>Booked (30d): </span>
+                <span style={labelHighlightStyle}>Booked ({new Date().toLocaleString('default', { month: 'long' })}): </span>
                 {stats?.bookingCount ?? 0}
               </div>
               <div>
