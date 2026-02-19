@@ -56,6 +56,7 @@ const mapDocToBooking = (doc: any): Booking => {
     updatedAt: toISOStringSafe(data.updatedAt),
     preparedAccounts: Array.isArray(data.preparedAccounts) ? (data.preparedAccounts as PreparedAccount[]) : undefined,
     refundDetails: data.refundDetails as RefundDetails | undefined,
+    groupId: data.groupId as string | undefined,
   };
 };
 

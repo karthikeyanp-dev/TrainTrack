@@ -29,7 +29,8 @@ import type {
   Passenger,
   PreparedAccount,
   TrainClass,
-  RefundDetails
+  RefundDetails,
+  BookingGroup
 } from "@/types/booking";
 import { LEGACY_CLASS_MAP } from "@/types/booking";
 
@@ -661,3 +662,138 @@ export async function deleteBookingRecord(id: string): Promise<{ success: boolea
     return { success: false, error: error.message || "Failed to delete booking record" };
   }
 }
+
+// ============= BOOKING GROUP OPERATIONS =============
+
+const mapDocToBookingGroup = (document: DocumentSnapshot<DocumentData>, id: string): BookingGroup => {
+  const data = document.data();
+  if (!data) {
+    throw new Error(`No data found for document with id ${id}`);
+  }
+
+  return {
+    id,
+    name: data.name || "Untitled Group",
+    bookingIds: Array.isArray(data.bookingIds) ? data.bookingIds : [],
+    totalAmount: data.totalAmount || 0,
+    status: data.status || "Mixed",
+    createdAt: toISOStringSafe(data.createdAt, "createdAt", id),
+    updatedAt: toISOStringSafe(data.updatedAt, "updatedAt", id),
+  };
+};
+
+export async function createBookingGroup(bookingIds: string[], name?: string): Promise<{ success: boolean; error?: string; group?: BookingGroup }> {
+  if (!db) return { success: false, error: "Database not initialized" };
+  const firestore = db;
+
+  try {
+    // 1. Create the group
+    const groupData = {
+      name: name || `Group Booking ${new Date().toLocaleDateString()}`,
+      bookingIds,
+      status: "Mixed",
+      totalAmount: 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    const groupRef = await addDoc(collection(firestore, "bookingGroups"), groupData);
+
+    // 2. Update each booking with the groupId
+    const batchPromises = bookingIds.map(bookingId => 
+      updateDoc(doc(firestore, "bookings", bookingId), { 
+        groupId: groupRef.id,
+        updatedAt: serverTimestamp() 
+      })
+    );
+
+    await Promise.all(batchPromises);
+
+    const newGroup = await getBookingGroupById(groupRef.id);
+    return { success: true, group: newGroup || undefined };
+
+  } catch (error: any) {
+    console.error("[Firestore Error] createBookingGroup:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getBookingGroups(): Promise<BookingGroup[]> {
+  if (!db) return [];
+  try {
+    const q = query(collection(db, "bookingGroups"), orderBy("createdAt", "desc"));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => mapDocToBookingGroup(doc, doc.id));
+  } catch (error) {
+    console.error("[Firestore Error] getBookingGroups:", error);
+    return [];
+  }
+}
+
+export async function getBookingGroupById(id: string): Promise<BookingGroup | null> {
+  if (!db) return null;
+  try {
+    const docSnap = await getDoc(doc(db, "bookingGroups", id));
+    if (docSnap.exists()) {
+      return mapDocToBookingGroup(docSnap, docSnap.id);
+    }
+    return null;
+  } catch (error) {
+    console.error(`[Firestore Error] getBookingGroupById (${id}):`, error);
+    return null;
+  }
+}
+
+export async function ungroupBookings(groupId: string): Promise<{ success: boolean; error?: string }> {
+   if (!db) return { success: false, error: "Database not initialized" };
+   const firestore = db;
+   try {
+     const group = await getBookingGroupById(groupId);
+     if (!group) return { success: false, error: "Group not found" };
+
+     // Remove groupId from all bookings
+     const promises = group.bookingIds.map(bid => 
+       updateDoc(doc(firestore, "bookings", bid), { 
+         groupId: deleteField(),
+         updatedAt: serverTimestamp()
+       })
+     );
+     await Promise.all(promises);
+
+     // Delete the group
+     await deleteDoc(doc(firestore, "bookingGroups", groupId));
+     
+     return { success: true };
+   } catch (error: any) {
+     console.error("[Firestore Error] ungroupBookings:", error);
+     return { success: false, error: error.message };
+   }
+}
+
+export async function addToBookingGroup(groupId: string, bookingId: string): Promise<{ success: boolean; error?: string }> {
+    if (!db) return { success: false, error: "Database not initialized" };
+    try {
+        const groupRef = doc(db, "bookingGroups", groupId);
+        const groupSnap = await getDoc(groupRef);
+        if (!groupSnap.exists()) return { success: false, error: "Group not found" };
+        
+        const currentIds = groupSnap.data().bookingIds || [];
+        if (currentIds.includes(bookingId)) return { success: true };
+
+        await updateDoc(groupRef, {
+            bookingIds: [...currentIds, bookingId],
+            updatedAt: serverTimestamp()
+        });
+
+        await updateDoc(doc(db, "bookings", bookingId), {
+            groupId: groupId,
+            updatedAt: serverTimestamp()
+        });
+
+        return { success: true };
+    } catch (error: any) {
+        console.error("[Firestore Error] addToBookingGroup:", error);
+        return { success: false, error: error.message };
+    }
+}
+

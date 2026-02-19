@@ -13,6 +13,12 @@ type SuggestDestinationsOutput = any;
 import { getAllBookingsAsJsonString } from "@/lib/firestoreClient";
 import { Label } from "@/components/ui/label";
 
+interface Suggestion {
+  destination: string;
+  route: string;
+  reason: string;
+}
+
 export function SmartSuggestionTool() {
   const [pastBookingData, setPastBookingData] = useState<string>("");
   const [popularTravelTrends, setPopularTravelTrends] = useState<string>(
@@ -23,7 +29,7 @@ export function SmartSuggestionTool() {
       { trend: "Cultural tours in historic cities", popularity: "Low" },
     ], null, 2)
   );
-  const [suggestions, setSuggestions] = useState<SuggestDestinationsOutput | null>(null);
+  const [suggestions, setSuggestions] = useState<Suggestion[] | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [isLoadingBookings, setIsLoadingBookings] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);

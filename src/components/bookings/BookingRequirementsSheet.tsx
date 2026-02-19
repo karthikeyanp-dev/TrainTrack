@@ -40,6 +40,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { cn } from "@/lib/utils";
 
 import { getAccounts } from "@/lib/accountsClient";
 import type { IrctcAccount } from "@/types/account";
@@ -64,9 +65,20 @@ type FormValues = z.infer<typeof FormSchema>;
 interface BookingRequirementsSheetProps {
   booking: Booking;
   iconComponent?: LucideIcon;
+  isGroupMode?: boolean;
+  groupBookings?: Booking[];
+  onSaveGroup?: (preparedAccounts: PreparedAccount[]) => Promise<{ success: boolean; error?: string }>;
+  className?: string;
 }
 
-export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequirementsSheetProps) {
+export function BookingRequirementsSheet({ 
+  booking, 
+  iconComponent, 
+  isGroupMode = false, 
+  groupBookings = [],
+  onSaveGroup,
+  className
+}: BookingRequirementsSheetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [availableAccounts, setAvailableAccounts] = useState<IrctcAccount[]>([]);
   const [availableHandlers, setAvailableHandlers] = useState<Handler[]>([]);
@@ -87,15 +99,24 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
   });
 
   const mutation = useMutation({
-    mutationFn: (data: PreparedAccount[]) =>
-      updateBookingRequirements(booking.id, data),
+    mutationFn: async (data: PreparedAccount[]) => {
+      if (isGroupMode && onSaveGroup) {
+        return onSaveGroup(data);
+      } else {
+        return updateBookingRequirements(booking.id, data);
+      }
+    },
     onSuccess: (result) => {
       if (result.success) {
         queryClient.invalidateQueries({ queryKey: ["bookings"] });
-        queryClient.invalidateQueries({ queryKey: ["booking", booking.id] });
+        if (!isGroupMode) {
+          queryClient.invalidateQueries({ queryKey: ["booking", booking.id] });
+        }
         toast({
           title: "Requirements Updated",
-          description: "Booking requirements have been saved successfully.",
+          description: isGroupMode 
+            ? "Shared requirements saved for all bookings in group."
+            : "Booking requirements have been saved successfully.",
         });
         setIsOpen(false);
       } else {
@@ -181,7 +202,7 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
         <Button
           variant="outline"
           size="sm"
-          className="flex-1 aspect-square p-2 relative"
+          className={cn("flex-1 aspect-square p-2 relative", className)}
           title="Booking Requirements"
         >
           <IconComponent className="h-4 w-4" />
@@ -194,9 +215,12 @@ export function BookingRequirementsSheet({ booking, iconComponent }: BookingRequ
       </SheetTrigger>
       <SheetContent side="bottom" className="h-[85vh] flex flex-col bg-card" onOpenAutoFocus={(e) => e.preventDefault()}>
         <SheetHeader>
-          <SheetTitle>Booking Requirements</SheetTitle>
+          <SheetTitle>{isGroupMode ? "Group Booking Requirements" : "Booking Requirements"}</SheetTitle>
           <SheetDescription>
-            Add prepared account details for this booking. These will be included when sharing.
+            {isGroupMode 
+              ? `Add prepared account details for all ${groupBookings.length} bookings in this group. These will be shared across all bookings.`
+              : "Add prepared account details for this booking. These will be included when sharing."
+            }
           </SheetDescription>
         </SheetHeader>
 

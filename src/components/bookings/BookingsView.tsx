@@ -9,7 +9,13 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Search, Loader2 } from "lucide-react";
 import { DateGroupHeading } from "@/components/bookings/DateGroupHeading";
 import { BookingList } from "@/components/bookings/BookingList";
+import { BookingGroupCard } from "@/components/bookings/BookingGroupCard";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+
+import { Button } from "@/components/ui/button";
+import { createBookingGroup } from "@/lib/firestoreClient";
+import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 
 interface BookingsViewProps {
   allBookings: Booking[];
@@ -36,6 +42,50 @@ const groupBookingsByDate = (bookings: Booking[], dateKey: 'bookingDate' | 'jour
 const SL_CLASSES: TrainClass[] = ["SL", "UR", "2S"];
 
 export function BookingsView({ allBookings, pendingBookings, allBookingDates, searchQuery }: BookingsViewProps) {
+    const { toast } = useToast();
+    const router = useRouter();
+    const [selectionMode, setSelectionMode] = useState(false);
+    const [selectedBookingIds, setSelectedBookingIds] = useState<Set<string>>(new Set());
+    const [isGrouping, setIsGrouping] = useState(false);
+
+    const handleToggleSelection = (id: string) => {
+        const newSet = new Set(selectedBookingIds);
+        if (newSet.has(id)) {
+            newSet.delete(id);
+        } else {
+            newSet.add(id);
+        }
+        setSelectedBookingIds(newSet);
+    };
+
+    const handleGroupBookings = async () => {
+        if (selectedBookingIds.size < 2) {
+            toast({ title: "Error", description: "Select at least 2 bookings to group.", variant: "destructive" });
+            return;
+        }
+
+        setIsGrouping(true);
+        try {
+            const result = await createBookingGroup(Array.from(selectedBookingIds));
+            if (result.success) {
+                toast({ title: "Group Created", description: `Successfully grouped ${selectedBookingIds.size} bookings.` });
+                setSelectionMode(false);
+                setSelectedBookingIds(new Set());
+                // Invalidate query to refresh data
+                // router.refresh() might not be enough if using client-side fetching hooks
+                // Assuming useBookings hook handles real-time updates or we need to trigger a refetch
+                // Since this component receives props, the parent page might need to refetch
+                router.refresh(); 
+            } else {
+                toast({ title: "Error", description: result.error, variant: "destructive" });
+            }
+        } catch (error) {
+            toast({ title: "Error", description: "An unexpected error occurred.", variant: "destructive" });
+        } finally {
+            setIsGrouping(false);
+        }
+    };
+
     const [page, setPage] = useState(1);
     const [isLoading, setIsLoading] = useState<boolean>(false);
 
@@ -107,9 +157,22 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
 
 
   const renderBookingsForDate = (bookingsForDate: Booking[]) => {
-    // Separate General (includes legacy 'Regular') and Tatkal bookings
-        const generalBookings = bookingsForDate.filter(b => ['General', 'Regular'].includes(String(b.bookingType)));
-        const tatkalBookings = bookingsForDate.filter(b => b.bookingType === 'Tatkal');
+    // 1. Extract groups
+    const groups: Record<string, Booking[]> = {};
+    const singles: Booking[] = [];
+    
+    bookingsForDate.forEach(b => {
+        if (b.groupId) {
+            if (!groups[b.groupId]) groups[b.groupId] = [];
+            groups[b.groupId].push(b);
+        } else {
+            singles.push(b);
+        }
+    });
+
+    // Separate General (includes legacy 'Regular') and Tatkal bookings from SINGLES
+        const generalBookings = singles.filter(b => ['General', 'Regular'].includes(String(b.bookingType)));
+        const tatkalBookings = singles.filter(b => b.bookingType === 'Tatkal');
         
         // For General, separate by AC/SL classes
         const generalAcBookings = generalBookings.filter(b => !SL_CLASSES.includes(b.classType));
@@ -119,30 +182,50 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
         const tatkalAcBookings = tatkalBookings.filter(b => !SL_CLASSES.includes(b.classType));
         const tatkalSlBookings = tatkalBookings.filter(b => SL_CLASSES.includes(b.classType));
 
+        const listProps = {
+            selectionMode,
+            selectedBookingIds,
+            onToggleSelection: handleToggleSelection
+        };
+
         return (
           <>
+            {/* Render Groups First */}
+            {Object.entries(groups).length > 0 && (
+                <div className="space-y-4 mb-6">
+                    {Object.entries(groups).map(([groupId, groupBookings]) => (
+                        <BookingGroupCard 
+                            key={groupId} 
+                            groupId={groupId} 
+                            bookings={groupBookings} 
+                            {...listProps}
+                        />
+                    ))}
+                </div>
+            )}
+
             {generalAcBookings.length > 0 && (
               <div className="mt-4">
                 <h4 className="text-lg font-medium mb-2 text-amber-700 dark:text-amber-600">General - AC Bookings</h4>
-                <BookingList bookings={generalAcBookings} />
+                <BookingList bookings={generalAcBookings} {...listProps} />
               </div>
             )}
             {generalSlBookings.length > 0 && (
               <div className="mt-4">
                 <h4 className="text-lg font-medium mb-2 text-amber-700 dark:text-amber-600">General - SL Bookings</h4>
-                <BookingList bookings={generalSlBookings} />
+                <BookingList bookings={generalSlBookings} {...listProps} />
               </div>
             )}
             {tatkalAcBookings.length > 0 && (
               <div className="mt-4">
                 <h4 className="text-lg font-medium mb-2 text-primary">Tatkal - AC Bookings</h4>
-                <BookingList bookings={tatkalAcBookings} />
+                <BookingList bookings={tatkalAcBookings} {...listProps} />
               </div>
             )}
             {tatkalSlBookings.length > 0 && (
               <div className="mt-4">
                 <h4 className="text-lg font-medium mb-2 text-accent">Tatkal - SL Bookings</h4>
-                <BookingList bookings={tatkalSlBookings} />
+                <BookingList bookings={tatkalSlBookings} {...listProps} />
               </div>
             )}
           </>
@@ -158,6 +241,25 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
 
     return (
         <>
+            <div className="flex justify-end items-center mb-4 gap-2">
+                {selectionMode ? (
+                    <>
+                         <span className="text-sm font-medium mr-2">{selectedBookingIds.size} Selected</span>
+                         <Button variant="outline" size="sm" onClick={() => { setSelectionMode(false); setSelectedBookingIds(new Set()); }}>
+                            Cancel
+                         </Button>
+                         <Button size="sm" onClick={handleGroupBookings} disabled={selectedBookingIds.size < 2 || isGrouping}>
+                            {isGrouping ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            Group Selected
+                         </Button>
+                    </>
+                ) : (
+                    <Button variant="outline" size="sm" onClick={() => setSelectionMode(true)}>
+                        Select Multiple
+                    </Button>
+                )}
+            </div>
+
             <Tabs defaultValue="pending" className="w-full">
               <TabsList className="grid w-full grid-cols-3 md:w-[400px]">
                 <TabsTrigger value="pending">Pending</TabsTrigger>

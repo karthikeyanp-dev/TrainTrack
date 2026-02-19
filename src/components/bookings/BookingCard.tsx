@@ -47,11 +47,16 @@ import { getAccountByUsername, updateAccount } from "@/lib/accountsClient";
 import { updateBookingRefundDetails } from "@/lib/firestoreClient";
 import type { RefundDetails } from "@/types/booking";
 import { Input } from "@/components/ui/input";
-
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface BookingCardProps {
   booking: Booking;
   isRefundMode?: boolean;
+  selectionMode?: boolean;
+  isSelected?: boolean;
+  onToggleSelection?: (id: string) => void;
+  hideActions?: boolean;
+  hideSharedDetails?: boolean;
 }
 
 function getStatusIcon(status: BookingStatus) {
@@ -67,7 +72,7 @@ function getStatusIcon(status: BookingStatus) {
   }
 }
 
-export function BookingCard({ booking, isRefundMode = false }: BookingCardProps) {
+export function BookingCard({ booking, isRefundMode = false, selectionMode = false, isSelected = false, onToggleSelection, hideActions = false, hideSharedDetails = false }: BookingCardProps) {
   const labelHighlightStyle = { color: '#AB945E', fontWeight: 700 };
   const sourceDestStyle = { color: '#dfa92a', fontWeight: 700 };
   const queryClient = useQueryClient();
@@ -562,39 +567,56 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
   const displayClass = `${booking.bookingType === 'Tatkal' ? 'T' : 'G'}-${compactClass}`;
 
   return (
-    <Card className="w-full shadow-md hover:shadow-lg transition-shadow duration-200 flex flex-col">
+    <Card className={cn(
+      "w-full shadow-md hover:shadow-lg transition-shadow duration-200 flex flex-col relative",
+      isSelected && "ring-2 ring-primary border-primary"
+    )}>
       <CardHeader>
-        <div className="space-y-2">
-          {/* First row: Source-Destination and Status Badge */}
-          <div className="flex justify-between items-start gap-2">
-            <CardTitle className="text-lg md:text-xl flex-shrink min-w-0">
-              <span style={sourceDestStyle}>{booking.source.toUpperCase()}</span> <span className="text-sm text-gray-400">to</span> <span style={sourceDestStyle}>{booking.destination.toUpperCase()}</span>
-            </CardTitle>
-            <div className="flex-shrink-0">
-              <StatusBadge status={booking.status} />
+        <div className="flex gap-3 items-start">
+          {selectionMode && (
+            <Checkbox 
+              checked={isSelected} 
+              onCheckedChange={() => onToggleSelection?.(booking.id)} 
+              className="mt-1.5"
+            />
+          )}
+          <div className="space-y-2 flex-1 min-w-0">
+            {/* First row: Source-Destination and Status Badge */}
+            <div className="flex justify-between items-start gap-2">
+              <CardTitle className="text-lg md:text-xl flex-shrink min-w-0">
+                <span style={sourceDestStyle}>{booking.source.toUpperCase()}</span> <span className="text-sm text-gray-400">to</span> <span style={sourceDestStyle}>{booking.destination.toUpperCase()}</span>
+              </CardTitle>
+              <div className="flex-shrink-0">
+                <StatusBadge status={booking.status} />
+              </div>
             </div>
-          </div>
-          
-          {/* Second row: For userName and Class display */}
-          <div className="flex justify-between items-start gap-2">
-            <CardDescription className="flex-1 min-w-0">
-              For <b>{booking.userName}</b>
-            </CardDescription>
-            <div className="flex flex-col items-end flex-shrink-0">
-              <span 
-                className={cn(
-                  "text-3xl font-semibold leading-none",
-                  booking.bookingType === 'Tatkal' ? "text-primary" : "text-amber-700 dark:text-amber-600"
+            
+            {/* Second row: For userName and Class display */}
+            <div className="flex justify-between items-start gap-2">
+              <CardDescription className="flex-1 min-w-0">
+                For <b>{booking.userName}</b>
+                {booking.groupId && (
+                   <span className="ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80">
+                     Grouped
+                   </span>
                 )}
-                title={`${booking.bookingType} - ${booking.classType}`}
-              >
-                {displayClass}
-              </span>
-              {booking.classType.includes("(") && (
-                <span className="text-xs text-muted-foreground mt-1">
-                  {booking.classType.match(/\((.*?)\)/)?.[1]}
+              </CardDescription>
+              <div className="flex flex-col items-end flex-shrink-0">
+                <span 
+                  className={cn(
+                    "text-3xl font-semibold leading-none",
+                    booking.bookingType === 'Tatkal' ? "text-primary" : "text-amber-700 dark:text-amber-600"
+                  )}
+                  title={`${booking.bookingType} - ${booking.classType}`}
+                >
+                  {displayClass}
                 </span>
-              )}
+                {booking.classType.includes("(") && (
+                  <span className="text-xs text-muted-foreground mt-1">
+                    {booking.classType.match(/\((.*?)\)/)?.[1]}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -701,7 +723,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
         )}
 
         {/* Prepared Accounts Accordion */}
-        {booking.preparedAccounts && booking.preparedAccounts.length > 0 && (
+        {!hideSharedDetails && booking.preparedAccounts && booking.preparedAccounts.length > 0 && (
           <Accordion type="single" collapsible className="w-full">
             <AccordionItem value="accounts" className="border-none">
               <AccordionTrigger className="py-2 text-sm hover:no-underline">
@@ -769,7 +791,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
         )}
 
         {/* Booking Details Accordion */}
-        {bookingRecord && (
+        {!hideSharedDetails && bookingRecord && (
           <Accordion type="single" collapsible className="w-full">
             <AccordionItem value="booking-details" className="border-none">
               <AccordionTrigger className="py-2 text-sm hover:no-underline">
@@ -840,136 +862,140 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
           </div>
         </div>
         
-        {/* Action buttons with icons only for mobile compatibility */}
-         {!isRefundMode ? (
-          <div className="flex gap-1">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleCopy}
-              className="flex-1 aspect-square p-2"
-              title="Duplicate"
-            >
-              <Copy className="h-4 w-4" />
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleEdit}
-              className="flex-1 aspect-square p-2"
-              title="Edit"
-            >
-              <Edit3 className="h-4 w-4" />
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleShare}
-              className="flex-1 aspect-square p-2"
-              title="Share"
-            >
-              <Share2 className="h-4 w-4" />
-            </Button>
-            
-            {/* Show Refund Button if applicable */}
-            {((booking.status === "Booking Failed (Paid)" || booking.status === "CNF & Cancelled") && !booking.refundDetails) && (
-              <Button
-                 variant="outline"
-                 size="sm"
-                 onClick={handleRefundClick}
-                 className="flex-1 aspect-square p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                 title="Process Refund"
-              >
-                 <Receipt className="h-4 w-4" />
-              </Button>
+        {!hideActions && (
+          <>
+            {/* Action buttons with icons only for mobile compatibility */}
+            {!isRefundMode ? (
+              <div className="flex gap-1">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleCopy}
+                  className="flex-1 aspect-square p-2"
+                  title="Duplicate"
+                >
+                  <Copy className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleEdit}
+                  className="flex-1 aspect-square p-2"
+                  title="Edit"
+                >
+                  <Edit3 className="h-4 w-4" />
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleShare}
+                  className="flex-1 aspect-square p-2"
+                  title="Share"
+                >
+                  <Share2 className="h-4 w-4" />
+                </Button>
+                
+                {/* Show Refund Button if applicable */}
+                {((booking.status === "Booking Failed (Paid)" || booking.status === "CNF & Cancelled") && !booking.refundDetails) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRefundClick}
+                    className="flex-1 aspect-square p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                    title="Process Refund"
+                  >
+                    <Receipt className="h-4 w-4" />
+                  </Button>
+                )}
+
+                <BookingRequirementsSheet booking={booking} iconComponent={CreditCard} />
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setShowDeleteDialog(true)}
+                  className="flex-1 aspect-square p-2 text-destructive hover:text-destructive"
+                  title="Delete"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ) : (
+              <div className="flex gap-1">
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={booking.refundDetails ? handleEditRefund : handleRefundClick}
+                  className="flex-1"
+                >
+                  <Receipt className="mr-2 h-4 w-4" />
+                  {booking.refundDetails ? "Update Refund" : "Process Refund"}
+                </Button>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => setShowDeleteDialog(true)}
+                  className="aspect-square p-2 text-destructive hover:text-destructive"
+                  title="Delete"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
             )}
+            
 
-            <BookingRequirementsSheet booking={booking} iconComponent={CreditCard} />
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setShowDeleteDialog(true)}
-              className="flex-1 aspect-square p-2 text-destructive hover:text-destructive"
-              title="Delete"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-         ) : (
-          <div className="flex gap-1">
-            <Button
-              variant="default"
-              size="sm"
-              onClick={booking.refundDetails ? handleEditRefund : handleRefundClick}
-              className="flex-1"
-            >
-              <Receipt className="mr-2 h-4 w-4" />
-              {booking.refundDetails ? "Update Refund" : "Process Refund"}
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setShowDeleteDialog(true)}
-              className="aspect-square p-2 text-destructive hover:text-destructive"
-              title="Delete"
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          </div>
-         )}
-        
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor={`status-select-${booking.id}`} className="text-xs" style={labelHighlightStyle}>Update Booking Status:</Label>
+                <Select
+                    value={booking.status}
+                    onValueChange={handleStatusSelect}
+                    disabled={statusUpdateMutation.isPending}
+                    name={`status-select-${booking.id}`}
+                    aria-labelledby={`status-select-label-${booking.id}`}
+                >
+                    <SelectTrigger id={`status-select-${booking.id}`} className="w-full">
+                        <SelectValue placeholder="Update status" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        {ALL_BOOKING_STATUSES.filter((statusOption) => {
+                          const currentStatus = booking.status;
 
-        <div className="flex flex-col gap-1.5">
-           <Label htmlFor={`status-select-${booking.id}`} className="text-xs" style={labelHighlightStyle}>Update Booking Status:</Label>
-            <Select
-                value={booking.status}
-                onValueChange={handleStatusSelect}
-                disabled={statusUpdateMutation.isPending}
-                name={`status-select-${booking.id}`}
-                aria-labelledby={`status-select-label-${booking.id}`}
-            >
-                <SelectTrigger id={`status-select-${booking.id}`} className="w-full">
-                    <SelectValue placeholder="Update status" />
-                </SelectTrigger>
-                <SelectContent>
-                    {ALL_BOOKING_STATUSES.filter((statusOption) => {
-                      const currentStatus = booking.status;
+                          // If Requested - show: Requested, Booked, Booking Failed (Paid), Booking Failed (Unpaid), Missed, User Cancelled
+                          if (currentStatus === "Requested") {
+                            return ["Requested", "Booked", "Booking Failed (Paid)", "Booking Failed (Unpaid)", "Missed", "User Cancelled"].includes(statusOption);
+                          }
 
-                      // If Requested - show: Requested, Booked, Booking Failed (Paid), Booking Failed (Unpaid), Missed, User Cancelled
-                      if (currentStatus === "Requested") {
-                        return ["Requested", "Booked", "Booking Failed (Paid)", "Booking Failed (Unpaid)", "Missed", "User Cancelled"].includes(statusOption);
-                      }
+                          // If Booked - show: Booked, Requested, CNF & Cancelled
+                          if (currentStatus === "Booked") {
+                            return ["Booked", "Requested", "CNF & Cancelled"].includes(statusOption);
+                          }
 
-                      // If Booked - show: Booked, Requested, CNF & Cancelled
-                      if (currentStatus === "Booked") {
-                        return ["Booked", "Requested", "CNF & Cancelled"].includes(statusOption);
-                      }
+                          // If CNF & Cancelled - show: CNF & Cancelled, Requested
+                          if (currentStatus === "CNF & Cancelled") {
+                            return ["CNF & Cancelled", "Requested"].includes(statusOption);
+                          }
 
-                      // If CNF & Cancelled - show: CNF & Cancelled, Requested
-                      if (currentStatus === "CNF & Cancelled") {
-                        return ["CNF & Cancelled", "Requested"].includes(statusOption);
-                      }
+                          // If Booking Failed (Unpaid), Missed, User Cancelled - show: current status and Requested
+                          if (["Booking Failed (Unpaid)", "Missed", "User Cancelled"].includes(currentStatus)) {
+                            return [currentStatus, "Requested"].includes(statusOption);
+                          }
 
-                      // If Booking Failed (Unpaid), Missed, User Cancelled - show: current status and Requested
-                      if (["Booking Failed (Unpaid)", "Missed", "User Cancelled"].includes(currentStatus)) {
-                        return [currentStatus, "Requested"].includes(statusOption);
-                      }
+                          // If Booking Failed (Paid) - show: current status and Requested (handled in refund flow)
+                          if (currentStatus === "Booking Failed (Paid)") {
+                            return [currentStatus, "Requested"].includes(statusOption);
+                          }
 
-                      // If Booking Failed (Paid) - show: current status and Requested (handled in refund flow)
-                      if (currentStatus === "Booking Failed (Paid)") {
-                        return [currentStatus, "Requested"].includes(statusOption);
-                      }
-
-                      // Default fallback
-                      return true;
-                    }).map((statusOption) => (
-                    <SelectItem key={statusOption} value={statusOption}>
-                        {statusOption}
-                    </SelectItem>
-                    ))}
-                </SelectContent>
-            </Select>
-        </div>
+                          // Default fallback
+                          return true;
+                        }).map((statusOption) => (
+                        <SelectItem key={statusOption} value={statusOption}>
+                            {statusOption}
+                        </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+            </div>
+          </>
+        )}
 
         <AlertDialog open={showStatusConfirmDialog} onOpenChange={setShowStatusConfirmDialog}>
           <AlertDialogContent>
