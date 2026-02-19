@@ -21,5 +21,10 @@ service cloud.firestore {
     match /handlers/{handlerId} {
       allow read, write: if true;
     }
+
+    // Booking Groups collection
+    match /bookingGroups/{groupId} {
+      allow read, write: if true;
+    }
   }
 }
