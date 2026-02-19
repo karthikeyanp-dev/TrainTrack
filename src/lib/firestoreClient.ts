@@ -318,6 +318,30 @@ export async function updateBookingStatus(
   }
 }
 
+/**
+ * Update status for multiple bookings in a group
+ */
+export async function updateGroupBookingStatus(
+  bookingIds: string[],
+  status: BookingStatus,
+  reason?: string,
+  handler?: string
+): Promise<{ success: boolean; error?: string }> {
+  if (!db) {
+    console.error("[Firestore Error] Database not initialized");
+    return { success: false, error: "Database not initialized" };
+  }
+
+  try {
+    const promises = bookingIds.map(id => updateBookingStatus(id, status, reason, handler));
+    await Promise.all(promises);
+    return { success: true };
+  } catch (error: any) {
+    console.error("[Firestore Error] updateGroupBookingStatus:", error);
+    return { success: false, error: error.message || "Failed to update group status" };
+  }
+}
+
 export async function updateBookingRequirements(
   id: string,
   preparedAccounts: PreparedAccount[]
@@ -607,6 +631,53 @@ export async function saveBookingRecord(data: {
   } catch (error: any) {
     console.error("[Firestore Error] saveBookingRecord:", error);
     return { success: false, error: error.message || "Failed to save booking record" };
+  }
+}
+
+/**
+ * Save booking records for multiple bookings in a group
+ */
+export async function saveGroupBookingRecords(data: {
+  bookingIds: string[];
+  bookedBy: string;
+  bookedAccountUsername: string;
+  totalAmount: number;
+  methodUsed: string;
+  passengerCounts: Record<string, number>; // bookingId -> passenger count
+}): Promise<{ success: boolean; error?: string }> {
+  if (!db) {
+    return { success: false, error: "Firestore database is not configured" };
+  }
+
+  try {
+    const totalPassengers = Object.values(data.passengerCounts).reduce((sum, count) => sum + count, 0);
+    const amountPerPassenger = data.totalAmount / totalPassengers;
+
+    // Save records for all bookings with amount split by passenger count
+    const promises = data.bookingIds.map(bookingId => {
+      const passengerCount = data.passengerCounts[bookingId] || 0;
+      const bookingShare = amountPerPassenger * passengerCount;
+      
+      return saveBookingRecord({
+        bookingId,
+        bookedBy: data.bookedBy,
+        bookedAccountUsername: data.bookedAccountUsername,
+        amountCharged: Number(bookingShare.toFixed(2)),
+        methodUsed: data.methodUsed,
+      });
+    });
+
+    const results = await Promise.all(promises);
+    const allSuccess = results.every(r => r.success);
+    
+    if (!allSuccess) {
+      throw new Error("Some bookings failed to save");
+    }
+    
+    return { success: true };
+  } catch (error: any) {
+    console.error("[Firestore Error] saveGroupBookingRecords:", error);
+    return { success: false, error: error.message || "Failed to save group booking records" };
   }
 }
 

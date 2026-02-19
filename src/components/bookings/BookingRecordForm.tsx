@@ -15,11 +15,12 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, CheckCircle2, Trash2 } from "lucide-react";
 import type { IrctcAccount } from "@/types/account";
+import type { Booking } from "@/types/booking";
 import { AccountSelect } from "@/components/accounts/AccountSelect";
 import { getAccounts } from "@/lib/accountsClient";
 import type { PaymentMethod, BookingRecord } from "@/types/bookingRecord";
 import { ALL_PAYMENT_METHODS } from "@/types/bookingRecord";
-import { getBookingRecordByBookingId, saveBookingRecord, deleteBookingRecord } from "@/lib/firestoreClient";
+import { getBookingRecordByBookingId, saveBookingRecord, deleteBookingRecord, saveGroupBookingRecords } from "@/lib/firestoreClient";
 import { getHandlers } from "@/lib/handlersClient";
 import type { Handler } from "@/types/handler";
 
@@ -28,6 +29,8 @@ interface BookingRecordFormProps {
   onClose?: () => void;
   onSave?: () => void;
   hideWrapper?: boolean;
+  isGroupMode?: boolean;
+  groupBookings?: Booking[];
 }
 
 interface FormState {
@@ -37,7 +40,7 @@ interface FormState {
   methodUsed: PaymentMethod | "";
 }
 
-export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = false }: BookingRecordFormProps) {
+export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = false, isGroupMode = false, groupBookings = [] }: BookingRecordFormProps) {
   const [accounts, setAccounts] = useState<IrctcAccount[]>([]);
   const [handlers, setHandlers] = useState<Handler[]>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
@@ -177,35 +180,68 @@ export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = fa
       return;
     }
 
-    const result = await saveBookingRecord({
-      bookingId,
-      bookedBy: form.bookedBy.trim(),
-      bookedAccountUsername: form.bookedAccountUsername.trim(),
-      amountCharged: amountNum,
-      methodUsed: form.methodUsed,
-    });
-
-    if (result.success && result.record) {
-      toast({
-        title: existingRecord ? "Record Updated" : "Record Saved",
-        description: "Booked details have been saved successfully.",
+    // In group mode, save for all bookings in the group
+    if (isGroupMode && groupBookings.length > 0) {
+      const passengerCounts: Record<string, number> = {};
+      groupBookings.forEach(b => {
+        passengerCounts[b.id] = b.passengers.length;
       });
-      setExistingRecord(result.record);
-      if (onSave) {
-        onSave();
-      } else if (onClose) {
-        onClose();
+
+      const groupResult = await saveGroupBookingRecords({
+        bookingIds: groupBookings.map(b => b.id),
+        bookedBy: form.bookedBy.trim(),
+        bookedAccountUsername: form.bookedAccountUsername.trim(),
+        totalAmount: amountNum,
+        methodUsed: form.methodUsed,
+        passengerCounts,
+      });
+
+      if (groupResult.success) {
+        toast({
+          title: "Record Saved for Group",
+          description: `Booked details have been saved for all ${groupBookings.length} bookings.`,
+        });
+        if (onSave) {
+          onSave();
+        } else if (onClose) {
+          onClose();
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: groupResult.error || "Failed to save group booking records",
+          variant: "destructive",
+        });
       }
     } else {
-      const errorMessage = result.error || (result.errors?.formErrors?.[0]) || "Failed to save record";
-      toast({
-        title: "Error Saving Record",
-        description: errorMessage,
-        variant: "destructive",
+      // Single booking mode
+      const result = await saveBookingRecord({
+        bookingId,
+        bookedBy: form.bookedBy.trim(),
+        bookedAccountUsername: form.bookedAccountUsername.trim(),
+        amountCharged: amountNum,
+        methodUsed: form.methodUsed,
       });
-    }
 
-    setIsSubmitting(false);
+      if (result.success && result.record) {
+        toast({
+          title: existingRecord ? "Record Updated" : "Record Saved",
+          description: "Booked details have been saved successfully.",
+        });
+        setExistingRecord(result.record);
+        if (onSave) {
+          onSave();
+        } else if (onClose) {
+          onClose();
+        }
+      } else {
+        toast({
+          title: "Error",
+          description: result.error || "Failed to save booking record",
+          variant: "destructive",
+        });
+      }
+    }
   };
 
   if (isLoadingAccounts) {

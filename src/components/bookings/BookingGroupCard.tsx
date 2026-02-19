@@ -22,6 +22,19 @@ import { useRouter } from "next/navigation";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { ALL_BOOKING_STATUSES, type BookingStatus } from "@/types/booking";
+import { updateGroupBookingStatus } from "@/lib/firestoreClient";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { StatusReasonDialog } from "./StatusReasonDialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { BookingRecordForm } from "./BookingRecordForm";
 
 interface BookingGroupCardProps {
   groupId: string;
@@ -48,7 +61,6 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
   const hasSharedPreparedAccounts = bookings.some(b => b.preparedAccounts && b.preparedAccounts.length > 0);
   const firstBookingWithAccounts = bookings.find(b => b.preparedAccounts && b.preparedAccounts.length > 0) || bookings[0];
   
-  const [showBookedDetailsDialog, setShowBookedDetailsDialog] = useState(false);
   const [groupBookingDetails, setGroupBookingDetails] = useState<{
     bookedBy: string;
     bookedAccountUsername: string;
@@ -247,53 +259,6 @@ ${bookingsText}${preparedAccountsText}${bookedDetailsText}
     }
   };
 
-  // Handle saving booking record for the entire group
-  const handleSaveGroupRecord = async (data: any) => {
-    try {
-      const totalPassengers = bookings.reduce((sum, b) => sum + b.passengers.length, 0);
-      const amountPerPassenger = data.amountCharged / totalPassengers;
-
-      // Save the same booking record for all bookings in the group, but split amount by passenger count
-      const promises = bookings.map(booking => {
-        const bookingShare = amountPerPassenger * booking.passengers.length;
-        return saveBookingRecord({
-          bookingId: booking.id,
-          bookedBy: data.bookedBy,
-          bookedAccountUsername: data.bookedAccountUsername,
-          amountCharged: Number(bookingShare.toFixed(2)), // Round to 2 decimals
-          methodUsed: data.methodUsed,
-        });
-      });
-      const results = await Promise.all(promises);
-      const allSuccess = results.every(r => r.success);
-      
-      if (allSuccess) {
-        const splitByBooking = bookings.map(b => ({
-          bookingId: b.id,
-          bookingFor: b.userName,
-          passengers: b.passengers.length,
-          amountCharged: Number((amountPerPassenger * b.passengers.length).toFixed(2)),
-        }));
-        const totalAmount = splitByBooking.reduce((sum, x) => sum + x.amountCharged, 0);
-        setGroupBookingDetails({
-          bookedBy: data.bookedBy,
-          bookedAccountUsername: data.bookedAccountUsername,
-          totalAmount: Number(totalAmount.toFixed(2)),
-          methodUsed: data.methodUsed,
-          splitByBooking,
-        });
-        toast({ title: "Booked Details Saved", description: `Saved for all ${bookings.length} bookings in group. Amount split by passenger count.` });
-        setShowBookedDetailsDialog(false);
-        router.refresh();
-        return { success: true };
-      } else {
-        throw new Error("Some bookings failed to save");
-      }
-    } catch (error) {
-      toast({ title: "Error", description: "Failed to save booked details.", variant: "destructive" });
-      return { success: false, error: "Failed to save" };
-    }
-  };
 
   return (
     <Card className="w-full border-2 border-primary/20 overflow-hidden">
@@ -317,10 +282,10 @@ ${bookingsText}${preparedAccountsText}${bookedDetailsText}
                 variant="ghost"
                 size="sm"
                 onClick={handleShare}
-                className="h-8 w-8 sm:w-auto px-0 sm:px-2 justify-center gap-2 bg-primary/10 hover:bg-primary/20 text-primary hover:text-primary"
+                className="h-8 w-8 px-0 justify-center bg-primary/10 hover:bg-primary/20 text-primary hover:text-primary"
+                title="Share"
               >
-                <Share2 className="h-5 w-5 sm:mr-1" />
-                <span className="hidden sm:inline">Share</span>
+                <Share2 className="h-5 w-5" />
               </Button>
             )}
             {!selectionMode && (
@@ -328,10 +293,10 @@ ${bookingsText}${preparedAccountsText}${bookedDetailsText}
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowUngroupDialog(true)} 
-                className="h-8 w-8 sm:w-auto px-0 sm:px-2 justify-center gap-2 bg-destructive/15 hover:bg-destructive/25 text-[hsl(0_50%_53%)] hover:text-[hsl(0_50%_53%)] border border-destructive/30 hover:border-destructive/50"
+                  className="h-8 w-8 px-0 justify-center bg-destructive/15 hover:bg-destructive/25 text-[hsl(0_50%_53%)] hover:text-[hsl(0_50%_53%)] border border-destructive/30 hover:border-destructive/50"
+                  title="Ungroup"
               >
-                  <Link2Off className="h-5 w-5 sm:mr-1 text-[hsl(0_50%_53%)]" />
-                  <span className="hidden sm:inline">Ungroup</span>
+                  <Link2Off className="h-5 w-5 text-[hsl(0_50%_53%)]" />
               </Button>
             )}
           </div>
@@ -345,7 +310,7 @@ ${bookingsText}${preparedAccountsText}${bookedDetailsText}
       </div>
 
       {/* Shared Actions Section */}
-      <CardContent className="p-4 border-t bg-muted/5 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <CardContent className="p-4 border-t bg-muted/5 grid grid-cols-1 gap-4">
         
         {/* Shared Prepared Accounts Section */}
         <div className="flex flex-col h-full bg-background rounded-lg border shadow-sm overflow-hidden">
@@ -448,17 +413,6 @@ ${bookingsText}${preparedAccountsText}${bookedDetailsText}
                       <Check className="h-3 w-3 text-white" />
                     </span>
                   )}
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowBookedDetailsDialog(true);
-                    }}
-                    className="h-8 px-2 text-primary hover:text-primary/80 hover:bg-primary/10"
-                  >
-                    {hasGroupBookedDetails ? "Update" : "Add"}
-                  </Button>
                 </div>
               </div>
               <AccordionContent className="px-3 pb-3">
@@ -531,6 +485,11 @@ ${bookingsText}${preparedAccountsText}${bookedDetailsText}
         </div>
       </CardContent>
 
+      {/* Group Status Update Section */}
+      <CardContent className="p-4 border-t bg-muted/5">
+        <GroupStatusUpdate bookings={bookings} />
+      </CardContent>
+
       {/* Individual Bookings List */}
       <CardContent className="p-4 bg-muted/10 space-y-4 border-t">
         <h4 className="font-medium text-sm text-muted-foreground mb-2">Individual Bookings</h4>
@@ -542,7 +501,7 @@ ${bookingsText}${preparedAccountsText}${bookedDetailsText}
             isSelected={selectedBookingIds?.has(booking.id)}
             onToggleSelection={onToggleSelection}
             hideActions={true} // Hide actions on individual cards when in group
-            hideSharedDetails={true} // Hide shared details (IDs, Booked Details)
+            hideSharedDetails={true} // Hide shared details (IDs, Booked Details) - shown at group level
           />
         ))}
       </CardContent>
@@ -564,176 +523,226 @@ ${bookingsText}${preparedAccountsText}${bookedDetailsText}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Group Booking Record Dialog */}
-      {showBookedDetailsDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <Card className="w-full max-w-md mx-4">
-            <CardHeader>
-              <CardTitle className="text-lg">
-                {hasGroupBookedDetails ? "Update Group Booked Details" : "Add Group Booked Details"}
-              </CardTitle>
-              <CardDescription>
-                This will apply to all {bookings.length} bookings in the group.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <GroupBookingRecordForm 
-                bookings={bookings}
-                onClose={() => setShowBookedDetailsDialog(false)}
-                onSave={handleSaveGroupRecord}
-              />
-            </CardContent>
-          </Card>
-        </div>
-      )}
     </Card>
   );
 }
 
-// Sub-component for group booking record form
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { getAccounts } from "@/lib/accountsClient";
-import { getHandlers } from "@/lib/handlersClient";
-import type { IrctcAccount } from "@/types/account";
-import type { Handler } from "@/types/handler";
-import { ALL_PAYMENT_METHODS } from "@/types/bookingRecord";
-import type { PaymentMethod } from "@/types/bookingRecord";
-
-interface GroupBookingRecordFormProps {
+// Sub-component for group status update
+interface GroupStatusUpdateProps {
   bookings: Booking[];
-  onClose: () => void;
-  onSave: (data: any) => Promise<{ success: boolean; error?: string }>;
 }
 
-function GroupBookingRecordForm({ bookings, onClose, onSave }: GroupBookingRecordFormProps) {
-  const [accounts, setAccounts] = useState<IrctcAccount[]>([]);
-  const [handlers, setHandlers] = useState<Handler[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
+function GroupStatusUpdate({ bookings }: GroupStatusUpdateProps) {
+  const queryClient = useQueryClient();
   const { toast } = useToast();
-  
-  const [form, setForm] = useState({
-    bookedBy: "",
-    bookedAccountUsername: "",
-    amountCharged: "",
-    methodUsed: "" as PaymentMethod | "",
+  const [showStatusConfirmDialog, setShowStatusConfirmDialog] = useState(false);
+  const [showReasonDialog, setShowReasonDialog] = useState(false);
+  const [showBookedDetailsDialog, setShowBookedDetailsDialog] = useState(false);
+  const [statusToConfirm, setStatusToConfirm] = useState<BookingStatus | null>(null);
+
+  // Get the common status (if all bookings have the same status)
+  const uniqueStatuses = Array.from(new Set(bookings.map(b => b.status)));
+  const currentStatus = uniqueStatuses.length === 1 ? uniqueStatuses[0] : "Mixed";
+
+  const statusUpdateMutation = useMutation({
+    mutationFn: async ({
+      status,
+      reason,
+      handler,
+    }: {
+      status: BookingStatus;
+      reason?: string;
+      handler?: string;
+    }) => {
+      const bookingIds = bookings.map(b => b.id);
+      return await updateGroupBookingStatus(bookingIds, status, reason, handler);
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      
+      if (result.success) {
+        toast({
+          title: "Status Updated",
+          description: `Updated status for ${bookings.length} bookings in group.`,
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to update booking status.",
+          variant: "destructive",
+        });
+      }
+      setShowStatusConfirmDialog(false);
+      setStatusToConfirm(null);
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: `Failed to update status: ${error.message}`,
+        variant: "destructive",
+      });
+      setShowStatusConfirmDialog(false);
+      setStatusToConfirm(null);
+    },
   });
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    setIsLoading(true);
-    try {
-      const [fetchedAccounts, fetchedHandlers] = await Promise.all([
-        getAccounts(),
-        getHandlers(),
-      ]);
-      setAccounts(fetchedAccounts);
-      setHandlers(fetchedHandlers);
-    } catch (error) {
-      toast({ title: "Error", description: "Failed to load data", variant: "destructive" });
-    } finally {
-      setIsLoading(false);
+  const handleStatusSelect = (newStatus: string) => {
+    if (newStatus === "Booked" || newStatus === "Booking Failed (Paid)") {
+      // Show the booked details dialog
+      setStatusToConfirm(newStatus as BookingStatus);
+      setShowBookedDetailsDialog(true);
+    } else if (newStatus === "Missed" || newStatus === "Booking Failed (Unpaid)" || newStatus === "CNF & Cancelled" || newStatus === "User Cancelled") {
+      // Show reason dialog for Missed, Failed, and Cancelled statuses
+      setStatusToConfirm(newStatus as BookingStatus);
+      setShowReasonDialog(true);
+    } else if (newStatus === "Requested" && currentStatus !== "Requested") {
+      // Reverting to Requested
+      setStatusToConfirm(newStatus as BookingStatus);
+      setShowStatusConfirmDialog(true);
+    } else {
+      // Show regular confirmation dialog
+      setStatusToConfirm(newStatus as BookingStatus);
+      setShowStatusConfirmDialog(true);
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    
-    const amountNum = Number(form.amountCharged || 0);
-    if (Number.isNaN(amountNum) || amountNum < 0) {
-      toast({ title: "Invalid Amount", description: "Amount must be a valid number", variant: "destructive" });
-      setIsSubmitting(false);
-      return;
+  const handleReasonConfirm = (reason: string, handler?: string) => {
+    if (statusToConfirm) {
+      statusUpdateMutation.mutate({ status: statusToConfirm, reason, handler });
+      setShowReasonDialog(false);
+      setStatusToConfirm(null);
     }
-
-    const result = await onSave({
-      bookedBy: form.bookedBy,
-      bookedAccountUsername: form.bookedAccountUsername,
-      amountCharged: amountNum,
-      methodUsed: form.methodUsed,
-    });
-
-    if (!result.success) {
-      toast({ title: "Error", description: result.error, variant: "destructive" });
-    }
-    setIsSubmitting(false);
   };
 
-  if (isLoading) {
-    return <div className="flex justify-center p-4"><Loader2 className="h-6 w-6 animate-spin" /></div>;
-  }
+  const handleBookedDetailsSuccess = () => {
+    // Update the status to Booked or Failed (Paid) after record is saved
+    if (statusToConfirm) {
+      statusUpdateMutation.mutate({ status: statusToConfirm });
+    }
+    setShowBookedDetailsDialog(false);
+    setStatusToConfirm(null);
+  };
 
-  const selectedAccount = accounts.find(acc => acc.username === form.bookedAccountUsername);
+  const handleConfirmStatusUpdate = () => {
+    if (statusToConfirm) {
+      statusUpdateMutation.mutate({ status: statusToConfirm, reason: "", handler: "" });
+    }
+  };
+
+  // Get first booking for reference
+  const firstBooking = bookings[0];
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-2">
-        <Label>Booked By</Label>
-        <Select value={form.bookedBy} onValueChange={(v) => setForm(f => ({ ...f, bookedBy: v }))}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select handler" />
+    <div className="space-y-3">
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-xs" style={{ color: '#AB945E', fontWeight: 700 }}>
+          Update Group Booking Status:
+        </Label>
+        <Select
+          value={currentStatus === "Mixed" ? undefined : currentStatus}
+          onValueChange={handleStatusSelect}
+          disabled={statusUpdateMutation.isPending}
+        >
+          <SelectTrigger className="w-full">
+            <SelectValue placeholder={currentStatus === "Mixed" ? "Mixed Status" : "Update status"} />
           </SelectTrigger>
           <SelectContent>
-            {handlers.map(h => <SelectItem key={h.id} value={h.name}>{h.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+            {ALL_BOOKING_STATUSES.filter((statusOption) => {
+              // If Requested - show: Requested, Booked, Booking Failed (Paid), Booking Failed (Unpaid), Missed, User Cancelled
+              if (currentStatus === "Requested") {
+                return ["Requested", "Booked", "Booking Failed (Paid)", "Booking Failed (Unpaid)", "Missed", "User Cancelled"].includes(statusOption);
+              }
 
-      <div className="space-y-2">
-        <Label>Booked Account</Label>
-        <Select value={form.bookedAccountUsername} onValueChange={(v) => setForm(f => ({ ...f, bookedAccountUsername: v }))}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select account" />
-          </SelectTrigger>
-          <SelectContent>
-            {accounts.map(a => <SelectItem key={a.id} value={a.username}>{a.username}</SelectItem>)}
-          </SelectContent>
-        </Select>
-      </div>
+              // If Booked - show: Booked, Requested, CNF & Cancelled
+              if (currentStatus === "Booked") {
+                return ["Booked", "Requested", "CNF & Cancelled"].includes(statusOption);
+              }
 
-      <div className="space-y-2">
-        <Label>Total Amount Charged (₹)</Label>
-        <Input 
-          type="number" 
-          value={form.amountCharged} 
-          onChange={(e) => setForm(f => ({ ...f, amountCharged: e.target.value }))}
-          placeholder="Total amount for the group"
-        />
-        <p className="text-xs text-muted-foreground">
-          Will be split based on number of passengers in each booking.
-        </p>
-      </div>
+              // If CNF & Cancelled - show: CNF & Cancelled, Requested
+              if (currentStatus === "CNF & Cancelled") {
+                return ["CNF & Cancelled", "Requested"].includes(statusOption);
+              }
 
-      <div className="space-y-2">
-        <Label>Payment Method</Label>
-        <Select value={form.methodUsed} onValueChange={(v) => setForm(f => ({ ...f, methodUsed: v as PaymentMethod }))}>
-          <SelectTrigger>
-            <SelectValue placeholder="Select method" />
-          </SelectTrigger>
-          <SelectContent>
-            {ALL_PAYMENT_METHODS.map(m => (
-              <SelectItem key={m} value={m}>
-                {m === 'Wallet' && selectedAccount ? `Wallet (₹${selectedAccount.walletAmount.toFixed(2)})` : m}
+              // If Booking Failed (Unpaid), Missed, User Cancelled - show: current status and Requested
+              if (["Booking Failed (Unpaid)", "Missed", "User Cancelled"].includes(currentStatus)) {
+                return [currentStatus, "Requested"].includes(statusOption);
+              }
+
+              // If Booking Failed (Paid) - show: current status and Requested
+              if (currentStatus === "Booking Failed (Paid)") {
+                return [currentStatus, "Requested"].includes(statusOption);
+              }
+
+              // For Mixed status, show all options
+              return true;
+            }).map((statusOption) => (
+              <SelectItem key={statusOption} value={statusOption}>
+                {statusOption}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
 
-      <div className="flex gap-2 pt-4">
-        <Button type="button" variant="outline" onClick={onClose} className="flex-1">Cancel</Button>
-        <Button type="submit" disabled={isSubmitting} className="flex-1">
-          {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Save for Group
-        </Button>
-      </div>
-    </form>
+      {/* Status Confirmation Dialog */}
+      <AlertDialog open={showStatusConfirmDialog} onOpenChange={setShowStatusConfirmDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirm Status Change</AlertDialogTitle>
+            <AlertDialogDescription>
+              {statusToConfirm === "Requested" && currentStatus !== "Requested" ? (
+                <>
+                  Are you sure you want to revert to "Requested" status for all {bookings.length} bookings in this group?
+                  <span className="block mt-2 font-medium text-amber-600 dark:text-amber-500">
+                    This will clear the status reason, handler, and booked details (if any), returning all bookings to pending state.
+                  </span>
+                </>
+              ) : (
+                <>
+                  Are you sure you want to change the status to "{statusToConfirm}" for all {bookings.length} bookings in this group?
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => { setStatusToConfirm(null); setShowStatusConfirmDialog(false); }}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmStatusUpdate}
+              disabled={statusUpdateMutation.isPending}
+            >
+              {statusUpdateMutation.isPending ? "Updating..." : "Confirm"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Status Reason Dialog */}
+      <StatusReasonDialog
+        open={showReasonDialog}
+        onOpenChange={setShowReasonDialog}
+        status={statusToConfirm || "Missed"}
+        bookingDetails={`Group of ${bookings.length} bookings`}
+        onConfirm={handleReasonConfirm}
+        isLoading={statusUpdateMutation.isPending}
+      />
+
+      {/* Booked Details Dialog */}
+      <Dialog open={showBookedDetailsDialog} onOpenChange={setShowBookedDetailsDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{statusToConfirm === "Booking Failed (Paid)" ? "Add Payment Details" : "Add Booked Details"}</DialogTitle>
+          </DialogHeader>
+          <BookingRecordForm 
+            bookingId={firstBooking.id} 
+            onClose={() => setShowBookedDetailsDialog(false)}
+            onSave={handleBookedDetailsSuccess}
+            hideWrapper={true}
+            isGroupMode={true}
+            groupBookings={bookings}
+          />
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 }
+

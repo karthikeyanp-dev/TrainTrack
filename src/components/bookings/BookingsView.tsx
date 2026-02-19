@@ -192,7 +192,7 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
           <>
             {/* Render Groups First */}
             {Object.entries(groups).length > 0 && (
-                <div className="space-y-4 mb-6">
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
                     {Object.entries(groups).map(([groupId, groupBookings]) => (
                         <BookingGroupCard 
                             key={groupId} 
