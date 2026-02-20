@@ -464,27 +464,52 @@ export async function getBookingRecordByBookingId(bookingId: string): Promise<an
 
   try {
     const recordsCollection = collection(db, "bookingRecords");
-    const q = query(recordsCollection, where("bookingId", "==", bookingId));
-    const querySnapshot = await getDocs(q);
+    
+    // First, check for direct bookingId match (individual bookings)
+    const directQuery = query(recordsCollection, where("bookingId", "==", bookingId));
+    const directSnapshot = await getDocs(directQuery);
 
-    if (querySnapshot.empty) {
-      return null;
+    if (!directSnapshot.empty) {
+      const docSnap = directSnapshot.docs[0];
+      const data = docSnap.data();
+      
+      return {
+        id: docSnap.id,
+        bookingId: data.bookingId,
+        bookingIds: data.bookingIds,
+        groupId: data.groupId,
+        bookedBy: data.bookedBy,
+        bookedAccountUsername: data.bookedAccountUsername,
+        amountCharged: data.amountCharged,
+        methodUsed: data.methodUsed,
+        createdAt: toISOStringSafe(data.createdAt, "createdAt", docSnap.id),
+        updatedAt: toISOStringSafe(data.updatedAt, "updatedAt", docSnap.id),
+      };
     }
 
-    // Return the first matching record
-    const docSnap = querySnapshot.docs[0];
-    const data = docSnap.data();
+    // If not found, check if bookingId exists in any record's bookingIds array (group bookings)
+    const allRecordsQuery = query(recordsCollection, where("bookingIds", "array-contains", bookingId));
+    const groupSnapshot = await getDocs(allRecordsQuery);
     
-    return {
-      id: docSnap.id,
-      bookingId: data.bookingId,
-      bookedBy: data.bookedBy,
-      bookedAccountUsername: data.bookedAccountUsername,
-      amountCharged: data.amountCharged,
-      methodUsed: data.methodUsed,
-      createdAt: toISOStringSafe(data.createdAt, "createdAt", docSnap.id),
-      updatedAt: toISOStringSafe(data.updatedAt, "updatedAt", docSnap.id),
-    };
+    if (!groupSnapshot.empty) {
+      const docSnap = groupSnapshot.docs[0];
+      const data = docSnap.data();
+      
+      return {
+        id: docSnap.id,
+        bookingId: data.bookingId,
+        bookingIds: data.bookingIds,
+        groupId: data.groupId,
+        bookedBy: data.bookedBy,
+        bookedAccountUsername: data.bookedAccountUsername,
+        amountCharged: data.amountCharged,
+        methodUsed: data.methodUsed,
+        createdAt: toISOStringSafe(data.createdAt, "createdAt", docSnap.id),
+        updatedAt: toISOStringSafe(data.updatedAt, "updatedAt", docSnap.id),
+      };
+    }
+
+    return null;
   } catch (error) {
     console.error(`[Firestore Error] getBookingRecordByBookingId (${bookingId}):`, error);
     return null;
@@ -635,46 +660,143 @@ export async function saveBookingRecord(data: {
 }
 
 /**
- * Save booking records for multiple bookings in a group
+ * Save a single booking record for a group of bookings
+ * This creates ONE record for the entire group, so account count increments by +1
  */
 export async function saveGroupBookingRecords(data: {
   bookingIds: string[];
+  groupId: string;
   bookedBy: string;
   bookedAccountUsername: string;
   totalAmount: number;
   methodUsed: string;
-  passengerCounts: Record<string, number>; // bookingId -> passenger count
-}): Promise<{ success: boolean; error?: string }> {
+}): Promise<{ success: boolean; error?: string; record?: any }> {
   if (!db) {
     return { success: false, error: "Firestore database is not configured" };
   }
 
   try {
-    const totalPassengers = Object.values(data.passengerCounts).reduce((sum, count) => sum + count, 0);
-    const amountPerPassenger = data.totalAmount / totalPassengers;
-
-    // Save records for all bookings with amount split by passenger count
-    const promises = data.bookingIds.map(bookingId => {
-      const passengerCount = data.passengerCounts[bookingId] || 0;
-      const bookingShare = amountPerPassenger * passengerCount;
-      
-      return saveBookingRecord({
-        bookingId,
-        bookedBy: data.bookedBy,
-        bookedAccountUsername: data.bookedAccountUsername,
-        amountCharged: Number(bookingShare.toFixed(2)),
-        methodUsed: data.methodUsed,
-      });
-    });
-
-    const results = await Promise.all(promises);
-    const allSuccess = results.every(r => r.success);
+    const recordsCollection = collection(db, "bookingRecords");
     
-    if (!allSuccess) {
-      throw new Error("Some bookings failed to save");
+    // Check if a record already exists for this group (by groupId or any of the bookingIds)
+    const groupQuery = query(recordsCollection, where("groupId", "==", data.groupId));
+    const groupSnapshot = await getDocs(groupQuery);
+    
+    const isUpdate = !groupSnapshot.empty;
+    let previousRecord = null;
+    
+    if (isUpdate) {
+      const existingDoc = groupSnapshot.docs[0];
+      previousRecord = existingDoc.data();
     }
+
+    // Find the account by username
+    const accountsCollection = collection(db, "irctcAccounts");
+    const accountQuery = query(accountsCollection, where("username", "==", data.bookedAccountUsername));
+    const accountSnapshot = await getDocs(accountQuery);
+
+    if (accountSnapshot.empty) {
+      return { success: false, error: `Account with username "${data.bookedAccountUsername}" not found` };
+    }
+
+    const accountDoc = accountSnapshot.docs[0];
+    const accountData = accountDoc.data();
+    const currentWalletAmount = accountData.walletAmount || 0;
+
+    // Handle wallet deduction logic
+    if (data.methodUsed === "Wallet") {
+      if (isUpdate && previousRecord?.methodUsed === "Wallet") {
+        const refundAmount = previousRecord.amountCharged || 0;
+        const newWalletAfterRefund = currentWalletAmount + refundAmount;
+        
+        if (newWalletAfterRefund < data.totalAmount) {
+          return { success: false, error: `Insufficient wallet balance. Available: ₹${newWalletAfterRefund.toFixed(2)}, Required: ₹${data.totalAmount.toFixed(2)}` };
+        }
+        
+        const finalWalletAmount = newWalletAfterRefund - data.totalAmount;
+        await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
+          walletAmount: finalWalletAmount,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        if (currentWalletAmount < data.totalAmount) {
+          return { success: false, error: `Insufficient wallet balance. Available: ₹${currentWalletAmount.toFixed(2)}, Required: ₹${data.totalAmount.toFixed(2)}` };
+        }
+        
+        const newWalletAmount = currentWalletAmount - data.totalAmount;
+        await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
+          walletAmount: newWalletAmount,
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } else if (isUpdate && previousRecord?.methodUsed === "Wallet") {
+      const refundAmount = previousRecord.amountCharged || 0;
+      const newWalletAmount = currentWalletAmount + refundAmount;
+      await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
+        walletAmount: newWalletAmount,
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    // Update lastBookedDate
+    const today = new Date().toISOString().split('T')[0];
+    const currentLastBookedDate = accountData.lastBookedDate || "";
     
-    return { success: true };
+    if (!isUpdate || currentLastBookedDate !== today) {
+      await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
+        lastBookedDate: today,
+        previousLastBookedDate: currentLastBookedDate || deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    // Create single record for the entire group
+    const recordData = {
+      bookingId: data.bookingIds[0], // Primary booking ID (first one)
+      bookingIds: data.bookingIds,   // All booking IDs in the group
+      groupId: data.groupId,         // Reference to the group
+      bookedBy: data.bookedBy,
+      bookedAccountUsername: data.bookedAccountUsername,
+      amountCharged: data.totalAmount, // Total amount for entire group
+      methodUsed: data.methodUsed,
+      updatedAt: serverTimestamp(),
+    };
+
+    let docId: string;
+
+    if (isUpdate) {
+      const existingDoc = groupSnapshot.docs[0];
+      docId = existingDoc.id;
+      await updateDoc(doc(db, "bookingRecords", docId), recordData);
+    } else {
+      const docRef = await addDoc(recordsCollection, {
+        ...recordData,
+        createdAt: serverTimestamp(),
+      });
+      docId = docRef.id;
+    }
+
+    // Retrieve the saved record
+    const savedDoc = await getDoc(doc(db, "bookingRecords", docId));
+    if (!savedDoc.exists()) {
+      return { success: false, error: "Failed to retrieve saved record" };
+    }
+
+    const savedData = savedDoc.data();
+    const record = {
+      id: savedDoc.id,
+      bookingId: savedData.bookingId,
+      bookingIds: savedData.bookingIds,
+      groupId: savedData.groupId,
+      bookedBy: savedData.bookedBy,
+      bookedAccountUsername: savedData.bookedAccountUsername,
+      amountCharged: savedData.amountCharged,
+      methodUsed: savedData.methodUsed,
+      createdAt: toISOStringSafe(savedData.createdAt, "createdAt", savedDoc.id),
+      updatedAt: toISOStringSafe(savedData.updatedAt, "updatedAt", savedDoc.id),
+    };
+
+    return { success: true, record };
   } catch (error: any) {
     console.error("[Firestore Error] saveGroupBookingRecords:", error);
     return { success: false, error: error.message || "Failed to save group booking records" };

@@ -157,7 +157,7 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
 
 
   const renderBookingsForDate = (bookingsForDate: Booking[]) => {
-    // 1. Extract groups
+    // 1. Extract groups and singles
     const groups: Record<string, Booking[]> = {};
     const singles: Booking[] = [];
     
@@ -170,66 +170,104 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
         }
     });
 
+    // Helper to categorize a group by its bookings' properties
+    // Uses the first booking's type to determine category (groups typically share same type)
+    const categorizeGroup = (groupBookings: Booking[]) => {
+        const firstBooking = groupBookings[0];
+        const isGeneral = ['General', 'Regular'].includes(String(firstBooking.bookingType));
+        const isSL = SL_CLASSES.includes(firstBooking.classType);
+        return { isGeneral, isSL };
+    };
+
+    // Categorize groups
+    const generalAcGroups: [string, Booking[]][] = [];
+    const generalSlGroups: [string, Booking[]][] = [];
+    const tatkalAcGroups: [string, Booking[]][] = [];
+    const tatkalSlGroups: [string, Booking[]][] = [];
+
+    Object.entries(groups).forEach(([groupId, groupBookings]) => {
+        const { isGeneral, isSL } = categorizeGroup(groupBookings);
+        if (isGeneral) {
+            if (isSL) {
+                generalSlGroups.push([groupId, groupBookings]);
+            } else {
+                generalAcGroups.push([groupId, groupBookings]);
+            }
+        } else {
+            if (isSL) {
+                tatkalSlGroups.push([groupId, groupBookings]);
+            } else {
+                tatkalAcGroups.push([groupId, groupBookings]);
+            }
+        }
+    });
+
     // Separate General (includes legacy 'Regular') and Tatkal bookings from SINGLES
-        const generalBookings = singles.filter(b => ['General', 'Regular'].includes(String(b.bookingType)));
-        const tatkalBookings = singles.filter(b => b.bookingType === 'Tatkal');
-        
-        // For General, separate by AC/SL classes
-        const generalAcBookings = generalBookings.filter(b => !SL_CLASSES.includes(b.classType));
-        const generalSlBookings = generalBookings.filter(b => SL_CLASSES.includes(b.classType));
-        
-        // For Tatkal, separate by AC/SL classes
-        const tatkalAcBookings = tatkalBookings.filter(b => !SL_CLASSES.includes(b.classType));
-        const tatkalSlBookings = tatkalBookings.filter(b => SL_CLASSES.includes(b.classType));
+    const generalBookings = singles.filter(b => ['General', 'Regular'].includes(String(b.bookingType)));
+    const tatkalBookings = singles.filter(b => b.bookingType === 'Tatkal');
+    
+    // For General, separate by AC/SL classes
+    const generalAcBookings = generalBookings.filter(b => !SL_CLASSES.includes(b.classType));
+    const generalSlBookings = generalBookings.filter(b => SL_CLASSES.includes(b.classType));
+    
+    // For Tatkal, separate by AC/SL classes
+    const tatkalAcBookings = tatkalBookings.filter(b => !SL_CLASSES.includes(b.classType));
+    const tatkalSlBookings = tatkalBookings.filter(b => SL_CLASSES.includes(b.classType));
 
-        const listProps = {
-            selectionMode,
-            selectedBookingIds,
-            onToggleSelection: handleToggleSelection
-        };
+    const listProps = {
+        selectionMode,
+        selectedBookingIds,
+        onToggleSelection: handleToggleSelection
+    };
 
-        return (
-          <>
-            {/* Render Groups First */}
-            {Object.entries(groups).length > 0 && (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
-                    {Object.entries(groups).map(([groupId, groupBookings]) => (
-                        <BookingGroupCard 
-                            key={groupId} 
-                            groupId={groupId} 
-                            bookings={groupBookings} 
-                            {...listProps}
-                        />
-                    ))}
-                </div>
-            )}
+    // Helper to render groups for a category
+    const renderGroupCards = (categoryGroups: [string, Booking[]][]) => (
+        categoryGroups.length > 0 && (
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-4">
+                {categoryGroups.map(([groupId, groupBookings]) => (
+                    <BookingGroupCard 
+                        key={groupId} 
+                        groupId={groupId} 
+                        bookings={groupBookings} 
+                        {...listProps}
+                    />
+                ))}
+            </div>
+        )
+    );
 
-            {generalAcBookings.length > 0 && (
-              <div className="mt-4">
-                <h4 className="text-lg font-medium mb-2 text-amber-700 dark:text-amber-600">General - AC Bookings</h4>
-                <BookingList bookings={generalAcBookings} {...listProps} />
-              </div>
-            )}
-            {generalSlBookings.length > 0 && (
-              <div className="mt-4">
-                <h4 className="text-lg font-medium mb-2 text-amber-700 dark:text-amber-600">General - SL Bookings</h4>
-                <BookingList bookings={generalSlBookings} {...listProps} />
-              </div>
-            )}
-            {tatkalAcBookings.length > 0 && (
-              <div className="mt-4">
-                <h4 className="text-lg font-medium mb-2 text-primary">Tatkal - AC Bookings</h4>
-                <BookingList bookings={tatkalAcBookings} {...listProps} />
-              </div>
-            )}
-            {tatkalSlBookings.length > 0 && (
-              <div className="mt-4">
-                <h4 className="text-lg font-medium mb-2 text-accent">Tatkal - SL Bookings</h4>
-                <BookingList bookings={tatkalSlBookings} {...listProps} />
-              </div>
-            )}
-          </>
-        );
+    return (
+      <>
+        {(generalAcGroups.length > 0 || generalAcBookings.length > 0) && (
+          <div className="mt-4">
+            <h4 className="text-lg font-medium mb-2 text-amber-700 dark:text-amber-600">General - AC Bookings</h4>
+            {renderGroupCards(generalAcGroups)}
+            {generalAcBookings.length > 0 && <BookingList bookings={generalAcBookings} {...listProps} />}
+          </div>
+        )}
+        {(generalSlGroups.length > 0 || generalSlBookings.length > 0) && (
+          <div className="mt-4">
+            <h4 className="text-lg font-medium mb-2 text-amber-700 dark:text-amber-600">General - SL Bookings</h4>
+            {renderGroupCards(generalSlGroups)}
+            {generalSlBookings.length > 0 && <BookingList bookings={generalSlBookings} {...listProps} />}
+          </div>
+        )}
+        {(tatkalAcGroups.length > 0 || tatkalAcBookings.length > 0) && (
+          <div className="mt-4">
+            <h4 className="text-lg font-medium mb-2 text-primary">Tatkal - AC Bookings</h4>
+            {renderGroupCards(tatkalAcGroups)}
+            {tatkalAcBookings.length > 0 && <BookingList bookings={tatkalAcBookings} {...listProps} />}
+          </div>
+        )}
+        {(tatkalSlGroups.length > 0 || tatkalSlBookings.length > 0) && (
+          <div className="mt-4">
+            <h4 className="text-lg font-medium mb-2 text-accent">Tatkal - SL Bookings</h4>
+            {renderGroupCards(tatkalSlGroups)}
+            {tatkalSlBookings.length > 0 && <BookingList bookings={tatkalSlBookings} {...listProps} />}
+          </div>
+        )}
+      </>
+    );
     };
   
     const noPendingMessage = searchQuery 

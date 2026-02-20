@@ -31,6 +31,7 @@ interface BookingRecordFormProps {
   hideWrapper?: boolean;
   isGroupMode?: boolean;
   groupBookings?: Booking[];
+  groupId?: string;
 }
 
 interface FormState {
@@ -40,7 +41,7 @@ interface FormState {
   methodUsed: PaymentMethod | "";
 }
 
-export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = false, isGroupMode = false, groupBookings = [] }: BookingRecordFormProps) {
+export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = false, isGroupMode = false, groupBookings = [], groupId }: BookingRecordFormProps) {
   const [accounts, setAccounts] = useState<IrctcAccount[]>([]);
   const [handlers, setHandlers] = useState<Handler[]>([]);
   const [isLoadingAccounts, setIsLoadingAccounts] = useState(true);
@@ -180,20 +181,15 @@ export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = fa
       return;
     }
 
-    // In group mode, save for all bookings in the group
-    if (isGroupMode && groupBookings.length > 0) {
-      const passengerCounts: Record<string, number> = {};
-      groupBookings.forEach(b => {
-        passengerCounts[b.id] = b.passengers.length;
-      });
-
+    // In group mode, save a single record for the entire group
+    if (isGroupMode && groupBookings.length > 0 && groupId) {
       const groupResult = await saveGroupBookingRecords({
         bookingIds: groupBookings.map(b => b.id),
+        groupId,
         bookedBy: form.bookedBy.trim(),
         bookedAccountUsername: form.bookedAccountUsername.trim(),
         totalAmount: amountNum,
         methodUsed: form.methodUsed,
-        passengerCounts,
       });
 
       if (groupResult.success) {

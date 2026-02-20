@@ -3,7 +3,7 @@ import { Booking } from "@/types/booking";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Layers, Link2Off, CheckCircle2, CreditCard, Loader2, Share2, Check } from "lucide-react";
+import { Layers, Link2Off, CheckCircle2, CreditCard, Loader2, Share2, Check, Edit3 } from "lucide-react";
 import { BookingCard } from "./BookingCard";
 import { BookingRequirementsSheet } from "./BookingRequirementsSheet";
 import { ungroupBookings, updateBookingRequirements, saveBookingRecord, getBookingRecordByBookingId } from "@/lib/firestoreClient";
@@ -47,6 +47,7 @@ interface BookingGroupCardProps {
 export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBookingIds, onToggleSelection }: BookingGroupCardProps) {
   const [showUngroupDialog, setShowUngroupDialog] = useState(false);
   const [isUngrouping, setIsUngrouping] = useState(false);
+  const [showEditRecordForm, setShowEditRecordForm] = useState(false);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -70,10 +71,45 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
   } | null>(null);
   const [isLoadingGroupBookingDetails, setIsLoadingGroupBookingDetails] = useState(false);
 
-  useEffect(() => {
-    const fetchGroupDetails = async () => {
-      try {
-        setIsLoadingGroupBookingDetails(true);
+  const fetchGroupDetails = async () => {
+    try {
+      setIsLoadingGroupBookingDetails(true);
+      
+      // Try to fetch a single group record first (by checking first booking)
+      const firstRecord = await getBookingRecordByBookingId(bookings[0].id);
+      
+      if (!firstRecord) {
+        setGroupBookingDetails(null);
+        return;
+      }
+
+      // If it's a group record (has bookingIds array), use it directly
+      if (firstRecord.bookingIds && firstRecord.bookingIds.length > 0) {
+        // Calculate split based on passenger counts
+        const splitByBooking = bookings.map(booking => ({
+          bookingId: booking.id,
+          bookingFor: booking.userName,
+          passengers: booking.passengers.length,
+          amountCharged: 0, // Will be calculated below
+        }));
+        
+        // Calculate amount per passenger for proportional split display
+        const totalPassengers = bookings.reduce((sum, b) => sum + b.passengers.length, 0);
+        const amountPerPassenger = firstRecord.amountCharged / totalPassengers;
+        
+        splitByBooking.forEach(item => {
+          item.amountCharged = Number((amountPerPassenger * item.passengers).toFixed(2));
+        });
+
+        setGroupBookingDetails({
+          bookedBy: firstRecord.bookedBy,
+          bookedAccountUsername: firstRecord.bookedAccountUsername,
+          totalAmount: Number(firstRecord.amountCharged.toFixed(2)),
+          methodUsed: firstRecord.methodUsed,
+          splitByBooking,
+        });
+      } else {
+        // Legacy individual records - fetch all and combine
         const records = await Promise.all(
           bookings.map(b => getBookingRecordByBookingId(b.id))
         );
@@ -88,7 +124,7 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
         }
 
         const totalAmount = valid.reduce((sum, x) => sum + (x.record.amountCharged || 0), 0);
-        const firstRecord = valid[0].record;
+        const legacyFirstRecord = valid[0].record;
         const splitByBooking = valid.map(x => ({
           bookingId: x.booking.id,
           bookingFor: x.booking.userName,
@@ -96,20 +132,22 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
           amountCharged: Number((x.record.amountCharged || 0).toFixed(2)),
         }));
 
-          setGroupBookingDetails({
-            bookedBy: firstRecord.bookedBy,
-            bookedAccountUsername: firstRecord.bookedAccountUsername,
-            totalAmount: Number(totalAmount.toFixed(2)),
-            methodUsed: firstRecord.methodUsed,
-            splitByBooking,
-          });
-      } catch (error) {
-        console.error("Failed to fetch group booking details", error);
-      } finally {
-        setIsLoadingGroupBookingDetails(false);
+        setGroupBookingDetails({
+          bookedBy: legacyFirstRecord.bookedBy,
+          bookedAccountUsername: legacyFirstRecord.bookedAccountUsername,
+          totalAmount: Number(totalAmount.toFixed(2)),
+          methodUsed: legacyFirstRecord.methodUsed,
+          splitByBooking,
+        });
       }
-    };
+    } catch (error) {
+      console.error("Failed to fetch group booking details", error);
+    } finally {
+      setIsLoadingGroupBookingDetails(false);
+    }
+  };
 
+  useEffect(() => {
     fetchGroupDetails();
   }, [bookings]);
 
@@ -409,9 +447,20 @@ ${bookingsText}${preparedAccountsText}${bookedDetailsText}
 
                 <div className="flex items-center gap-2">
                   {hasGroupBookedDetails && (
-                    <span className="h-5 w-5 rounded-full bg-green-600 flex items-center justify-center">
-                      <Check className="h-3 w-3 text-white" />
-                    </span>
+                    <>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                        onClick={() => setShowEditRecordForm(true)}
+                        title="Edit Booked Details"
+                      >
+                        <Edit3 className="h-3 w-3" />
+                      </Button>
+                      <span className="h-5 w-5 rounded-full bg-green-600 flex items-center justify-center">
+                        <Check className="h-3 w-3 text-white" />
+                      </span>
+                    </>
                   )}
                 </div>
               </div>
@@ -487,7 +536,7 @@ ${bookingsText}${preparedAccountsText}${bookedDetailsText}
 
       {/* Group Status Update Section */}
       <CardContent className="p-4 border-t bg-muted/5">
-        <GroupStatusUpdate bookings={bookings} />
+        <GroupStatusUpdate bookings={bookings} groupId={groupId} />
       </CardContent>
 
       {/* Individual Bookings List */}
@@ -523,6 +572,30 @@ ${bookingsText}${preparedAccountsText}${bookedDetailsText}
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Edit Booked Details Dialog */}
+      <Dialog open={showEditRecordForm} onOpenChange={setShowEditRecordForm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Booked Details</DialogTitle>
+          </DialogHeader>
+          <BookingRecordForm 
+            bookingId={bookings[0].id} 
+            onClose={() => {
+              setShowEditRecordForm(false);
+              fetchGroupDetails();
+            }}
+            onSave={() => {
+              setShowEditRecordForm(false);
+              fetchGroupDetails();
+            }}
+            hideWrapper={true}
+            isGroupMode={true}
+            groupBookings={bookings}
+            groupId={groupId}
+          />
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }
@@ -530,9 +603,10 @@ ${bookingsText}${preparedAccountsText}${bookedDetailsText}
 // Sub-component for group status update
 interface GroupStatusUpdateProps {
   bookings: Booking[];
+  groupId: string;
 }
 
-function GroupStatusUpdate({ bookings }: GroupStatusUpdateProps) {
+function GroupStatusUpdate({ bookings, groupId }: GroupStatusUpdateProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [showStatusConfirmDialog, setShowStatusConfirmDialog] = useState(false);
@@ -739,6 +813,7 @@ function GroupStatusUpdate({ bookings }: GroupStatusUpdateProps) {
             hideWrapper={true}
             isGroupMode={true}
             groupBookings={bookings}
+            groupId={groupId}
           />
         </DialogContent>
       </Dialog>
