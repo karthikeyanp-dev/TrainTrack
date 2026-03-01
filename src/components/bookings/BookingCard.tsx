@@ -829,6 +829,12 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                     <span style={labelHighlightStyle}>Payment Method:</span>
                     <div className="font-medium">{bookingRecord.methodUsed}</div>
                   </div>
+                  {bookingRecord.trainName && (
+                    <div>
+                      <span style={labelHighlightStyle}>Train:</span>
+                      <div className="font-medium">{bookingRecord.trainName}</div>
+                    </div>
+                  )}
                 </div>
               </AccordionContent>
             </AccordionItem>

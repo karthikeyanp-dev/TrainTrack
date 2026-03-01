@@ -11,6 +11,7 @@ export interface BookingRecord {
   bookedAccountUsername: string;  // IRCTC account username used
   amountCharged: number;    // Final transaction cost (total for group)
   methodUsed: PaymentMethod;
+  trainName?: string;       // Optional train name/number at time of booking
   createdAt: string;        // ISO string
   updatedAt: string;        // ISO string
 }

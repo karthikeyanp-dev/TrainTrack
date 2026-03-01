@@ -39,6 +39,7 @@ interface FormState {
   bookedAccountUsername: string;
   amountCharged: string;
   methodUsed: PaymentMethod | "";
+  trainName: string;
 }
 
 export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = false, isGroupMode = false, groupBookings = [], groupId }: BookingRecordFormProps) {
@@ -55,6 +56,7 @@ export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = fa
     bookedAccountUsername: "",
     amountCharged: "",
     methodUsed: "",
+    trainName: "",
   });
 
   useEffect(() => {
@@ -80,6 +82,7 @@ export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = fa
           bookedAccountUsername: existingRec.bookedAccountUsername,
           amountCharged: existingRec.amountCharged.toString(),
           methodUsed: existingRec.methodUsed,
+          trainName: existingRec.trainName || "",
         });
       }
     } catch (error) {
@@ -124,6 +127,7 @@ export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = fa
         bookedAccountUsername: "",
         amountCharged: "",
         methodUsed: "",
+        trainName: "",
       });
       loadData(); // Reload to refresh wallet balances
     } else {
@@ -190,6 +194,7 @@ export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = fa
         bookedAccountUsername: form.bookedAccountUsername.trim(),
         totalAmount: amountNum,
         methodUsed: form.methodUsed,
+        trainName: form.trainName.trim() || undefined,
       });
 
       if (groupResult.success) {
@@ -217,6 +222,7 @@ export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = fa
         bookedAccountUsername: form.bookedAccountUsername.trim(),
         amountCharged: amountNum,
         methodUsed: form.methodUsed,
+        trainName: form.trainName.trim() || undefined,
       });
 
       if (result.success && result.record) {
@@ -341,6 +347,21 @@ export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = fa
           </Select>
           );
         })()}
+      </div>
+
+      <div className="space-y-1">
+        <Label htmlFor={`trainName-${bookingId}`} className="text-xs">
+          Train Name / No. (Optional)
+        </Label>
+        <Input
+          id={`trainName-${bookingId}`}
+          type="text"
+          value={form.trainName}
+          onChange={(e) => setForm(prev => ({ ...prev, trainName: e.target.value }))}
+          placeholder="e.g., 12345 Tamil Nadu Express"
+          disabled={isSubmitting}
+          className="text-sm"
+        />
       </div>
 
       <div className="flex gap-2 pt-2">

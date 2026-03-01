@@ -43,15 +43,19 @@ npm run typecheck
 All data operations use Firestore client SDK with React Query hooks:
 
 **Custom hooks in `src/hooks/`:**
-- `useBookings.ts` - Real-time bookings data with infinite scroll
-- `useAccounts.ts` - IRCTC account management
-- `useBookingRecords.ts` - Booking completion records
-- `useHandlers.ts` - Handler/agent management
+- `useBookings.ts` - Real-time bookings via `onSnapshot()` listener; also exports `usePendingBookings()`, `useBookingDates()`
+- `useAccounts.ts` - IRCTC account management via React Query (polling, not real-time); also exports `useAccountStats()`
+- `useHandlers.ts` - Handler/agent management; also exports `useHandlerStats()`
+
+**Firestore operations in `src/lib/`** (all raw Firestore calls live here, not in hooks):
+- `firestoreClient.ts` - All booking CRUD, status updates, group operations, booking records
+- `accountsClient.ts` - Account CRUD, wallet tracking, monthly stats
+- `handlersClient.ts` - Handler CRUD and booking assignment stats
 
 **Important patterns:**
 - Firestore client methods: `collection()`, `doc()`, `getDocs()`, `addDoc()`, `updateDoc()`, `deleteDoc()`
-- React Query for caching and automatic refetching
-- Real-time listeners with `onSnapshot()` for live updates
+- React Query for caching; `useBookings` uses `onSnapshot()`, accounts/handlers use polling
+- Optional fields cleaned up with `deleteField()` on update (not set to `null`)
 - Firestore Timestamp conversion to ISO strings for client compatibility
 
 ### Firebase Integration
@@ -63,8 +67,11 @@ All data operations use Firestore client SDK with React Query hooks:
 - `irctcAccounts/` - IRCTC credentials and wallet tracking
 - `bookingRecords/` - Completion/payment records
 - `handlers/` - Handler/agent names
+- `bookingGroups/` - Group booking metadata (links multiple bookings)
 
-**Data conversion:** Always convert Firestore Timestamps to ISO strings when reading data, as Timestamps cannot be serialized for client components.
+**Data conversion:** Always convert Firestore Timestamps to ISO strings when reading data, as Timestamps cannot be serialized for client components. Use `toISOStringSafe()` from `firestoreClient.ts` for safe conversion with error logging.
+
+**Legacy class mapping:** `normalizeClassType()` in `firestoreClient.ts` maps old class names (e.g., `"CC w Food"` → `"CC"`) using `LEGACY_CLASS_MAP` from `src/types/booking.ts`. Always use this when reading `classType` from Firestore.
 
 ### Genkit AI Setup
 
@@ -91,10 +98,10 @@ All forms use React Hook Form + Zod + Firestore client SDK:
 
 All types defined in `src/types/`:
 
-- `booking.ts` - BookingStatus, TrainClass, Passenger, Booking interfaces
-- `account.ts` - IrctcAccount interface
-- `bookingRecord.ts` - BookingRecord, PaymentMethod
-- `handler.ts` - Handler interface
+- `booking.ts` - `BookingStatus`, `TrainClass`, `Passenger`, `PreparedAccount`, `RefundDetails`, `Booking`, `BookingGroup`, `LEGACY_CLASS_MAP`
+- `account.ts` - `IrctcAccount` interface
+- `bookingRecord.ts` - `BookingRecord`, `PaymentMethod` enum (`"Wallet" | "UPI" | "Others"`)
+- `handler.ts` - `Handler` interface
 
 ### UI Components
 
@@ -132,7 +139,7 @@ journeyDate: booking.journeyDate?.toDate?.()?.toISOString() || booking.journeyDa
 
 ### Search Implementation
 
-The search bar (`SearchBarClient.tsx`) passes query to home page via URL params. Client-side filtering happens in the React Query hook.
+The search bar (`SearchBarClient.tsx`) passes query to home page via URL params (`?search=term`). Client-side filtering happens in the page component, not the React Query hook — the hook returns all data unfiltered.
 
 ### Infinite Scroll Pattern
 
@@ -212,17 +219,19 @@ Current Firestore rules (`firestore.rules`) allow unrestricted read/write. In pr
 
 ### Known Quirks
 
-- Development server runs on port 9002 (configured in `package.json`)
+- Development server runs on port 9002 with Turbopack (`next dev --turbopack -p 9002`)
 - Date conversion required for all Firestore Timestamp fields
-- React Query stale time set to 60 seconds
+- React Query stale time set to 60 seconds; accounts hook has no refetch-on-focus
 - All components must use `"use client"` directive for CSR
 - Firebase Hosting serves all routes to `/index.html` (SPA mode)
+- `TOAST_LIMIT = 1` — only one toast notification visible at a time
+- Optional env var `NEXT_PUBLIC_BASE_PATH` for subdirectory deployments
 
 ## Testing
 
 Currently no test setup. When adding tests:
 - Place test files alongside source: `*.test.ts(x)`
-- Focus on Server Actions and form validation
+- Focus on form validation (Zod schemas) and Firestore client functions
 - Mock Firebase in tests
 
 ## Genkit Development

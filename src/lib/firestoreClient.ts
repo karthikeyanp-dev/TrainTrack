@@ -482,6 +482,7 @@ export async function getBookingRecordByBookingId(bookingId: string): Promise<an
         bookedAccountUsername: data.bookedAccountUsername,
         amountCharged: data.amountCharged,
         methodUsed: data.methodUsed,
+        trainName: data.trainName as string | undefined,
         createdAt: toISOStringSafe(data.createdAt, "createdAt", docSnap.id),
         updatedAt: toISOStringSafe(data.updatedAt, "updatedAt", docSnap.id),
       };
@@ -490,11 +491,11 @@ export async function getBookingRecordByBookingId(bookingId: string): Promise<an
     // If not found, check if bookingId exists in any record's bookingIds array (group bookings)
     const allRecordsQuery = query(recordsCollection, where("bookingIds", "array-contains", bookingId));
     const groupSnapshot = await getDocs(allRecordsQuery);
-    
+
     if (!groupSnapshot.empty) {
       const docSnap = groupSnapshot.docs[0];
       const data = docSnap.data();
-      
+
       return {
         id: docSnap.id,
         bookingId: data.bookingId,
@@ -504,6 +505,7 @@ export async function getBookingRecordByBookingId(bookingId: string): Promise<an
         bookedAccountUsername: data.bookedAccountUsername,
         amountCharged: data.amountCharged,
         methodUsed: data.methodUsed,
+        trainName: data.trainName as string | undefined,
         createdAt: toISOStringSafe(data.createdAt, "createdAt", docSnap.id),
         updatedAt: toISOStringSafe(data.updatedAt, "updatedAt", docSnap.id),
       };
@@ -522,6 +524,7 @@ export async function saveBookingRecord(data: {
   bookedAccountUsername: string;
   amountCharged: number;
   methodUsed: string;
+  trainName?: string;
 }): Promise<{ success: boolean; error?: string; record?: any; errors?: any }> {
   if (!db) {
     return { success: false, error: "Firestore database is not configured" };
@@ -609,7 +612,7 @@ export async function saveBookingRecord(data: {
       });
     }
 
-    const recordData = {
+    const recordData: Record<string, any> = {
       bookingId: data.bookingId,
       bookedBy: data.bookedBy,
       bookedAccountUsername: data.bookedAccountUsername,
@@ -617,6 +620,12 @@ export async function saveBookingRecord(data: {
       methodUsed: data.methodUsed,
       updatedAt: serverTimestamp(),
     };
+
+    if (data.trainName && data.trainName.trim() !== "") {
+      recordData.trainName = data.trainName.trim();
+    } else {
+      recordData.trainName = deleteField();
+    }
 
     let docId: string;
 
@@ -648,6 +657,7 @@ export async function saveBookingRecord(data: {
       bookedAccountUsername: savedData.bookedAccountUsername,
       amountCharged: savedData.amountCharged,
       methodUsed: savedData.methodUsed,
+      trainName: savedData.trainName as string | undefined,
       createdAt: toISOStringSafe(savedData.createdAt, "createdAt", savedDoc.id),
       updatedAt: toISOStringSafe(savedData.updatedAt, "updatedAt", savedDoc.id),
     };
@@ -670,6 +680,7 @@ export async function saveGroupBookingRecords(data: {
   bookedAccountUsername: string;
   totalAmount: number;
   methodUsed: string;
+  trainName?: string;
 }): Promise<{ success: boolean; error?: string; record?: any }> {
   if (!db) {
     return { success: false, error: "Firestore database is not configured" };
@@ -751,7 +762,7 @@ export async function saveGroupBookingRecords(data: {
     }
 
     // Create single record for the entire group
-    const recordData = {
+    const recordData: Record<string, any> = {
       bookingId: data.bookingIds[0], // Primary booking ID (first one)
       bookingIds: data.bookingIds,   // All booking IDs in the group
       groupId: data.groupId,         // Reference to the group
@@ -761,6 +772,12 @@ export async function saveGroupBookingRecords(data: {
       methodUsed: data.methodUsed,
       updatedAt: serverTimestamp(),
     };
+
+    if (data.trainName && data.trainName.trim() !== "") {
+      recordData.trainName = data.trainName.trim();
+    } else {
+      recordData.trainName = deleteField();
+    }
 
     let docId: string;
 
@@ -792,6 +809,7 @@ export async function saveGroupBookingRecords(data: {
       bookedAccountUsername: savedData.bookedAccountUsername,
       amountCharged: savedData.amountCharged,
       methodUsed: savedData.methodUsed,
+      trainName: savedData.trainName as string | undefined,
       createdAt: toISOStringSafe(savedData.createdAt, "createdAt", savedDoc.id),
       updatedAt: toISOStringSafe(savedData.updatedAt, "updatedAt", savedDoc.id),
     };
