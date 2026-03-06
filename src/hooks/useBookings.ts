@@ -55,6 +55,8 @@ const mapDocToBooking = (doc: any): Booking => {
     createdAt: toISOStringSafe(data.createdAt),
     updatedAt: toISOStringSafe(data.updatedAt),
     preparedAccounts: Array.isArray(data.preparedAccounts) ? (data.preparedAccounts as PreparedAccount[]) : undefined,
+    paymentReceived: data.paymentReceived as boolean | undefined,
+    amountSettled: data.amountSettled as boolean | undefined,
     refundDetails: data.refundDetails as RefundDetails | undefined,
     groupId: data.groupId as string | undefined,
   };
@@ -182,3 +184,4 @@ export function useBookingDates() {
 
   return { data: dates, isLoading, error };
 }
+

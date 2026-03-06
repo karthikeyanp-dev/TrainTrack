@@ -92,6 +92,8 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     createdAt: toISOStringSafe(data.createdAt, "createdAt", id),
     updatedAt: toISOStringSafe(data.updatedAt, "updatedAt", id),
     preparedAccounts: Array.isArray(data.preparedAccounts) ? (data.preparedAccounts as PreparedAccount[]) : undefined,
+    paymentReceived: data.paymentReceived as boolean | undefined,
+    amountSettled: data.amountSettled as boolean | undefined,
     refundDetails: data.refundDetails as RefundDetails | undefined,
   };
 };
@@ -378,6 +380,33 @@ export async function updateBookingRequirements(
   }
 }
 
+export async function updateBookingPaymentTracking(
+  id: string,
+  paymentTracking: Pick<Booking, "paymentReceived" | "amountSettled">
+): Promise<{ success: boolean; error?: string; booking?: Booking }> {
+  if (!db) {
+    return { success: false, error: "Firestore database is not configured" };
+  }
+
+  try {
+    const docRef = doc(db, "bookings", id);
+
+    await updateDoc(docRef, {
+      ...paymentTracking,
+      updatedAt: serverTimestamp(),
+    });
+
+    const updatedDocSnap = await getDoc(docRef);
+    if (updatedDocSnap.exists()) {
+      return { success: true, booking: mapDocToBooking(updatedDocSnap, updatedDocSnap.id) };
+    }
+
+    return { success: false, error: "Failed to retrieve booking after update" };
+  } catch (error: any) {
+    console.error(`[Firestore Error] updateBookingPaymentTracking (${id}):`, error);
+    return { success: false, error: error.message || "Failed to update payment tracking" };
+  }
+}
 export async function updateBookingRefundDetails(
   id: string,
   refundDetails: RefundDetails
@@ -1007,4 +1036,6 @@ export async function addToBookingGroup(groupId: string, bookingId: string): Pro
         return { success: false, error: error.message };
     }
 }
+
+
 

@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { StatusBadge } from "./StatusBadge";
 import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X, CreditCard, Receipt, Loader2 } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { updateBookingStatus, deleteBooking, getBookingRecordByBookingId, deleteBookingRefundDetails, deleteBookingRecord } from "@/lib/firestoreClient";
+import { updateBookingStatus, deleteBooking, getBookingRecordByBookingId, deleteBookingRefundDetails, deleteBookingRecord, updateBookingPaymentTracking, updateBookingRefundDetails } from "@/lib/firestoreClient";
 import type { BookingRecord } from "@/types/bookingRecord";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
@@ -44,10 +44,12 @@ import { BookingRequirementsSheet } from "./BookingRequirementsSheet";
 import { BookingRecordForm } from "./BookingRecordForm";
 import { StatusReasonDialog } from "./StatusReasonDialog";
 import { getAccountByUsername, updateAccount } from "@/lib/accountsClient";
-import { updateBookingRefundDetails } from "@/lib/firestoreClient";
+
 import type { RefundDetails } from "@/types/booking";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface BookingCardProps {
   booking: Booking;
@@ -217,6 +219,37 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
         variant: "destructive",
       });
       setShowDeleteDialog(false);
+    },
+  });
+
+  const paymentTrackingMutation = useMutation({
+    mutationFn: (paymentTracking: Pick<Booking, "paymentReceived" | "amountSettled">) =>
+      updateBookingPaymentTracking(booking.id, paymentTracking),
+    onSuccess: (result, variables) => {
+      if (!result.success) {
+        toast({
+          title: "Error",
+          description: result.error || "Failed to update payment tracking.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["bookings"] });
+      queryClient.invalidateQueries({ queryKey: ["booking", booking.id] });
+      toast({
+        title: "Payment Tracking Updated",
+        description: variables.paymentReceived !== undefined
+          ? `Payment receipt marked as ${variables.paymentReceived ? "completed" : "pending"}.`
+          : `Settlement marked as ${variables.amountSettled ? "completed" : "pending"}.`,
+      });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: `Failed to update payment tracking: ${error.message}`,
+        variant: "destructive",
+      });
     },
   });
 
@@ -445,6 +478,16 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
 
   const handleCopy = () => {
     router.push(`/bookings/new?copyFrom=${booking.id}`);
+  };
+
+  const handlePaymentTrackingToggle = (
+    field: "paymentReceived" | "amountSettled",
+    checked: boolean,
+  ) => {
+    paymentTrackingMutation.mutate({
+      paymentReceived: field === "paymentReceived" ? checked : booking.paymentReceived ?? false,
+      amountSettled: field === "amountSettled" ? checked : booking.amountSettled ?? false,
+    });
   };
 
   const handleShare = () => {
@@ -1000,6 +1043,74 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                     </SelectContent>
                 </Select>
             </div>
+
+            {booking.status === "Booked" && bookingRecord && (
+              <TooltipProvider delayDuration={150}>
+                <div className="rounded-md border border-border/60 bg-muted/30 p-3">
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide" style={labelHighlightStyle}>
+                    Payment Tracking
+                  </div>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-1.5">
+                        <Label htmlFor={`payment-received-${booking.id}`} className="text-xs font-medium text-foreground">
+                          Payment Received
+                        </Label>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label="Payment received help"
+                              className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground/80"
+                            >
+                              <Info className="h-3.5 w-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-[220px] text-xs">
+                            Mark when payment from the customer is collected.
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <Switch
+                        id={`payment-received-${booking.id}`}
+                        checked={booking.paymentReceived ?? false}
+                        onCheckedChange={(checked) => handlePaymentTrackingToggle("paymentReceived", checked)}
+                        disabled={paymentTrackingMutation.isPending}
+                        className="border border-[#AB945E]/50 data-[state=checked]:bg-[#AB945E]"
+                      />
+                    </div>
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-1.5">
+                        <Label htmlFor={`amount-settled-${booking.id}`} className="text-xs font-medium text-foreground">
+                          Amount Settled
+                        </Label>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              type="button"
+                              aria-label="Amount settled help"
+                              className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground/80"
+                            >
+                              <Info className="h-3.5 w-3.5" />
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent side="top" className="max-w-[220px] text-xs">
+                            Mark when the amount is settled to whoever booked it.
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                      <Switch
+                        id={`amount-settled-${booking.id}`}
+                        checked={booking.amountSettled ?? false}
+                        onCheckedChange={(checked) => handlePaymentTrackingToggle("amountSettled", checked)}
+                        disabled={paymentTrackingMutation.isPending}
+                        className="border border-[#AB945E]/50 data-[state=checked]:bg-[#AB945E]"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </TooltipProvider>
+            )}
           </>
         )}
 
@@ -1179,3 +1290,8 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
 
     
     
+
+
+
+
+

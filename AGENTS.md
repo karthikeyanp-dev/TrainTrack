@@ -1,0 +1,50 @@
+# AGENTS.md
+
+## Project
+
+TrainTrack is a Next.js 15 static-export app for train booking operations. The frontend is TypeScript + React 18 + Tailwind + Radix/shadcn UI. Data is handled client-side through Firebase Firestore, with Genkit used for AI-powered suggestions.
+
+## Working Rules
+
+- Treat this as a client-rendered app. New pages and interactive app surfaces should usually use "use client".
+- Preserve static export compatibility. `next.config.mjs` uses `output: "export"` and `trailingSlash: true`.
+- Keep raw Firestore access inside `src/lib/`. Hooks in `src/hooks/` should wrap those clients, not duplicate database logic.
+- Keep shared domain types in `src/types/`.
+- Prefer existing UI primitives from `src/components/ui/` before introducing new component patterns.
+- Respect the `@/*` path alias to `src/*`.
+
+## Useful Paths
+
+- `src/app/` app routes and page entry points
+- `src/components/bookings/` booking UI and forms
+- `src/components/accounts/` account management UI
+- `src/components/layout/` shell and search components
+- `src/hooks/useBookings.ts` booking queries and realtime subscription
+- `src/hooks/useAccounts.ts` account queries and stats
+- `src/hooks/useHandlers.ts` handler queries and stats
+- `src/lib/firestoreClient.ts` booking and booking-group Firestore operations
+- `src/lib/accountsClient.ts` account Firestore operations
+- `src/lib/handlersClient.ts` handler Firestore operations
+- `src/lib/firebase.ts` Firebase initialization
+- `src/ai/` Genkit setup and flows
+
+## Commands
+
+- `npm run dev` starts Next.js on port `9002`
+- `npm run genkit:dev` starts the Genkit dev server
+- `npm run genkit:watch` starts Genkit with reload
+- `npm run build` creates the static export
+- `npm run typecheck` runs TypeScript checks
+
+## Current Repo State
+
+- `git pull --ff-only` reported `Already up to date.` on March 6, 2026.
+- `npm.cmd run typecheck` passes.
+- `npm.cmd run lint` currently fails because `next lint` hits a circular JSON/config error from `.eslintrc.json`; linting likely needs migration to the ESLint CLI for reliable execution on Next 15/16-era tooling.
+
+## Implementation Notes
+
+- Firestore timestamp values should be converted to ISO strings before use in client components.
+- The app is deployed to Firebase Hosting from the static `out/` directory.
+- `next.config.mjs` currently ignores TypeScript and ESLint errors during build, so do not assume a successful production build means the codebase is clean.
+- Existing repo guidance also lives in `CLAUDE.md`; keep both files aligned if architecture or workflows change.

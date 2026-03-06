@@ -60,6 +60,8 @@ export interface Booking {
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
   preparedAccounts?: PreparedAccount[]; // Optional array of prepared accounts for booking requirements
+  paymentReceived?: boolean;
+  amountSettled?: boolean;
   refundDetails?: RefundDetails;
   groupId?: string; // ID of the booking group this booking belongs to
 }
@@ -77,3 +79,6 @@ export interface BookingGroup {
 export type BookingFormData = Omit<Booking, "id" | "createdAt" | "updatedAt" | "status" | "preparedAccounts" | "groupId">;
 
     
+
+
+
