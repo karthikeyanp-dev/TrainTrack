@@ -12,6 +12,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateBookingStatus, deleteBooking, getBookingRecordByBookingId, deleteBookingRefundDetails, deleteBookingRecord, updateBookingPaymentTracking, updateBookingRefundDetails } from "@/lib/firestoreClient";
 import type { BookingRecord } from "@/types/bookingRecord";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
@@ -50,6 +51,7 @@ import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface BookingCardProps {
   booking: Booking;
@@ -80,6 +82,7 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const router = useRouter();
+  const isMobile = useIsMobile();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showStatusConfirmDialog, setShowStatusConfirmDialog] = useState(false);
   const [statusToConfirm, setStatusToConfirm] = useState<BookingStatus | null>(null);
@@ -1056,20 +1059,37 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                         <Label htmlFor={`payment-received-${booking.id}`} className="text-xs font-medium text-foreground">
                           Payment Received
                         </Label>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              aria-label="Payment received help"
-                              className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground/80"
-                            >
-                              <Info className="h-3.5 w-3.5" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-[220px] text-xs">
-                            Mark when payment from the customer is collected.
-                          </TooltipContent>
-                        </Tooltip>
+                        {isMobile ? (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label="Payment received help"
+                                className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground/80"
+                              >
+                                <Info className="h-3.5 w-3.5" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent side="top" align="start" className="w-56 p-2.5 text-xs">
+                              Mark when payment from the customer is collected.
+                            </PopoverContent>
+                          </Popover>
+                        ) : (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label="Payment received help"
+                                className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground/80"
+                              >
+                                <Info className="h-3.5 w-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[220px] text-xs">
+                              Mark when payment from the customer is collected.
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
                       </div>
                       <Switch
                         id={`payment-received-${booking.id}`}
@@ -1084,20 +1104,37 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                         <Label htmlFor={`amount-settled-${booking.id}`} className="text-xs font-medium text-foreground">
                           Amount Settled
                         </Label>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <button
-                              type="button"
-                              aria-label="Amount settled help"
-                              className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground/80"
-                            >
-                              <Info className="h-3.5 w-3.5" />
-                            </button>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-[220px] text-xs">
-                            Mark when the amount is settled to whoever booked it.
-                          </TooltipContent>
-                        </Tooltip>
+                        {isMobile ? (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label="Amount settled help"
+                                className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground/80"
+                              >
+                                <Info className="h-3.5 w-3.5" />
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent side="top" align="start" className="w-56 p-2.5 text-xs">
+                              Mark when the amount is settled to whoever booked it.
+                            </PopoverContent>
+                          </Popover>
+                        ) : (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                type="button"
+                                aria-label="Amount settled help"
+                                className="inline-flex h-4 w-4 items-center justify-center text-muted-foreground/80"
+                              >
+                                <Info className="h-3.5 w-3.5" />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="top" className="max-w-[220px] text-xs">
+                              Mark when the amount is settled to whoever booked it.
+                            </TooltipContent>
+                          </Tooltip>
+                        )}
                       </div>
                       <Switch
                         id={`amount-settled-${booking.id}`}
@@ -1290,6 +1327,10 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
 
     
     
+
+
+
+
 
 
 
