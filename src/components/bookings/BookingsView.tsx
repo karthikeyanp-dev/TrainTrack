@@ -16,6 +16,28 @@ import { Button } from "@/components/ui/button";
 import { createBookingGroup } from "@/lib/firestoreClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
+import { cn } from "@/lib/utils";
+
+/**
+ * Payment tracking feature start date.
+ * Bookings created/updated before this date should NOT show as pending for payment tracking.
+ * Set to March 6, 2026 (yesterday when feature was implemented).
+ */
+const PAYMENT_TRACKING_START_DATE = new Date('2026-03-06T00:00:00.000Z');
+
+/**
+ * Check if a booking is eligible for payment tracking (created/updated on or after the feature start date)
+ */
+const isEligibleForPaymentTracking = (booking: Booking): boolean => {
+  const createdAt = new Date(booking.createdAt);
+  const updatedAt = new Date(booking.updatedAt);
+  // Use the later of createdAt or updatedAt
+  const relevantDate = updatedAt > createdAt ? updatedAt : createdAt;
+  return relevantDate >= PAYMENT_TRACKING_START_DATE;
+};
+
+// Payment filter types
+export type PaymentFilterType = 'all' | 'payment-pending' | 'settlement-pending';
 
 interface BookingsViewProps {
   allBookings: Booking[];
@@ -47,6 +69,7 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedBookingIds, setSelectedBookingIds] = useState<Set<string>>(new Set());
     const [isGrouping, setIsGrouping] = useState(false);
+    const [paymentFilter, setPaymentFilter] = useState<PaymentFilterType>('all');
 
     const handleToggleSelection = (id: string) => {
         const newSet = new Set(selectedBookingIds);
@@ -123,8 +146,15 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
         }
     }, [searchQuery]);
 
+    // Reset payment filter when search query changes
+    useEffect(() => {
+        if (searchQuery) {
+            setPaymentFilter('all');
+        }
+    }, [searchQuery]);
 
-    const { pendingBookingsByDate, pendingDates, completedBookingsByDate, completedDates } = useMemo(() => {
+
+    const { pendingBookingsByDate, pendingDates, completedBookingsByDate, completedDates, paymentPendingCount, settlementPendingCount } = useMemo(() => {
         const sourceBookings = allBookings;
 
         // --- Pending Bookings Logic (now uses pre-fetched pendingBookings prop) ---
@@ -134,7 +164,7 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
 
 
         // --- Completed Bookings Logic ---
-        const completedBookingsToDisplay = searchQuery 
+        let completedBookingsToDisplay = searchQuery 
             ? sourceBookings.filter(b => b.status !== 'Requested')
             : sourceBookings.filter(b => {
                 const visibleDateSet = new Set(visibleDates);
@@ -145,6 +175,30 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
                 
                 return b.status !== 'Requested' && visibleDateSet.has(b.bookingDate);
             });
+        
+        // --- Payment Tracking Filter ---
+        // Count pending payments for eligible bookings (created/updated after feature start date)
+        const eligibleForTracking = completedBookingsToDisplay.filter(b => b.status === 'Booked' && isEligibleForPaymentTracking(b));
+        const paymentPendingCount = eligibleForTracking.filter(b => !b.paymentReceived).length;
+        const settlementPendingCount = eligibleForTracking.filter(b => !b.amountSettled).length;
+        
+        // Apply payment filter if active
+        if (paymentFilter !== 'all') {
+            completedBookingsToDisplay = completedBookingsToDisplay.filter(b => {
+                // Only "Booked" status with payment tracking eligibility
+                if (b.status !== 'Booked' || !isEligibleForPaymentTracking(b)) {
+                    return false; // Hide non-eligible bookings when filter is active
+                }
+                
+                if (paymentFilter === 'payment-pending') {
+                    return !b.paymentReceived;
+                }
+                if (paymentFilter === 'settlement-pending') {
+                    return !b.amountSettled;
+                }
+                return true;
+            });
+        }
             
         const completedBookingsByDate = groupBookingsByDate(
              completedBookingsToDisplay.sort((a, b) => new Date(b.journeyDate).getTime() - new Date(a.journeyDate).getTime()),
@@ -152,8 +206,8 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
         );
         const completedDates = Object.keys(completedBookingsByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
-        return { pendingBookingsByDate, pendingDates, completedBookingsByDate, completedDates };
-    }, [allBookings, pendingBookings, visibleDates, searchQuery]);
+        return { pendingBookingsByDate, pendingDates, completedBookingsByDate, completedDates, paymentPendingCount, settlementPendingCount };
+    }, [allBookings, pendingBookings, visibleDates, searchQuery, paymentFilter]);
 
 
   const renderBookingsForDate = (bookingsForDate: Booking[]) => {
@@ -330,12 +384,57 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
               </TabsContent>
 
               <TabsContent value="completed" className="mt-6">
-                <h2 className="text-2xl font-semibold mb-4">Completed Bookings</h2>
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                  <h2 className="text-2xl font-semibold">Completed Bookings</h2>
+                  <div className="flex items-center gap-2 flex-nowrap overflow-x-auto pb-2 mb-2">
+                    <button
+                      onClick={() => setPaymentFilter('all')}
+                      className={cn(
+                        "h-8 shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors border",
+                        paymentFilter === 'all'
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted text-foreground border-border hover:bg-muted/80"
+                      )}
+                    >
+                      All
+                    </button>
+                    <button
+                      onClick={() => setPaymentFilter('payment-pending')}
+                      disabled={paymentPendingCount === 0}
+                      className={cn(
+                        "h-8 shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors border",
+                        paymentFilter === 'payment-pending'
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted text-foreground border-border hover:bg-muted/80",
+                        paymentPendingCount === 0 && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      Payment Pending {paymentPendingCount > 0 && `(${paymentPendingCount})`}
+                    </button>
+                    <button
+                      onClick={() => setPaymentFilter('settlement-pending')}
+                      disabled={settlementPendingCount === 0}
+                      className={cn(
+                        "h-8 shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors border",
+                        paymentFilter === 'settlement-pending'
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted text-foreground border-border hover:bg-muted/80",
+                        settlementPendingCount === 0 && "opacity-50 cursor-not-allowed"
+                      )}
+                    >
+                      Settlement Pending {settlementPendingCount > 0 && `(${settlementPendingCount})`}
+                    </button>
+                  </div>
+                </div>
                 {completedDates.length === 0 ? (
                   <Alert className="mt-4">
                     {searchQuery ? <Search className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-                    <AlertTitle>{searchQuery ? "Search Results" : "No Completed Bookings"}</AlertTitle>
-                    <AlertDescription>{noCompletedMessage}</AlertDescription>
+                    <AlertTitle>{searchQuery ? "Search Results" : paymentFilter !== 'all' ? "No Pending Payments" : "No Completed Bookings"}</AlertTitle>
+                    <AlertDescription>
+                      {searchQuery ? noCompletedMessage : paymentFilter !== 'all' 
+                        ? `No bookings with ${paymentFilter === 'payment-pending' ? 'pending customer payments' : 'pending settlements'} found.`
+                        : noCompletedMessage}
+                    </AlertDescription>
                   </Alert>
                 ) : (
                   <Accordion type="multiple" className="w-full space-y-4" defaultValue={completedDates.length > 0 ? [completedDates[0]] : []}>
