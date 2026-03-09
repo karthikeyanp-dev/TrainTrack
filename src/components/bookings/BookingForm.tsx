@@ -55,6 +55,7 @@ const bookingFormSchema = z.object({
   bookingDate: z.date({ required_error: "Booking date is required." }),
   classType: z.enum(ALL_TRAIN_CLASSES, { required_error: "Train class is required." }),
   trainPreference: z.string().optional(),
+  upgradePreferred: z.boolean().optional(),
   remarks: z.string().optional(),
 });
 
@@ -81,6 +82,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           journeyDate: initialData.journeyDateObj,
           bookingDate: initialData.bookingDateObj,
           trainPreference: initialData.trainPreference || "",
+          upgradePreferred: initialData.upgradePreferred || false,
           remarks: initialData.remarks || "",
           passengers: initialData.passengers?.map(p => ({
             name: p.name || "",
@@ -95,6 +97,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           destination: "",
           userName: "",
           trainPreference: "",
+          upgradePreferred: false,
           remarks: "",
           passengers: [{ name: "", age: undefined, gender: undefined, berthRequired: false }],
         },
@@ -132,8 +135,10 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           gender: p.gender!,
           ...(p.berthRequired && { berthRequired: p.berthRequired }),
       })) as Passenger[],
-      ...(values.trainPreference && values.trainPreference.trim() !== "" && { trainPreference: values.trainPreference }),
-      ...(values.remarks && values.remarks.trim() !== "" && { remarks: values.remarks }),
+       ...(values.trainPreference && values.trainPreference.trim() !== "" && { trainPreference: values.trainPreference }),
+       upgradePreferred: !!values.upgradePreferred,
+       ...(values.remarks && values.remarks.trim() !== "" && { remarks: values.remarks }),
+
     };
 
     if (formDataForAction.passengers.length === 0) {
@@ -544,6 +549,29 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           )}
         />
 
+        <FormField
+          control={form.control}
+          name="upgradePreferred"
+          render={({ field }) => (
+            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+              <div className="space-y-0.5">
+                <FormLabel className="text-base">Upgrade Preferred</FormLabel>
+                <FormDescription>
+                  Check if an upgrade is preferred if available.
+                </FormDescription>
+              </div>
+              <FormControl>
+                <input
+                  type="checkbox"
+                  checked={field.value || false}
+                  onChange={(e) => field.onChange(e.target.checked)}
+                  className="h-5 w-5 rounded border-gray-300"
+                />
+              </FormControl>
+            </FormItem>
+          )}
+        />
+        
         <FormField
           control={form.control}
           name="remarks"

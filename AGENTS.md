@@ -38,7 +38,7 @@ TrainTrack is a Next.js 15 static-export app for train booking operations. The f
 
 ## Current Repo State
 
-- `git pull --ff-only` reported `Already up to date.` on March 6, 2026.
+- `git pull --ff-only` reported `Already up to date.` on March 9, 2026.
 - `npm.cmd run typecheck` passes.
 - `npm.cmd run lint` currently fails because `next lint` hits a circular JSON/config error from `.eslintrc.json`; linting likely needs migration to the ESLint CLI for reliable execution on Next 15/16-era tooling.
 
@@ -47,4 +47,8 @@ TrainTrack is a Next.js 15 static-export app for train booking operations. The f
 - Firestore timestamp values should be converted to ISO strings before use in client components.
 - The app is deployed to Firebase Hosting from the static `out/` directory.
 - `next.config.mjs` currently ignores TypeScript and ESLint errors during build, so do not assume a successful production build means the codebase is clean.
+- **Payment tracking**: Bookings have `paymentReceived` and `amountSettled` fields for tracking customer payments and handler settlements. Use `isEligibleForPaymentTracking()` helper to filter bookings created/updated after March 6, 2026.
+- **Group bookings**: Bookings can be grouped using `bookingGroups/` collection. Group operations include creation, status updates, and record editing.
+- **Train names**: Booking records now include `trainName` field for better identification.
+- **Upgrade preferred**: Booking records now include `upgradePreferred` field to indicate if an upgrade is preferred.
 - Existing repo guidance also lives in `CLAUDE.md`; keep both files aligned if architecture or workflows change.

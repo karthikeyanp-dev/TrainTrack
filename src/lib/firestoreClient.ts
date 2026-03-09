@@ -85,6 +85,7 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     classType: normalizeClassType(data.classType),
     bookingType: data.bookingType || "Tatkal",
     trainPreference: data.trainPreference as string | undefined,
+    upgradePreferred: data.upgradePreferred as boolean | undefined,
     remarks: (data.remarks || data.timePreference) as string | undefined,
     status: data.status as BookingStatus,
     statusReason: data.statusReason as string | undefined,
@@ -242,6 +243,9 @@ export async function updateBookingById(id: string, formData: BookingFormData): 
 
     if (!formData.trainPreference) {
       bookingData.trainPreference = deleteField();
+    }
+    if (!formData.upgradePreferred) {
+      bookingData.upgradePreferred = deleteField();
     }
     if (!formData.remarks) {
       bookingData.remarks = deleteField();

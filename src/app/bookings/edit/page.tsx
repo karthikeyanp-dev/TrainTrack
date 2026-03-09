@@ -42,6 +42,7 @@ function EditBookingContent() {
             classType: booking.classType,
             bookingType: booking.bookingType,
             trainPreference: booking.trainPreference || "",
+            upgradePreferred: booking.upgradePreferred || false,
             remarks: booking.remarks || "",
           });
         } else {

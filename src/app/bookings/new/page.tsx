@@ -38,6 +38,7 @@ function NewBookingPageContent() {
             classType: bookingToCopy.classType,
             bookingType: bookingToCopy.bookingType,
             trainPreference: bookingToCopy.trainPreference || "",
+            upgradePreferred: bookingToCopy.upgradePreferred || false,
             remarks: bookingToCopy.remarks || "",
           });
         } else {

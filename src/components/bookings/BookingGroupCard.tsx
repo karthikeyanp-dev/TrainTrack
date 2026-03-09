@@ -210,7 +210,7 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
       const formattedBooking = formatDate(b.bookingDate);
       const bookingDateFormatted = formattedBooking !== "N/A" ? formattedBooking : (b.bookingDate || "N/A");
 
-      return `Booking ${index + 1} (For ${b.userName}):\nFrom: ${b.source.toUpperCase()}\nTo: ${b.destination.toUpperCase()}\nJourney Date: ${journeyDateFormatted}\nBook By: ${bookingDateFormatted}\nType: ${b.bookingType}\nClass: ${b.classType}\nPassengers:\n${passengerDetailsText}${b.trainPreference ? `\nTrain Preference: ${b.trainPreference}` : ""}${b.remarks ? `\nRemarks: ${b.remarks}` : ""}`;
+      return `Booking ${index + 1} (For ${b.userName}):\nFrom: ${b.source.toUpperCase()}\nTo: ${b.destination.toUpperCase()}\nJourney Date: ${journeyDateFormatted}\nBook By: ${bookingDateFormatted}\nType: ${b.bookingType}\nClass: ${b.classType}\nPassengers:\n${passengerDetailsText}${b.trainPreference ? `\nTrain Preference: ${b.trainPreference}` : ""}${b.upgradePreferred ? `\nUpgrade Preferred: Yes` : ""}${b.remarks ? `\nRemarks: ${b.remarks}` : ""}`;
     }).join("\n-\n");
 
     let preparedAccountsText = "";

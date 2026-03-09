@@ -53,6 +53,7 @@ export interface Booking {
   classType: TrainClass;
   bookingType: BookingType;
   trainPreference?: string; // Optional
+  upgradePreferred?: boolean; // Optional
   remarks?: string; // Optional
   status: BookingStatus;
   statusReason?: string; // Optional reason for status like Missed or Booking Failed

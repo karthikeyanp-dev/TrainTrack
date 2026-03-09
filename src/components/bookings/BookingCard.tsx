@@ -530,8 +530,10 @@ Class: ${booking.classType}
 Passengers:
 ${passengerDetailsText}
 -
-${booking.trainPreference ? `Train Preference: ${booking.trainPreference}` : ''}
-${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
+            ${booking.trainPreference ? `Train Preference: ${booking.trainPreference}` : ''}
+            ${booking.upgradePreferred ? `Upgrade Preferred: Yes` : ''}
+            ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
+
 ----------------------
     `.trim().replace(/^\n+|\n+$/g, '').replace(/\n\n+/g, '\n');
 
@@ -709,6 +711,12 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
           <div className="flex items-start gap-2">
             <Train className="h-4 w-4 text-muted-foreground mt-0.5" />
             <span className="flex-1"><span style={labelHighlightStyle}>Train Pref:</span> {booking.trainPreference}</span>
+          </div>
+        )}
+        {booking.upgradePreferred && (
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-primary" />
+            <span className="font-semibold text-primary">Upgrade Preferred</span>
           </div>
         )}
         {booking.remarks && (

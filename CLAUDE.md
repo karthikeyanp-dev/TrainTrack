@@ -57,6 +57,8 @@ All data operations use Firestore client SDK with React Query hooks:
 - React Query for caching; `useBookings` uses `onSnapshot()`, accounts/handlers use polling
 - Optional fields cleaned up with `deleteField()` on update (not set to `null`)
 - Firestore Timestamp conversion to ISO strings for client compatibility
+- **Payment tracking**: Booking records include `paymentReceived` and `amountSettled` fields; filter by eligibility date using helper function
+- **Group bookings**: Use `createBookingGroup()`, `updateBookingGroupStatus()`, `saveGroupBookingRecords()` from `firestoreClient.ts`
 
 ### Firebase Integration
 
@@ -99,6 +101,10 @@ All forms use React Hook Form + Zod + Firestore client SDK:
 All types defined in `src/types/`:
 
 - `booking.ts` - `BookingStatus`, `TrainClass`, `Passenger`, `PreparedAccount`, `RefundDetails`, `Booking`, `BookingGroup`, `LEGACY_CLASS_MAP`
+  - `Booking` includes `paymentReceived` and `amountSettled` fields for payment tracking
+  - `Booking` includes `trainName` field for train identification
+  - `Booking` includes `upgradePreferred` boolean to track if an upgrade is preferred
+  - `BookingGroup` for grouping multiple bookings together
 - `account.ts` - `IrctcAccount` interface
 - `bookingRecord.ts` - `BookingRecord`, `PaymentMethod` enum (`"Wallet" | "UPI" | "Others"`)
 - `handler.ts` - `Handler` interface
@@ -226,6 +232,8 @@ Current Firestore rules (`firestore.rules`) allow unrestricted read/write. In pr
 - Firebase Hosting serves all routes to `/index.html` (SPA mode)
 - `TOAST_LIMIT = 1` — only one toast notification visible at a time
 - Optional env var `NEXT_PUBLIC_BASE_PATH` for subdirectory deployments
+- **Payment tracking**: Use `isEligibleForPaymentTracking()` helper in BookingsView to filter bookings created/updated after feature start date (March 6, 2026)
+- **Group bookings**: Multiple bookings can be grouped together using `bookingGroups/` collection; supports bulk status updates and record editing
 
 ## Testing
 
