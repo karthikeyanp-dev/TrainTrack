@@ -520,19 +520,20 @@ Train Booking Details:
 ----------------------
 From: ${booking.source.toUpperCase()}
 To: ${booking.destination.toUpperCase()}
--
+---
 Journey Date: ${journeyDateFormatted}
 Book By: ${bookingDateFormatted}
--
+---
 Type: ${booking.bookingType}
 Class: ${booking.classType}
--
+---
 Passengers:
 ${passengerDetailsText}
--
-            ${booking.trainPreference ? `Train Preference: ${booking.trainPreference}` : ''}
-            ${booking.upgradePreferred ? `Upgrade Preferred: Yes` : ''}
-            ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
+---
+${booking.trainPreference ? `Train Preference: ${booking.trainPreference}` : ''}
+${booking.upgradePreferred ? `Upgrade Preferred: Yes` : ''}
+---
+${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
 
 ----------------------
     `.trim().replace(/^\n+|\n+$/g, '').replace(/\n\n+/g, '\n');
