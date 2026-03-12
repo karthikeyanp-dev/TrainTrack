@@ -654,6 +654,12 @@ export async function saveBookingRecord(data: {
       updatedAt: serverTimestamp(),
     };
 
+    // Generate or preserve transaction ID for consistent booking tracking
+    const bookingTransactionId = isUpdate && previousRecord?.bookingTransactionId 
+      ? previousRecord.bookingTransactionId 
+      : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    recordData.bookingTransactionId = bookingTransactionId;
+
     if (data.trainName && data.trainName.trim() !== "") {
       recordData.trainName = data.trainName.trim();
     } else {
@@ -690,6 +696,7 @@ export async function saveBookingRecord(data: {
       bookedAccountUsername: savedData.bookedAccountUsername,
       amountCharged: savedData.amountCharged,
       methodUsed: savedData.methodUsed,
+      bookingTransactionId: savedData.bookingTransactionId,
       trainName: savedData.trainName as string | undefined,
       createdAt: toISOStringSafe(savedData.createdAt, "createdAt", savedDoc.id),
       updatedAt: toISOStringSafe(savedData.updatedAt, "updatedAt", savedDoc.id),
@@ -794,6 +801,11 @@ export async function saveGroupBookingRecords(data: {
       });
     }
 
+    // Generate a unique transaction ID for this booking event
+    const bookingTransactionId = isUpdate && previousRecord?.bookingTransactionId 
+      ? previousRecord.bookingTransactionId 
+      : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
     // Create single record for the entire group
     const recordData: Record<string, any> = {
       bookingId: data.bookingIds[0], // Primary booking ID (first one)
@@ -803,6 +815,7 @@ export async function saveGroupBookingRecords(data: {
       bookedAccountUsername: data.bookedAccountUsername,
       amountCharged: data.totalAmount, // Total amount for entire group
       methodUsed: data.methodUsed,
+      bookingTransactionId,          // Track this booking transaction
       updatedAt: serverTimestamp(),
     };
 
@@ -842,6 +855,7 @@ export async function saveGroupBookingRecords(data: {
       bookedAccountUsername: savedData.bookedAccountUsername,
       amountCharged: savedData.amountCharged,
       methodUsed: savedData.methodUsed,
+      bookingTransactionId: savedData.bookingTransactionId,
       trainName: savedData.trainName as string | undefined,
       createdAt: toISOStringSafe(savedData.createdAt, "createdAt", savedDoc.id),
       updatedAt: toISOStringSafe(savedData.updatedAt, "updatedAt", savedDoc.id),
@@ -988,12 +1002,100 @@ export async function getBookingGroupById(id: string): Promise<BookingGroup | nu
   }
 }
 
-export async function ungroupBookings(groupId: string): Promise<{ success: boolean; error?: string }> {
+export async function ungroupBookings(groupId: string, bookings?: any[]): Promise<{ success: boolean; error?: string }> {
    if (!db) return { success: false, error: "Database not initialized" };
    const firestore = db;
    try {
      const group = await getBookingGroupById(groupId);
      if (!group) return { success: false, error: "Group not found" };
+
+     // Fetch bookings data if not provided (need passenger counts for amount split)
+     let bookingsData = bookings || [];
+     if (bookingsData.length === 0) {
+       const bookingPromises = group.bookingIds.map(bid => getBookingById(bid));
+       bookingsData = await Promise.all(bookingPromises);
+     }
+
+     // Fetch the group booking record to get the total amount
+     const recordsCollection = collection(firestore, "bookingRecords");
+     const groupRecordQuery = query(recordsCollection, where("groupId", "==", groupId));
+     const groupRecordSnapshot = await getDocs(groupRecordQuery);
+
+     // If there's a group booking record, we need to split it into individual records
+     if (!groupRecordSnapshot.empty) {
+       const groupRecordDoc = groupRecordSnapshot.docs[0];
+       const groupRecordData = groupRecordDoc.data();
+       const totalAmount = groupRecordData.amountCharged || 0;
+       const methodUsed = groupRecordData.methodUsed;
+       const bookedBy = groupRecordData.bookedBy;
+       const bookedAccountUsername = groupRecordData.bookedAccountUsername;
+       const trainName = groupRecordData.trainName;
+       const bookingTransactionId = groupRecordData.bookingTransactionId; // Preserve transaction ID
+
+       // Calculate total passengers across all bookings
+       const totalPassengers = bookingsData.reduce((sum, booking: any) => 
+         sum + (booking.passengers?.length || 0), 0
+       );
+
+       // Calculate amount per passenger
+       const amountPerPassenger = totalAmount / totalPassengers;
+
+       // Create individual booking records for each booking with proportional amount
+       const individualRecordPromises = bookingsData.map(async (booking: any) => {
+         const passengerCount = booking.passengers?.length || 0;
+         const proportionalAmount = Number((amountPerPassenger * passengerCount).toFixed(2));
+
+         // Create individual record
+         const recordData = {
+           bookingId: booking.id,
+           groupId: deleteField(), // Remove group reference
+           bookedBy,
+           bookedAccountUsername,
+           amountCharged: proportionalAmount,
+           methodUsed,
+           bookingTransactionId, // Preserve the same transaction ID
+           updatedAt: serverTimestamp(),
+         } as any;
+
+         if (trainName) {
+           recordData.trainName = trainName;
+         } else {
+           recordData.trainName = deleteField();
+         }
+
+         // Check if individual record already exists for this booking (without groupId)
+         const allRecordsQuery = query(
+           recordsCollection,
+           where("bookingId", "==", booking.id)
+         );
+         const allRecordsSnapshot = await getDocs(allRecordsQuery);
+         
+         // Filter out any records that still have groupId (shouldn't happen but be safe)
+         let existingDoc = null;
+         if (!allRecordsSnapshot.empty) {
+           existingDoc = allRecordsSnapshot.docs.find(docSnap => 
+             !docSnap.data().groupId || docSnap.data().groupId === null
+           );
+         }
+         
+         if (!existingDoc) {
+           // Create new individual record
+           await addDoc(recordsCollection, {
+             ...recordData,
+             createdAt: serverTimestamp(),
+           });
+         } else {
+           // Update existing individual record
+           await updateDoc(doc(firestore, "bookingRecords", existingDoc.id), recordData);
+         }
+       });
+
+       // Wait for all individual records to be created/updated
+       await Promise.all(individualRecordPromises);
+
+       // Delete the group booking record
+       await deleteDoc(doc(firestore, "bookingRecords", groupRecordDoc.id));
+     }
 
      // Remove groupId from all bookings
      const promises = group.bookingIds.map(bid => 

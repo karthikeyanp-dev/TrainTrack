@@ -14,6 +14,7 @@ export interface BookingRecord {
   trainName?: string;       // Optional train name/number at time of booking
   createdAt: string;        // ISO string
   updatedAt: string;        // ISO string
+  bookingTransactionId?: string; // Unique ID to track related booking records from same transaction
 }
 
 export type BookingRecordFormData = Omit<BookingRecord, "id" | "createdAt" | "updatedAt">;

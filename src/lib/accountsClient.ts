@@ -180,26 +180,59 @@ export async function getAccountStats(): Promise<AccountStats[]> {
     
     const bookingRecordsSnapshot = await getDocs(bookingRecordsCollection);
     
-    // Count bookings per account from current month
+    // Count unique booking transactions per account from current month
     const accountUsage = new Map<string, { count: number; lastDate?: string }>();
+    
+    // Track processed transactions using different strategies
+    const processedTransactionIds = new Set<string>(); // For new bookings with transaction ID
+    const processedGroupIds = new Set<string>(); // For old group bookings
+    const processedDocIds = new Set<string>(); // For old individual bookings
     
     bookingRecordsSnapshot.docs.forEach(doc => {
       const data = doc.data();
       const username = data.bookedAccountUsername;
       const createdAt = data.createdAt?.toDate?.();
+      const transactionId = data.bookingTransactionId;
+      const groupId = data.groupId;
       
       // Only count bookings from current month
       if (username && createdAt && createdAt >= startOfCurrentMonth) {
-        const existing = accountUsage.get(username) || { count: 0 };
-        const existingDate = existing.lastDate ? new Date(existing.lastDate) : null;
-        const currentDate = createdAt;
+        let shouldCount = false;
         
-        accountUsage.set(username, {
-          count: existing.count + 1,
-          lastDate: (!existingDate || currentDate > existingDate) 
-            ? createdAt.toISOString().split('T')[0]
-            : existing.lastDate,
-        });
+        // Priority 1: Use transaction ID if available (new system)
+        if (transactionId) {
+          if (!processedTransactionIds.has(transactionId)) {
+            processedTransactionIds.add(transactionId);
+            shouldCount = true;
+          }
+        } 
+        // Priority 2: Use groupId for old group bookings without transaction ID
+        else if (groupId) {
+          if (!processedGroupIds.has(groupId)) {
+            processedGroupIds.add(groupId);
+            shouldCount = true;
+          }
+        } 
+        // Priority 3: Fall back to document ID for old individual bookings
+        else {
+          if (!processedDocIds.has(doc.id)) {
+            processedDocIds.add(doc.id);
+            shouldCount = true;
+          }
+        }
+        
+        if (shouldCount) {
+          const existing = accountUsage.get(username) || { count: 0 };
+          const existingDate = existing.lastDate ? new Date(existing.lastDate) : null;
+          const currentDate = createdAt;
+          
+          accountUsage.set(username, {
+            count: existing.count + 1,
+            lastDate: (!existingDate || currentDate > existingDate) 
+              ? createdAt.toISOString().split('T')[0]
+              : existing.lastDate,
+          });
+        }
       }
     });
 

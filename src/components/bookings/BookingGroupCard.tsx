@@ -265,7 +265,8 @@ ${bookingsText}${preparedAccountsText}${bookedDetailsText}
   const handleUngroup = async () => {
     setIsUngrouping(true);
     try {
-      const result = await ungroupBookings(groupId);
+      // Pass bookings data so ungroupBookings can calculate proportional amounts
+      const result = await ungroupBookings(groupId, bookings);
       if (result.success) {
         toast({ title: "Group Dissolved", description: "Bookings have been ungrouped." });
         router.refresh();
