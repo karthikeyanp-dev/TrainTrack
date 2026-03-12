@@ -7,6 +7,8 @@ import { useBookings, usePendingBookings, useBookingDates } from "@/hooks/useBoo
 import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, Suspense } from "react";
 import type { Booking } from "@/types/booking";
+import { motion } from "framer-motion";
+import { staggerContainer, staggerItem } from "@/lib/animations";
 
 function HomePageContent() {
   const router = useRouter();
@@ -72,14 +74,18 @@ function HomePageContent() {
   if (errorAll || errorPending || errorDates) {
     return (
       <AppShell showAddButton={true} activeTab="bookings">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
+        <motion.div 
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="flex items-center justify-center min-h-[400px]"
+        >
+          <div className="text-center p-8 rounded-2xl bg-destructive/10 border border-destructive/20">
             <p className="text-lg font-semibold text-destructive">Error loading bookings</p>
             <p className="text-sm text-muted-foreground mt-2">
               {(errorAll || errorPending || errorDates)?.message || "An unknown error occurred"}
             </p>
           </div>
-        </div>
+        </motion.div>
       </AppShell>
     );
   }
