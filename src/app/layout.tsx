@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
-import { Open_Sans } from 'next/font/google';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import { Providers } from './providers';
 import type { ReactNode } from 'react';
 import { ThemeProvider } from 'next-themes';
 
-const openSans = Open_Sans({
+const inter = Inter({
   subsets: ['latin'],
-  variable: '--font-open-sans',
+  variable: '--font-inter',
   display: 'swap',
 });
 
@@ -24,14 +24,14 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${openSans.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} font-sans antialiased`}>
         <ThemeProvider
           attribute="class"
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
         >
-          <section id="main" className='max-w-screen-xl mx-auto px-4 sm:px-6 lg:px-8'>
+          <section id="main" className='w-full px-4 sm:px-6 lg:px-8'>
             <Providers>{children}</Providers>
           </section>
         </ThemeProvider>

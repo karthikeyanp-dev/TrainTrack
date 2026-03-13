@@ -6,7 +6,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, Edit3, Eye, EyeOff, Plus, X } from "lucide-react";
+import { Loader2, Trash2, Edit3, Eye, EyeOff, Plus, X, CreditCard, UserCircle, Wallet, Calendar, TrendingUp, Users, Briefcase } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import type { IrctcAccount } from "@/types/account";
 import { getAccounts, addAccount, deleteAccount, updateAccount, getAccountStats, type AccountStats } from "@/lib/accountsClient";
 import type { Handler } from "@/types/handler";
@@ -326,19 +327,37 @@ function AccountsManager() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div className="text-sm text-muted-foreground">
-          Total Accounts: <span className="font-medium text-foreground">{totalAccounts}</span>
-          <span className="mx-2">•</span>
-          Total Wallet: <span className="font-medium text-foreground">₹{totalWalletAmount.toFixed(2)}</span>
+    <motion.div 
+      className="space-y-8"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.4 }}
+    >
+      {/* Stats Header */}
+      <motion.div 
+        className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
+      >
+        <div className="flex flex-wrap items-center gap-4 text-sm">
+          <div className="flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-full">
+            <CreditCard className="h-4 w-4 text-primary" />
+            <span className="text-muted-foreground">Total Accounts:</span>
+            <span className="font-semibold text-foreground">{totalAccounts}</span>
+          </div>
+          <div className="flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-full">
+            <Wallet className="h-4 w-4 text-primary" />
+            <span className="text-muted-foreground">Total Wallet:</span>
+            <span className="font-semibold text-foreground">₹{totalWalletAmount.toFixed(2)}</span>
+          </div>
         </div>
         {!showAddForm && (
-          <Button onClick={() => setShowAddForm(true)}>
+          <Button onClick={() => setShowAddForm(true)} className="rounded-full">
             <Plus className="mr-2 h-4 w-4" /> Add Account
           </Button>
         )}
-      </div>
+      </motion.div>
 
       {showAddForm && (
         <Card className="max-w-xl">
@@ -409,11 +428,25 @@ function AccountsManager() {
       </Card>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {accounts.map(account => {
+      {/* Account Cards Grid */}
+      <motion.div 
+        className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.2 }}
+      >
+        <AnimatePresence>
+        {accounts.map((account, index) => {
           const stats = accountStats.find(s => s.accountId === account.id);
           return (
-          <Card key={account.id}>
+          <motion.div
+            key={account.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={{ delay: index * 0.05 }}
+          >
+          <Card className="group hover:shadow-lg transition-shadow duration-300">
             <CardHeader className="pb-3">
               <div className="flex justify-between items-start">
                 <CardTitle className="text-base">
@@ -491,6 +524,7 @@ function AccountsManager() {
               </div>
             </CardContent>
           </Card>
+          </motion.div>
           );
         })}
         {accounts.length === 0 && (
@@ -498,7 +532,8 @@ function AccountsManager() {
             No accounts added yet. Click &apos;Add Account&apos; to add your first IRCTC account.
           </p>
         )}
-      </div>
+        </AnimatePresence>
+      </motion.div>
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
@@ -635,7 +670,7 @@ function AccountsManager() {
           </form>
         </DialogContent>
       </Dialog>
-    </div>
+    </motion.div>
   );
 }
 

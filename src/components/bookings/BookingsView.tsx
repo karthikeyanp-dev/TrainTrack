@@ -1,12 +1,12 @@
-
 'use client';
 
-import { useState, useEffect, useMemo, Fragment } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useInView } from 'react-intersection-observer';
+import { motion, AnimatePresence } from 'framer-motion';
 import type { Booking, TrainClass } from '@/types/booking';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Search, Loader2 } from "lucide-react";
+import { AlertCircle, Search, Loader2, Calendar, CheckCircle2, Clock, Receipt, Layers } from "lucide-react";
 import { DateGroupHeading } from "@/components/bookings/DateGroupHeading";
 import { BookingList } from "@/components/bookings/BookingList";
 import { BookingGroupCard } from "@/components/bookings/BookingGroupCard";
@@ -17,6 +17,7 @@ import { createBookingGroup } from "@/lib/firestoreClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { staggerContainer, staggerItem, fadeInUp } from "@/lib/animations";
 
 /**
  * Payment tracking feature start date.
@@ -277,7 +278,7 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
     // Helper to render groups for a category
     const renderGroupCards = (categoryGroups: [string, Booking[]][]) => (
         categoryGroups.length > 0 && (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-4">
+            <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 mb-4">
                 {categoryGroups.map(([groupId, groupBookings]) => (
                     <BookingGroupCard 
                         key={groupId} 
@@ -332,100 +333,198 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
         : "No bookings have been marked as 'Booked', 'Missed', 'Failed', 'Cancelled' etc. yet.";
 
     return (
-        <>
-            <div className="flex justify-end items-center mb-4 gap-2">
+        <motion.div
+            initial="initial"
+            animate="animate"
+            variants={staggerContainer}
+        >
+            <motion.div variants={staggerItem} className="flex justify-end items-center mb-6 gap-2">
                 {selectionMode ? (
-                    <>
-                         <span className="text-sm font-medium mr-2">{selectedBookingIds.size} Selected</span>
+                    <motion.div 
+                        initial={{ opacity: 0, x: 20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="flex items-center gap-2"
+                    >
+                         <span className="text-sm font-medium mr-2 px-3 py-1 bg-primary/10 text-primary rounded-full">
+                            {selectedBookingIds.size} Selected
+                         </span>
                          <Button variant="outline" size="sm" onClick={() => { setSelectionMode(false); setSelectedBookingIds(new Set()); }}>
                             Cancel
                          </Button>
                          <Button size="sm" onClick={handleGroupBookings} disabled={selectedBookingIds.size < 2 || isGrouping}>
-                            {isGrouping ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                            {isGrouping ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Layers className="mr-2 h-4 w-4" />}
                             Group Selected
                          </Button>
-                    </>
+                    </motion.div>
                 ) : (
                     <Button variant="outline" size="sm" onClick={() => setSelectionMode(true)}>
+                        <Layers className="mr-2 h-4 w-4" />
                         Select Multiple
                     </Button>
                 )}
-            </div>
+            </motion.div>
 
             <Tabs defaultValue="pending" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 md:w-[400px]">
-                <TabsTrigger value="pending">Pending</TabsTrigger>
-                <TabsTrigger value="completed">Completed</TabsTrigger>
-                <TabsTrigger value="refunds">Refunds</TabsTrigger>
+              <TabsList className="inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground w-full md:w-[420px]">
+                <TabsTrigger 
+                    value="pending" 
+                    className="inline-flex items-center justify-center gap-2 rounded-sm px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
+                >
+                    <Clock className="h-4 w-4" />
+                    Pending
+                </TabsTrigger>
+                <TabsTrigger 
+                    value="completed"
+                    className="inline-flex items-center justify-center gap-2 rounded-sm px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
+                >
+                    <CheckCircle2 className="h-4 w-4" />
+                    Completed
+                </TabsTrigger>
+                <TabsTrigger 
+                    value="refunds"
+                    className="inline-flex items-center justify-center gap-2 rounded-sm px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
+                >
+                    <Receipt className="h-4 w-4" />
+                    Refunds
+                </TabsTrigger>
               </TabsList>
 
               <TabsContent value="pending" className="mt-6">
-                <h2 className="text-2xl font-semibold mb-4">Pending Bookings</h2>
+                <motion.div variants={staggerItem}>
+                    <div className="flex items-center gap-3 mb-6">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10">
+                            <Clock className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                            <h2 className="text-heading-3 font-semibold">Pending Bookings</h2>
+                            <p className="text-sm text-muted-foreground">
+                                {pendingDates.length} date{pendingDates.length !== 1 ? 's' : ''} with pending requests
+                            </p>
+                        </div>
+                    </div>
+                </motion.div>
                 {pendingDates.length === 0 ? (
-                  <Alert className="mt-4">
-                    {searchQuery ? <Search className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-                    <AlertTitle>{searchQuery ? "Search Results" : "No Pending Bookings"}</AlertTitle>
-                    <AlertDescription>{noPendingMessage}</AlertDescription>
-                  </Alert>
+                  <motion.div variants={staggerItem}>
+                    <Alert className="mt-4 border-dashed">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
+                            {searchQuery ? <Search className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
+                        </div>
+                        <AlertTitle className="mt-2">{searchQuery ? "Search Results" : "No Pending Bookings"}</AlertTitle>
+                        <AlertDescription>{noPendingMessage}</AlertDescription>
+                    </Alert>
+                  </motion.div>
                 ) : (
                   <Accordion type="multiple" className="w-full space-y-4" defaultValue={pendingDates.length > 0 ? [pendingDates[0]] : []}>
-                    {pendingDates.map(date => (
-                      <AccordionItem value={date} key={`pending-${date}`} className="border-b-0">
-                        <AccordionTrigger className="p-0 hover:no-underline">
-                          <DateGroupHeading dateString={date} />
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          {renderBookingsForDate(pendingBookingsByDate[date])}
-                        </AccordionContent>
-                      </AccordionItem>
+                    {pendingDates.map((date, index) => (
+                      <motion.div
+                        key={`pending-${date}`}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                      >
+                        <AccordionItem value={date} className="border rounded-2xl px-4 bg-card shadow-elevation-1">
+                            <AccordionTrigger className="py-4 hover:no-underline">
+                                <DateGroupHeading dateString={date} />
+                            </AccordionTrigger>
+                            <AccordionContent className="pb-4">
+                                {renderBookingsForDate(pendingBookingsByDate[date])}
+                            </AccordionContent>
+                        </AccordionItem>
+                      </motion.div>
                     ))}
                   </Accordion>
                 )}
               </TabsContent>
 
               <TabsContent value="completed" className="mt-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                  <h2 className="text-2xl font-semibold">Completed Bookings</h2>
-                  <div className="flex items-center gap-2 flex-nowrap overflow-x-auto pb-2 mb-2">
-                    <button
-                      onClick={() => setPaymentFilter('all')}
-                      className={cn(
-                        "h-8 shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors border",
-                        paymentFilter === 'all'
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-muted text-foreground border-border hover:bg-muted/80"
-                      )}
-                    >
-                      All
-                    </button>
-                    <button
-                      onClick={() => setPaymentFilter('payment-pending')}
-                      disabled={paymentPendingCount === 0}
-                      className={cn(
-                        "h-8 shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors border",
-                        paymentFilter === 'payment-pending'
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-muted text-foreground border-border hover:bg-muted/80",
-                        paymentPendingCount === 0 && "opacity-50 cursor-not-allowed"
-                      )}
-                    >
-                      Payment Pending {paymentPendingCount > 0 && `(${paymentPendingCount})`}
-                    </button>
-                    <button
-                      onClick={() => setPaymentFilter('settlement-pending')}
-                      disabled={settlementPendingCount === 0}
-                      className={cn(
-                        "h-8 shrink-0 px-3 py-1.5 rounded-full text-sm font-medium transition-colors border",
-                        paymentFilter === 'settlement-pending'
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-muted text-foreground border-border hover:bg-muted/80",
-                        settlementPendingCount === 0 && "opacity-50 cursor-not-allowed"
-                      )}
-                    >
-                      Settlement Pending {settlementPendingCount > 0 && `(${settlementPendingCount})`}
-                    </button>
-                  </div>
-                </div>
+                <motion.div variants={staggerItem}>
+                    <div className="flex flex-col gap-4 mb-6">
+                        {/* Header Row */}
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
+                                    <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                                </div>
+                                <div>
+                                    <h2 className="text-heading-3 font-semibold">Completed Bookings</h2>
+                                    <p className="text-sm text-muted-foreground">
+                                        {completedDates.length} date{completedDates.length !== 1 ? 's' : ''} with completed bookings
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Filter Pills - Desktop: Horizontal, Mobile: Wrap or Single Select */}
+                        <div className="flex flex-wrap items-center gap-2">
+                            {/* All Filter */}
+                            <button
+                                onClick={() => setPaymentFilter('all')}
+                                className={cn(
+                                    "h-9 px-4 py-2 rounded-full text-sm font-medium transition-all",
+                                    paymentFilter === 'all'
+                                        ? "bg-primary text-primary-foreground shadow-elevation-2 ring-2 ring-primary/20"
+                                        : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                                )}
+                            >
+                                All
+                            </button>
+
+                            {/* Payment Pending - Only show if there are any */}
+                            {paymentPendingCount > 0 && (
+                                <button
+                                    onClick={() => setPaymentFilter('payment-pending')}
+                                    className={cn(
+                                        "h-9 px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2",
+                                        paymentFilter === 'payment-pending'
+                                            ? "bg-amber-500 text-white shadow-elevation-2 ring-2 ring-amber-500/20"
+                                            : "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20"
+                                    )}
+                                >
+                                    <span className="flex h-2 w-2 rounded-full bg-current animate-pulse" />
+                                    Payment Pending
+                                    <span className={cn(
+                                        "px-1.5 py-0.5 text-xs rounded-full",
+                                        paymentFilter === 'payment-pending' ? "bg-white/20" : "bg-amber-500/20"
+                                    )}>
+                                        {paymentPendingCount}
+                                    </span>
+                                </button>
+                            )}
+
+                            {/* Settlement Pending - Only show if there are any */}
+                            {settlementPendingCount > 0 && (
+                                <button
+                                    onClick={() => setPaymentFilter('settlement-pending')}
+                                    className={cn(
+                                        "h-9 px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2",
+                                        paymentFilter === 'settlement-pending'
+                                            ? "bg-purple-500 text-white shadow-elevation-2 ring-2 ring-purple-500/20"
+                                            : "bg-purple-500/10 text-purple-600 hover:bg-purple-500/20"
+                                    )}
+                                >
+                                    <span className="flex h-2 w-2 rounded-full bg-current" />
+                                    Settlement Pending
+                                    <span className={cn(
+                                        "px-1.5 py-0.5 text-xs rounded-full",
+                                        paymentFilter === 'settlement-pending' ? "bg-white/20" : "bg-purple-500/20"
+                                    )}>
+                                        {settlementPendingCount}
+                                    </span>
+                                </button>
+                            )}
+
+                            {/* Summary text when filters are active */}
+                            {paymentFilter !== 'all' && (
+                                <button
+                                    onClick={() => setPaymentFilter('all')}
+                                    className="text-xs text-muted-foreground hover:text-foreground underline ml-2"
+                                >
+                                    Clear filter
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </motion.div>
                 {completedDates.length === 0 ? (
                   <Alert className="mt-4">
                     {searchQuery ? <Search className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
@@ -463,10 +562,14 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
               </div>
             )}
             {!searchQuery && !hasMore && allBookingDates.length > 0 && (
-              <div className="text-center text-muted-foreground p-4">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                className="text-center text-muted-foreground p-4"
+              >
                 You've reached the end of the list.
-              </div>
+              </motion.div>
             )}
-        </>
+        </motion.div>
     );
 }

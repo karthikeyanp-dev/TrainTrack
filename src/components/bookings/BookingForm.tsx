@@ -19,7 +19,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { ArrowRightLeft, CalendarIcon, Loader2, UserPlus, Users, X } from "lucide-react";
+import { ArrowRightLeft, CalendarIcon, Loader2, UserPlus, Users, X, Train, MapPin, CalendarDays, Ticket, User, MessageSquare, Sparkles } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { addBooking, updateBookingById } from "@/lib/firestoreClient";
@@ -170,39 +171,70 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+      <motion.form 
+        onSubmit={form.handleSubmit(onSubmit)} 
+        className="space-y-8"
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4 }}
+      >
         {form.formState.errors.root?.serverError && (
-          <FormMessage className="text-destructive p-2 bg-destructive/10 rounded-md">
-            {form.formState.errors.root.serverError.message}
-          </FormMessage>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className="p-3 bg-destructive/10 border border-destructive/20 rounded-xl"
+          >
+            <FormMessage className="text-destructive" />
+          </motion.div>
         )}
 
-        <FormField
-          control={form.control}
-          name="bookingType"
-          render={({ field }) => (
-            <FormItem className="space-y-3">
-              <FormLabel>Type</FormLabel>
-              <FormControl>
-                <RadioGroup
-                  onValueChange={field.onChange}
-                  defaultValue={field.value}
-                  className="flex flex-col space-y-1 md:flex-row md:space-y-0 md:space-x-4"
-                >
-                  {ALL_BOOKING_TYPES.map((type) => (
-                     <FormItem key={type} className="flex items-center space-x-3 space-y-0">
-                        <FormControl>
-                          <RadioGroupItem value={type} />
-                        </FormControl>
-                        <FormLabel className="font-normal">{type}</FormLabel>
-                      </FormItem>
-                  ))}
-                </RadioGroup>
-              </FormControl>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        {/* Booking Type Selection */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
+          <FormField
+            control={form.control}
+            name="bookingType"
+            render={({ field }) => (
+              <FormItem className="space-y-3">
+                <FormLabel className="flex items-center gap-2 text-base font-semibold">
+                  <Ticket className="h-4 w-4 text-primary" />
+                  Booking Type
+                </FormLabel>
+                <FormControl>
+                  <RadioGroup
+                    onValueChange={field.onChange}
+                    defaultValue={field.value}
+                    className="flex flex-wrap gap-3"
+                  >
+                    {ALL_BOOKING_TYPES.map((type) => (
+                       <FormItem key={type} className="flex items-center space-x-2 space-y-0">
+                          <FormControl>
+                            <RadioGroupItem value={type} className="sr-only peer" id={`type-${type}`} />
+                          </FormControl>
+                          <FormLabel 
+                            htmlFor={`type-${type}`}
+                            className={cn(
+                              "flex items-center gap-2 px-4 py-2 rounded-xl border-2 cursor-pointer transition-all font-medium",
+                              field.value === type
+                                ? "border-primary bg-primary/10 text-primary"
+                                : "border-muted bg-muted/50 hover:bg-muted hover:border-muted-foreground/30"
+                            )}
+                          >
+                            {type === "Tatkal" && <Sparkles className="h-4 w-4" />}
+                            {type}
+                          </FormLabel>
+                        </FormItem>
+                    ))}
+                  </RadioGroup>
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </motion.div>
         
         <div className="flex flex-col md:flex-row items-center gap-2 md:gap-4">
             <FormField
@@ -225,10 +257,10 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             />
             <Button
               type="button"
-              variant="ghost"
+              variant="outline"
               size="icon"
               onClick={handleSwap}
-              className="mt-1 md:mt-5 self-center"
+              className="mt-6 self-center rounded-full h-10 w-10 border-2 hover:bg-primary/10 hover:border-primary/50 transition-colors"
               aria-label="Swap source and destination"
             >
               <ArrowRightLeft className="h-4 w-4" />
@@ -238,13 +270,17 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
               name="destination"
               render={({ field }) => (
                 <FormItem className="w-full">
-                  <FormLabel>Destination</FormLabel>
+                  <FormLabel className="flex items-center gap-2">
+                    <MapPin className="h-4 w-4 text-primary" />
+                    Destination
+                  </FormLabel>
                   <FormControl>
                     <Input
                       placeholder="e.g., MS"
                       {...field}
                       onChange={(e) => field.onChange(e.target.value.toUpperCase())}
                       value={field.value || ''}
+                      className="h-11"
                     />
                   </FormControl>
                   <FormMessage />
@@ -253,13 +289,22 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             />
         </div>
 
-        <div className="grid md:grid-cols-2 gap-6">
+        {/* Dates Section */}
+        <motion.div 
+          className="grid md:grid-cols-2 gap-6"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
           <FormField
             control={form.control}
             name="journeyDate"
             render={({ field }) => (
               <FormItem className="flex flex-col">
-                <FormLabel>Date of Journey</FormLabel>
+                <FormLabel className="flex items-center gap-2">
+                  <CalendarDays className="h-4 w-4 text-primary" />
+                  Date of Journey
+                </FormLabel>
                 <Popover open={journeyDatePopoverOpen} onOpenChange={setJourneyDatePopoverOpen}>
                   <PopoverTrigger asChild>
                     <FormControl>
@@ -300,7 +345,10 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             name="bookingDate"
             render={({ field }) => (
               <FormItem className="flex flex-col">
-                <FormLabel>Date to be Booked By</FormLabel>
+                <FormLabel className="flex items-center gap-2">
+                  <CalendarIcon className="h-4 w-4 text-primary" />
+                  Date to be Booked By
+                </FormLabel>
                 <Popover open={bookingDatePopoverOpen} onOpenChange={setBookingDatePopoverOpen}>
                   <PopoverTrigger asChild>
                     <FormControl>
@@ -336,14 +384,24 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
               </FormItem>
             )}
           />
-        </div>
+        </motion.div>
 
+        {/* Class & User Section */}
+        <motion.div
+          className="grid md:grid-cols-2 gap-6"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
         <FormField
           control={form.control}
           name="classType"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Train Class</FormLabel>
+              <FormLabel className="flex items-center gap-2">
+                <Train className="h-4 w-4 text-primary" />
+                Train Class
+              </FormLabel>
               <Select onValueChange={field.onChange} defaultValue={field.value}>
                 <FormControl>
                   <SelectTrigger>
@@ -368,18 +426,28 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           name="userName"
           render={({ field }) => (
             <FormItem>
-              <FormLabel>Requested by</FormLabel>
+              <FormLabel className="flex items-center gap-2">
+                <User className="h-4 w-4 text-primary" />
+                Requested by
+              </FormLabel>
               <FormControl>
-                <Input placeholder="e.g., Rajesh" {...field} value={field.value || ''}/>
+                <Input placeholder="e.g., Rajesh" {...field} value={field.value || ''} className="h-11"/>
               </FormControl>
               <FormMessage />
             </FormItem>
           )}
         />
+        </motion.div>
 
-        <div>
+        {/* Passenger Details Section */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+        >
           <FormLabel className="flex items-center gap-2 mb-4 text-lg font-semibold">
-            <Users className="h-6 w-6" /> Passenger Details
+            <Users className="h-5 w-5 text-primary" /> 
+            Passenger Details
           </FormLabel>
           {fields.map((item, index) => (
             <div key={item.id} className="space-y-4 p-4 mb-4 border rounded-md relative shadow-sm bg-card">
@@ -529,7 +597,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                 {form.formState.errors.passengers.root.message}
              </FormMessage>
            )}
-        </div>
+        </motion.div>
         <Separator />
 
         <FormField
@@ -541,9 +609,9 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
               <FormControl>
                 <Input placeholder="e.g., Any express, specific train number" {...field} value={field.value || ''} />
               </FormControl>
-              <FormDescription>
-                Specify any preferred train(s) or types of trains.
-              </FormDescription>
+              {/* <FormDescription>
+                Specify any preferred train names or numbers.
+              </FormDescription> */}
               <FormMessage />
             </FormItem>
           )}
@@ -556,9 +624,9 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
               <div className="space-y-0.5">
                 <FormLabel className="text-base">Upgrade Preferred</FormLabel>
-                <FormDescription>
+                {/* <FormDescription>
                   Check if an upgrade is preferred if available.
-                </FormDescription>
+                </FormDescription> */}
               </div>
               <FormControl>
                 <input
@@ -581,9 +649,9 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
               <FormControl>
                 <Textarea placeholder="e.g., Morning, after 6 PM, around noon" {...field} value={field.value || ''} />
               </FormControl>
-              <FormDescription>
+              {/* <FormDescription>
                 Specify any additional notes or preferences.
-              </FormDescription>
+              </FormDescription> */}
               <FormMessage />
             </FormItem>
           )}
@@ -603,7 +671,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             Cancel
           </Button>
         </div>
-      </form>
+      </motion.form>
     </Form>
   );
 }
