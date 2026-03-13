@@ -609,9 +609,9 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
               <FormControl>
                 <Input placeholder="e.g., Any express, specific train number" {...field} value={field.value || ''} />
               </FormControl>
-              <FormDescription>
+              {/* <FormDescription>
                 Specify any preferred train names or numbers.
-              </FormDescription>
+              </FormDescription> */}
               <FormMessage />
             </FormItem>
           )}
@@ -649,9 +649,9 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
               <FormControl>
                 <Textarea placeholder="e.g., Morning, after 6 PM, around noon" {...field} value={field.value || ''} />
               </FormControl>
-              <FormDescription>
+              {/* <FormDescription>
                 Specify any additional notes or preferences.
-              </FormDescription>
+              </FormDescription> */}
               <FormMessage />
             </FormItem>
           )}

@@ -277,7 +277,8 @@ export function AppShell({ children, showAddButton = false, activeTab }: AppShel
                 <h1 className="text-heading-4 font-semibold">
                   {activeTab === "bookings" && "Bookings"}
                   {activeTab === "accounts" && "Accounts"}
-                  {!activeTab && "Dashboard"}
+                  {activeTab === "dashboard" && "Dashboard"}
+                  {activeTab === "suggestions" && "Smart Suggestions"}
                 </h1>
               </div>
               <nav className="flex items-center gap-2">
