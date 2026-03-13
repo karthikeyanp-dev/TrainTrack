@@ -31,7 +31,7 @@ export default function RootLayout({
           enableSystem
           disableTransitionOnChange
         >
-          <section id="main" className='w-full px-4 sm:px-6 lg:px-8'>
+          <section id="main" className='w-full px-0 sm:px-0 lg:px-8'>
             <Providers>{children}</Providers>
           </section>
         </ThemeProvider>
