@@ -19,18 +19,20 @@ import {
 import { Button } from "@/components/ui/button";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { SearchBarClient } from "./SearchBarClient";
+import { CommandPalette } from "@/components/command-palette/CommandPalette";
 import { cn } from "@/lib/utils";
 import { fadeIn, slideUp, staggerContainer, staggerItem } from "@/lib/animations";
 
 interface AppShellProps {
   children: ReactNode;
   showAddButton?: boolean;
-  activeTab?: "bookings" | "accounts" | "dashboard";
+  activeTab?: "bookings" | "accounts" | "dashboard" | "suggestions";
 }
 
 const navItems = [
   { href: "/", label: "Bookings", icon: Calendar, id: "bookings" },
   { href: "/accounts", label: "Accounts", icon: Users, id: "accounts" },
+  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: "dashboard" },
 ];
 
 function Sidebar({ activeTab, onClose }: { activeTab?: string; onClose?: () => void }) {
@@ -120,6 +122,7 @@ function MobileNav({ activeTab }: { activeTab?: string }) {
               <span className="font-bold gradient-text">TrainTrack</span>
             </Link>
             <div className="flex items-center gap-2">
+              <CommandPalette />
               <ThemeSwitcher />
               <Button
                 variant="ghost"
@@ -288,12 +291,12 @@ export function AppShell({ children, showAddButton = false, activeTab }: AppShel
         </header>
 
         {/* Page Content */}
-        <main className="pt-14 lg:pt-0 pb-20 lg:pb-6">
+        <main className="pt-14 lg:pt-0 pb-20 lg:pb-6 w-full">
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            className="p-4 lg:p-6"
+            className="p-4 lg:p-6 w-full"
           >
             {children}
           </motion.div>

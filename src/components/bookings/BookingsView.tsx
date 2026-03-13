@@ -278,7 +278,7 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
     // Helper to render groups for a category
     const renderGroupCards = (categoryGroups: [string, Booking[]][]) => (
         categoryGroups.length > 0 && (
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-4">
+            <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 mb-4">
                 {categoryGroups.map(([groupId, groupBookings]) => (
                     <BookingGroupCard 
                         key={groupId} 
@@ -365,24 +365,24 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
             </motion.div>
 
             <Tabs defaultValue="pending" className="w-full">
-              <TabsList className="grid w-full grid-cols-3 md:w-[420px] bg-muted/50 p-1.5 rounded-2xl">
+              <TabsList className="inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground w-full md:w-[420px]">
                 <TabsTrigger 
                     value="pending" 
-                    className="rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-elevation-1 data-[state=active]:text-primary gap-2"
+                    className="inline-flex items-center justify-center gap-2 rounded-sm px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
                 >
                     <Clock className="h-4 w-4" />
                     Pending
                 </TabsTrigger>
                 <TabsTrigger 
                     value="completed"
-                    className="rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-elevation-1 data-[state=active]:text-primary gap-2"
+                    className="inline-flex items-center justify-center gap-2 rounded-sm px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
                 >
                     <CheckCircle2 className="h-4 w-4" />
                     Completed
                 </TabsTrigger>
                 <TabsTrigger 
                     value="refunds"
-                    className="rounded-xl data-[state=active]:bg-background data-[state=active]:shadow-elevation-1 data-[state=active]:text-primary gap-2"
+                    className="inline-flex items-center justify-center gap-2 rounded-sm px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
                 >
                     <Receipt className="h-4 w-4" />
                     Refunds

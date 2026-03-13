@@ -34,7 +34,7 @@ export function DateGroupHeading({ dateString, isJourneyDate = false }: DateGrou
   }, [dateString, isJourneyDate]);
 
   return (
-    <h3 className="text-xl font-medium pb-2 border-b">
+    <h3 className="text-xl font-medium pb-2">
       {displayDate}
     </h3>
   );

@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "./StatusBadge";
-import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X, CreditCard, Receipt, Loader2 } from "lucide-react";
+import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X, CreditCard, Receipt, Loader2, ArrowRight } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateBookingStatus, deleteBooking, getBookingRecordByBookingId, deleteBookingRefundDetails, deleteBookingRecord, updateBookingPaymentTracking, updateBookingRefundDetails } from "@/lib/firestoreClient";
 import type { BookingRecord } from "@/types/bookingRecord";
@@ -16,6 +16,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { format } from "date-fns";
 import { useRouter } from "next/navigation";
 import { useState, useEffect, useCallback } from "react";
+import { motion } from "framer-motion";
 
 import {
   AlertDialog,
@@ -616,11 +617,17 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
   const displayClass = `${booking.bookingType === 'Tatkal' ? 'T' : 'G'}-${compactClass}`;
 
   return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -2 }}
+      transition={{ duration: 0.2 }}
+    >
     <Card className={cn(
       "w-full shadow-md hover:shadow-lg transition-shadow duration-200 flex flex-col relative",
       isSelected && "ring-2 ring-primary border-primary"
     )}>
-      <CardHeader>
+      <CardHeader className="pb-2">
         <div className="flex gap-3 items-start">
           {selectionMode && (
             <Checkbox 
@@ -629,15 +636,21 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
               className="mt-1.5"
             />
           )}
-          <div className="space-y-2 flex-1 min-w-0">
-            {/* First row: Source-Destination and Status Badge */}
-            <div className="flex justify-between items-start gap-2">
-              <CardTitle className="text-lg md:text-xl flex-shrink min-w-0">
-                <span style={sourceDestStyle}>{booking.source.toUpperCase()}</span> <span className="text-sm text-gray-400">to</span> <span style={sourceDestStyle}>{booking.destination.toUpperCase()}</span>
+          <div className="space-y-2 flex-1 min-w-0 relative">
+            {/* Status Badge - Top Right */}
+            <div className="absolute top-0 right-0">
+              <StatusBadge status={booking.status} size="sm" />
+            </div>
+            
+            {/* First row: Source-Destination with Arrow */}
+            <div className="flex items-center gap-2 pr-20">
+              <CardTitle className="text-lg md:text-xl flex-shrink-0">
+                <span style={sourceDestStyle}>{booking.source.toUpperCase()}</span>
               </CardTitle>
-              <div className="flex-shrink-0">
-                <StatusBadge status={booking.status} />
-              </div>
+              <ArrowRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+              <CardTitle className="text-lg md:text-xl flex-shrink-0">
+                <span style={sourceDestStyle}>{booking.destination.toUpperCase()}</span>
+              </CardTitle>
             </div>
             
             {/* Second row: For userName and Class display */}
@@ -1330,6 +1343,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
 
       </CardFooter>
     </Card>
+    </motion.div>
   );
 }
 

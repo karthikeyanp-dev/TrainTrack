@@ -8,7 +8,6 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useEffect, useMemo, Suspense } from "react";
 import type { Booking } from "@/types/booking";
 import { motion } from "framer-motion";
-import { staggerContainer, staggerItem } from "@/lib/animations";
 
 function HomePageContent() {
   const router = useRouter();
