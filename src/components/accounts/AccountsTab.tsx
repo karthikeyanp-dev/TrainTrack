@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, Edit3, Eye, EyeOff, Plus, X, CreditCard, UserCircle, Wallet, Calendar, TrendingUp, Users, Briefcase } from "lucide-react";
+import { Loader2, Trash2, Edit3, Eye, EyeOff, Plus, X, CreditCard, UserCircle, Wallet, Calendar, TrendingUp, Users, Briefcase, Search } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { IrctcAccount } from "@/types/account";
 import { getAccounts, addAccount, deleteAccount, updateAccount, getAccountStats, type AccountStats } from "@/lib/accountsClient";
@@ -41,7 +41,7 @@ interface AccountFormState {
   lastBookedDate: string;
 }
 
-function AccountsManager() {
+function AccountsManager({ searchQuery }: { searchQuery: string }) {
   const [accounts, setAccounts] = useState<IrctcAccount[]>([]);
   const [accountStats, setAccountStats] = useState<AccountStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -318,6 +318,12 @@ function AccountsManager() {
   const totalAccounts = accounts.length;
   const totalWalletAmount = accounts.reduce((sum, acc) => sum + acc.walletAmount, 0);
 
+  const filteredAccounts = useMemo(() => {
+    if (!searchQuery.trim()) return accounts;
+    const q = searchQuery.toLowerCase();
+    return accounts.filter(a => a.username.toLowerCase().includes(q));
+  }, [accounts, searchQuery]);
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center p-12">
@@ -436,7 +442,7 @@ function AccountsManager() {
         transition={{ delay: 0.2 }}
       >
         <AnimatePresence>
-        {accounts.map((account, index) => {
+        {filteredAccounts.map((account, index) => {
           const stats = accountStats.find(s => s.accountId === account.id);
           return (
           <motion.div
@@ -527,9 +533,11 @@ function AccountsManager() {
           </motion.div>
           );
         })}
-        {accounts.length === 0 && (
+        {filteredAccounts.length === 0 && (
           <p className="text-sm text-muted-foreground col-span-full">
-            No accounts added yet. Click &apos;Add Account&apos; to add your first IRCTC account.
+            {searchQuery.trim()
+              ? `No accounts found matching "${searchQuery}".`
+              : "No accounts added yet. Click 'Add Account' to add your first IRCTC account."}
           </p>
         )}
         </AnimatePresence>
@@ -674,7 +682,7 @@ function AccountsManager() {
   );
 }
 
-function HandlersManager() {
+function HandlersManager({ searchQuery }: { searchQuery: string }) {
   const [handlers, setHandlers] = useState<Handler[]>([]);
   const [handlerStats, setHandlerStats] = useState<HandlerStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -828,6 +836,12 @@ function HandlersManager() {
     setIsSubmitting(false);
   };
 
+  const filteredHandlers = useMemo(() => {
+    if (!searchQuery.trim()) return handlers;
+    const q = searchQuery.toLowerCase();
+    return handlers.filter(h => h.name.toLowerCase().includes(q));
+  }, [handlers, searchQuery]);
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center p-12">
@@ -881,7 +895,7 @@ function HandlersManager() {
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {handlers.map(handler => {
+        {filteredHandlers.map(handler => {
           const stats = handlerStats.find(s => s.handlerId === handler.id || s.name === handler.name);
           return (
             <Card key={handler.id}>
@@ -924,9 +938,11 @@ function HandlersManager() {
             </Card>
           );
         })}
-        {handlers.length === 0 && (
+        {filteredHandlers.length === 0 && (
           <p className="text-sm text-muted-foreground col-span-full">
-            No handlers added yet. Click &apos;Add Handler&apos; to add your first handler.
+            {searchQuery.trim()
+              ? `No handlers found matching "${searchQuery}".`
+              : "No handlers added yet. Click 'Add Handler' to add your first handler."}
           </p>
         )}
       </div>
@@ -991,18 +1007,42 @@ function HandlersManager() {
 }
 
 export function AccountsTab() {
+  const [searchQuery, setSearchQuery] = useState('');
+
   return (
-    <Tabs defaultValue="accounts" className="w-full">
-      <TabsList className="mb-4">
-        <TabsTrigger value="accounts">Accounts</TabsTrigger>
-        <TabsTrigger value="handlers">Handlers</TabsTrigger>
-      </TabsList>
-      <TabsContent value="accounts">
-        <AccountsManager />
-      </TabsContent>
-      <TabsContent value="handlers">
-        <HandlersManager />
-      </TabsContent>
-    </Tabs>
+    <>
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+        <Input
+          type="search"
+          placeholder="Search accounts and handlers..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-9 pr-9"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery('')}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            aria-label="Clear search"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      <Tabs defaultValue="accounts" className="w-full" onValueChange={() => setSearchQuery('')}>
+        <TabsList className="mb-4">
+          <TabsTrigger value="accounts">Accounts</TabsTrigger>
+          <TabsTrigger value="handlers">Handlers</TabsTrigger>
+        </TabsList>
+        <TabsContent value="accounts">
+          <AccountsManager searchQuery={searchQuery} />
+        </TabsContent>
+        <TabsContent value="handlers">
+          <HandlersManager searchQuery={searchQuery} />
+        </TabsContent>
+      </Tabs>
+    </>
   );
 }

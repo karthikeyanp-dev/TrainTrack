@@ -633,7 +633,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             <Checkbox 
               checked={isSelected} 
               onCheckedChange={() => onToggleSelection?.(booking.id)} 
-              className="mt-1.5"
+              className="mt-3 shrink-0"
             />
           )}
           <div className="space-y-2 flex-1 min-w-0 relative">
@@ -643,7 +643,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             </div>
             
             {/* First row: Source-Destination with Arrow */}
-            <div className="flex items-center gap-2 pr-20">
+            <div className="flex min-h-7 items-center gap-2 pr-20">
               <CardTitle className="text-lg md:text-xl flex-shrink-0">
                 <span style={sourceDestStyle}>{booking.source.toUpperCase()}</span>
               </CardTitle>

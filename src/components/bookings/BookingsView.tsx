@@ -6,13 +6,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { Booking, TrainClass } from '@/types/booking';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Search, Loader2, Calendar, CheckCircle2, Clock, Receipt, Layers } from "lucide-react";
+import { AlertCircle, Search, Loader2, Calendar, CheckCircle2, Clock, Receipt, Layers, X } from "lucide-react";
 import { DateGroupHeading } from "@/components/bookings/DateGroupHeading";
 import { BookingList } from "@/components/bookings/BookingList";
 import { BookingGroupCard } from "@/components/bookings/BookingGroupCard";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { createBookingGroup } from "@/lib/firestoreClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
@@ -44,7 +45,6 @@ interface BookingsViewProps {
   allBookings: Booking[];
   pendingBookings: Booking[];
   allBookingDates: string[];
-  searchQuery?: string;
 }
 
 import { RefundsManager } from "@/components/accounts/RefundsManager";
@@ -64,13 +64,42 @@ const groupBookingsByDate = (bookings: Booking[], dateKey: 'bookingDate' | 'jour
 
 const SL_CLASSES: TrainClass[] = ["SL", "UR", "2S"];
 
-export function BookingsView({ allBookings, pendingBookings, allBookingDates, searchQuery }: BookingsViewProps) {
+export function BookingsView({ allBookings: rawAllBookings, pendingBookings: rawPendingBookings, allBookingDates }: BookingsViewProps) {
     const { toast } = useToast();
     const router = useRouter();
+    const [searchQuery, setSearchQuery] = useState('');
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedBookingIds, setSelectedBookingIds] = useState<Set<string>>(new Set());
     const [isGrouping, setIsGrouping] = useState(false);
     const [paymentFilter, setPaymentFilter] = useState<PaymentFilterType>('all');
+
+    // Filter bookings by local search query
+    const { allBookings, pendingBookings } = useMemo(() => {
+        if (!searchQuery.trim()) {
+            return { allBookings: rawAllBookings, pendingBookings: rawPendingBookings };
+        }
+        const q = searchQuery.trim().toLowerCase();
+        const filteredPending = rawPendingBookings.filter(booking => {
+            const passengerMatch = booking.passengers.some(p => p.name.toLowerCase().includes(q));
+            return passengerMatch ||
+                booking.userName.toLowerCase().includes(q) ||
+                booking.source.toLowerCase().includes(q) ||
+                booking.destination.toLowerCase().includes(q);
+        });
+        const filteredAll = rawAllBookings.filter(booking => {
+            const passengerMatch = booking.passengers.some(p => p.name.toLowerCase().includes(q));
+            return (
+                passengerMatch ||
+                booking.userName.toLowerCase().includes(q) ||
+                booking.source.toLowerCase().includes(q) ||
+                booking.destination.toLowerCase().includes(q) ||
+                booking.classType.toLowerCase().includes(q) ||
+                (booking.trainPreference && booking.trainPreference.toLowerCase().includes(q)) ||
+                (booking.remarks && booking.remarks.toLowerCase().includes(q))
+            );
+        });
+        return { allBookings: filteredAll, pendingBookings: filteredPending };
+    }, [rawAllBookings, rawPendingBookings, searchQuery]);
 
     const handleToggleSelection = (id: string) => {
         const newSet = new Set(selectedBookingIds);
@@ -332,37 +361,64 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
         ? "No completed bookings found matching your search."
         : "No bookings have been marked as 'Booked', 'Missed', 'Failed', 'Cancelled' etc. yet.";
 
+    const clearSelectionState = () => {
+        setSelectionMode(false);
+        setSelectedBookingIds(new Set());
+    };
+
+    const renderGroupingActions = () => {
+        if (selectionMode) {
+            return (
+                <div className="w-full md:w-auto">
+                    <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card/60 p-2 md:justify-end md:border-0 md:bg-transparent md:p-0">
+                        <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+                            {selectedBookingIds.size} Selected
+                        </span>
+                        <Button variant="outline" size="sm" className="shrink-0" onClick={clearSelectionState}>
+                            Cancel
+                        </Button>
+                        <Button size="sm" className="shrink-0" onClick={handleGroupBookings} disabled={selectedBookingIds.size < 2 || isGrouping}>
+                            {isGrouping ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Layers className="mr-2 h-4 w-4" />}
+                            Group Selected
+                        </Button>
+                    </div>
+                </div>
+            );
+        }
+
+        return (
+            <Button variant="outline" size="sm" className="w-fit md:shrink-0" onClick={() => setSelectionMode(true)}>
+                <Layers className="mr-2 h-4 w-4" />
+                Grouping
+            </Button>
+        );
+    };
+
     return (
         <motion.div
             initial="initial"
             animate="animate"
             variants={staggerContainer}
         >
-            <motion.div variants={staggerItem} className="flex justify-end items-center mb-6 gap-2">
-                {selectionMode ? (
-                    <motion.div 
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        className="flex items-center gap-2"
-                    >
-                         <span className="text-sm font-medium mr-2 px-3 py-1 bg-primary/10 text-primary rounded-full">
-                            {selectedBookingIds.size} Selected
-                         </span>
-                         <Button variant="outline" size="sm" onClick={() => { setSelectionMode(false); setSelectedBookingIds(new Set()); }}>
-                            Cancel
-                         </Button>
-                         <Button size="sm" onClick={handleGroupBookings} disabled={selectedBookingIds.size < 2 || isGrouping}>
-                            {isGrouping ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Layers className="mr-2 h-4 w-4" />}
-                            Group Selected
-                         </Button>
-                    </motion.div>
-                ) : (
-                    <Button variant="outline" size="sm" onClick={() => setSelectionMode(true)}>
-                        <Layers className="mr-2 h-4 w-4" />
-                        Select Multiple
-                    </Button>
-                )}
-            </motion.div>
+            <div className="relative mb-4">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              <Input
+                type="search"
+                placeholder="Search bookings..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 pr-9"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  aria-label="Clear search"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
 
             <Tabs defaultValue="pending" className="w-full">
               <TabsList className="inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground w-full md:w-[420px]">
@@ -391,16 +447,19 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
 
               <TabsContent value="pending" className="mt-6">
                 <motion.div variants={staggerItem}>
-                    <div className="flex items-center gap-3 mb-6">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-500/10">
-                            <Clock className="h-5 w-5 text-blue-600" />
+                    <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10">
+                                <Clock className="h-5 w-5 text-blue-600" />
+                            </div>
+                            <div className="min-w-0">
+                                <h2 className="text-heading-3 font-semibold">Pending Bookings</h2>
+                                <p className="text-sm text-muted-foreground">
+                                    {pendingDates.length} date{pendingDates.length !== 1 ? 's' : ''} with pending requests
+                                </p>
+                            </div>
                         </div>
-                        <div>
-                            <h2 className="text-heading-3 font-semibold">Pending Bookings</h2>
-                            <p className="text-sm text-muted-foreground">
-                                {pendingDates.length} date{pendingDates.length !== 1 ? 's' : ''} with pending requests
-                            </p>
-                        </div>
+                        {renderGroupingActions()}
                     </div>
                 </motion.div>
                 {pendingDates.length === 0 ? (
@@ -440,27 +499,28 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
                 <motion.div variants={staggerItem}>
                     <div className="flex flex-col gap-4 mb-6">
                         {/* Header Row */}
-                        <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/10">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                            <div className="flex items-center gap-3 min-w-0">
+                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10">
                                     <CheckCircle2 className="h-5 w-5 text-emerald-600" />
                                 </div>
-                                <div>
+                                <div className="min-w-0">
                                     <h2 className="text-heading-3 font-semibold">Completed Bookings</h2>
                                     <p className="text-sm text-muted-foreground">
                                         {completedDates.length} date{completedDates.length !== 1 ? 's' : ''} with completed bookings
                                     </p>
                                 </div>
                             </div>
+                            {renderGroupingActions()}
                         </div>
 
                         {/* Filter Pills - Desktop: Horizontal, Mobile: Wrap or Single Select */}
-                        <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-1.5">
                             {/* All Filter */}
                             <button
                                 onClick={() => setPaymentFilter('all')}
                                 className={cn(
-                                    "h-9 px-4 py-2 rounded-full text-sm font-medium transition-all",
+                                    "h-6 px-2.5 py-1 rounded-full text-[0.6rem] font-medium leading-none transition-all",
                                     paymentFilter === 'all'
                                         ? "bg-primary text-primary-foreground shadow-elevation-2 ring-2 ring-primary/20"
                                         : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
@@ -474,16 +534,16 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
                                 <button
                                     onClick={() => setPaymentFilter('payment-pending')}
                                     className={cn(
-                                        "h-9 px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2",
+                                        "h-6 px-2.5 py-1 rounded-full text-[0.6rem] font-medium leading-none transition-all flex items-center gap-1",
                                         paymentFilter === 'payment-pending'
                                             ? "bg-amber-500 text-white shadow-elevation-2 ring-2 ring-amber-500/20"
                                             : "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20"
                                     )}
                                 >
-                                    <span className="flex h-2 w-2 rounded-full bg-current animate-pulse" />
+                                    <span className="flex h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
                                     Payment Pending
                                     <span className={cn(
-                                        "px-1.5 py-0.5 text-xs rounded-full",
+                                        "rounded-full px-1 py-0 text-[0.55rem] leading-none",
                                         paymentFilter === 'payment-pending' ? "bg-white/20" : "bg-amber-500/20"
                                     )}>
                                         {paymentPendingCount}
@@ -496,16 +556,16 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
                                 <button
                                     onClick={() => setPaymentFilter('settlement-pending')}
                                     className={cn(
-                                        "h-9 px-4 py-2 rounded-full text-sm font-medium transition-all flex items-center gap-2",
+                                        "h-6 px-2.5 py-1 rounded-full text-[0.6rem] font-medium leading-none transition-all flex items-center gap-1",
                                         paymentFilter === 'settlement-pending'
                                             ? "bg-purple-500 text-white shadow-elevation-2 ring-2 ring-purple-500/20"
                                             : "bg-purple-500/10 text-purple-600 hover:bg-purple-500/20"
                                     )}
                                 >
-                                    <span className="flex h-2 w-2 rounded-full bg-current" />
+                                    <span className="flex h-1.5 w-1.5 rounded-full bg-current" />
                                     Settlement Pending
                                     <span className={cn(
-                                        "px-1.5 py-0.5 text-xs rounded-full",
+                                        "rounded-full px-1 py-0 text-[0.55rem] leading-none",
                                         paymentFilter === 'settlement-pending' ? "bg-white/20" : "bg-purple-500/20"
                                     )}>
                                         {settlementPendingCount}
@@ -517,7 +577,7 @@ export function BookingsView({ allBookings, pendingBookings, allBookingDates, se
                             {paymentFilter !== 'all' && (
                                 <button
                                     onClick={() => setPaymentFilter('all')}
-                                    className="text-xs text-muted-foreground hover:text-foreground underline ml-2"
+                                    className="ml-1.5 text-[0.6rem] text-muted-foreground underline hover:text-foreground"
                                 >
                                     Clear filter
                                 </button>

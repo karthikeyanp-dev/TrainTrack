@@ -5,14 +5,12 @@ import { BookingsLoadingSkeleton } from "@/components/bookings/BookingsLoadingSk
 import { BookingsView } from "@/components/bookings/BookingsView";
 import { useBookings, usePendingBookings, useBookingDates } from "@/hooks/useBookings";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useEffect, useMemo, Suspense } from "react";
-import type { Booking } from "@/types/booking";
+import { useEffect, Suspense } from "react";
 import { motion } from "framer-motion";
 
 function HomePageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const searchQuery = searchParams.get('search') || undefined;
   
   // Handle legacy tab parameter redirect
   useEffect(() => {
@@ -25,46 +23,6 @@ function HomePageContent() {
   const { data: allBookings = [], isLoading: isLoadingAll, error: errorAll } = useBookings();
   const { data: pendingBookings = [], isLoading: isLoadingPending, error: errorPending } = usePendingBookings();
   const { data: allBookingDates = [], isLoading: isLoadingDates, error: errorDates } = useBookingDates();
-
-  // Filter bookings based on search query
-  const { filteredAllBookings, filteredPendingBookings } = useMemo(() => {
-    if (!searchQuery || searchQuery.trim() === "") {
-      return {
-        filteredAllBookings: allBookings,
-        filteredPendingBookings: pendingBookings,
-      };
-    }
-
-    const lowercasedQuery = searchQuery.trim().toLowerCase();
-
-    const filteredPending = pendingBookings.filter(booking => {
-      const passengerMatch = booking.passengers.some(p => p.name.toLowerCase().includes(lowercasedQuery));
-      return passengerMatch ||
-        booking.userName.toLowerCase().includes(lowercasedQuery) ||
-        booking.source.toLowerCase().includes(lowercasedQuery) ||
-        booking.destination.toLowerCase().includes(lowercasedQuery);
-    });
-
-    const filteredAll = allBookings.filter(booking => {
-      const passengerMatch = booking.passengers.some(p =>
-        p.name.toLowerCase().includes(lowercasedQuery)
-      );
-      return (
-        passengerMatch ||
-        booking.userName.toLowerCase().includes(lowercasedQuery) ||
-        booking.source.toLowerCase().includes(lowercasedQuery) ||
-        booking.destination.toLowerCase().includes(lowercasedQuery) ||
-        booking.classType.toLowerCase().includes(lowercasedQuery) ||
-        (booking.trainPreference && booking.trainPreference.toLowerCase().includes(lowercasedQuery)) ||
-        (booking.remarks && booking.remarks.toLowerCase().includes(lowercasedQuery))
-      );
-    });
-
-    return {
-      filteredAllBookings: filteredAll,
-      filteredPendingBookings: filteredPending,
-    };
-  }, [allBookings, pendingBookings, searchQuery]);
 
   // Show loading state while any data is loading
   const isLoading = isLoadingAll || isLoadingPending || isLoadingDates;
@@ -95,10 +53,9 @@ function HomePageContent() {
         <BookingsLoadingSkeleton />
       ) : (
         <BookingsView 
-          allBookings={filteredAllBookings} 
-          pendingBookings={filteredPendingBookings} 
-          allBookingDates={searchQuery ? [] : allBookingDates}
-          searchQuery={searchQuery}
+          allBookings={allBookings} 
+          pendingBookings={pendingBookings} 
+          allBookingDates={allBookingDates}
         />
       )}
     </AppShell>

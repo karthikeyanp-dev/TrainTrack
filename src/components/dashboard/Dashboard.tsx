@@ -8,8 +8,10 @@ import {
   CheckCircle2, 
   Clock, 
   TrendingUp, 
-  Users, 
+  Receipt,
   Train,
+  XCircle,
+  UserX,
   ArrowRight,
   Plus
 } from "lucide-react";
@@ -57,16 +59,16 @@ function StatCard({
       transition={{ delay, duration: 0.4 }}
     >
       <Card className="hover:shadow-lg transition-shadow duration-300">
-        <CardHeader className="flex flex-row items-center justify-between pb-2">
-          <CardTitle className="text-sm font-medium text-muted-foreground">
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 p-4 pb-1">
+          <CardTitle className="text-xs font-medium text-muted-foreground">
             {title}
           </CardTitle>
-          <div className={`p-2 rounded-xl ${colorStyles[color]}`}>
-            <Icon className="h-4 w-4" />
+          <div className={`rounded-lg p-1.5 ${colorStyles[color]}`}>
+            <Icon className="h-3.5 w-3.5" />
           </div>
         </CardHeader>
-        <CardContent>
-          <div className="text-2xl font-bold">{value}</div>
+        <CardContent className="p-4 pt-1">
+          <div className="text-3xl font-bold leading-tight">{value}</div>
           {(description || trend) && (
             <div className="flex items-center gap-2 mt-1">
               {trend && trendValue && (
@@ -79,7 +81,7 @@ function StatCard({
                 </span>
               )}
               {description && (
-                <p className="text-xs text-muted-foreground">{description}</p>
+                <p className="text-[11px] text-muted-foreground">{description}</p>
               )}
             </div>
           )}
@@ -93,22 +95,35 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
   // Calculate stats
   const totalBookings = allBookings.length;
   const pendingCount = pendingBookings.length;
-  const completedCount = allBookings.filter(b => b.status === "Booked").length;
-  const cancelledCount = allBookings.filter(b => 
-    b.status === "CNF & Cancelled" || b.status === "User Cancelled"
+  const bookedCount = allBookings.filter(b => b.status === "Booked").length;
+  const failedCount = allBookings.filter(
+    b => b.status === "Booking Failed (Unpaid)" || b.status === "Booking Failed (Paid)"
   ).length;
-  
-  // Today's bookings
-  const today = new Date().toISOString().split('T')[0];
-  const todayBookings = allBookings.filter(b => b.journeyDate === today);
-  
-  // This week's bookings
-  const weekFromNow = new Date();
-  weekFromNow.setDate(weekFromNow.getDate() + 7);
-  const thisWeekBookings = allBookings.filter(b => {
-    const journeyDate = new Date(b.journeyDate);
-    return journeyDate >= new Date() && journeyDate <= weekFromNow;
+  const userCancelledCount = allBookings.filter(b => b.status === "User Cancelled").length;
+  const refundPendingCount = allBookings.filter(
+    b => (b.status === "Booking Failed (Paid)" || b.status === "CNF & Cancelled") && !b.refundDetails
+  ).length;
+
+  // Last month analysis (calendar month)
+  const now = new Date();
+  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+
+  const lastMonthBookings = allBookings.filter((b) => {
+    const createdAt = new Date(b.createdAt);
+    return createdAt >= lastMonthStart && createdAt <= lastMonthEnd;
   });
+
+  const lastMonthTotal = lastMonthBookings.length;
+  const lastMonthBooked = lastMonthBookings.filter((b) => b.status === "Booked").length;
+  const lastMonthFailed = lastMonthBookings.filter(
+    (b) => b.status === "Booking Failed (Unpaid)" || b.status === "Booking Failed (Paid)"
+  ).length;
+  const lastMonthCancelled = lastMonthBookings.filter(
+    (b) => b.status === "User Cancelled" || b.status === "CNF & Cancelled"
+  ).length;
+  const lastMonthPending = lastMonthBookings.filter((b) => b.status === "Requested").length;
+  const lastMonthSuccessRate = lastMonthTotal > 0 ? Math.round((lastMonthBooked / lastMonthTotal) * 100) : 0;
 
   // Recent bookings (last 5)
   const recentBookings = [...allBookings]
@@ -139,7 +154,7 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
       </motion.div>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:gap-4">
         <StatCard
           title="Total Bookings"
           value={totalBookings}
@@ -149,34 +164,50 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
           delay={0.1}
         />
         <StatCard
+          title="Booked"
+          value={bookedCount}
+          description="Successfully booked"
+          icon={CheckCircle2}
+          color="green"
+          delay={0.15}
+        />
+        <StatCard
+          title="Failed"
+          value={failedCount}
+          description="Booking failed"
+          icon={XCircle}
+          color="red"
+          delay={0.2}
+        />
+        <StatCard
+          title="User Cancelled"
+          value={userCancelledCount}
+          description="Cancelled by user"
+          icon={UserX}
+          color="default"
+          delay={0.25}
+        />
+        <StatCard
           title="Pending"
           value={pendingCount}
           description="Awaiting action"
           icon={Clock}
           color="amber"
-          delay={0.15}
+          delay={0.3}
         />
         <StatCard
-          title="Completed"
-          value={completedCount}
-          description="Successfully booked"
-          icon={CheckCircle2}
-          color="green"
-          delay={0.2}
-        />
-        <StatCard
-          title="This Week"
-          value={thisWeekBookings.length}
-          description="Upcoming journeys"
-          icon={Train}
-          color="default"
-          delay={0.25}
+          title="Refund Pending"
+          value={refundPendingCount}
+          description="Awaiting refund"
+          icon={Receipt}
+          color="red"
+          delay={0.35}
         />
       </div>
 
-      {/* Quick Actions & Recent Activity */}
+      {/* Last Month Analysis & Recent Activity */}
       <div className="grid gap-6 lg:grid-cols-3">
-        {/* Quick Actions */}
+        {/* Last Month Analysis */}
         <motion.div
           className="lg:col-span-1"
           initial={{ opacity: 0, x: -20 }}
@@ -185,36 +216,32 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
         >
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Quick Actions</CardTitle>
+              <CardTitle className="text-lg">Last Month Analysis</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <Link href="/bookings/new">
-                <Button variant="outline" className="w-full justify-between group rounded-xl">
-                  <span className="flex items-center gap-2">
-                    <Plus className="h-4 w-4" />
-                    Create Booking
-                  </span>
-                  <ArrowRight className="h-4 w-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
-                </Button>
-              </Link>
-              <Link href="/accounts">
-                <Button variant="outline" className="w-full justify-between group rounded-xl">
-                  <span className="flex items-center gap-2">
-                    <Users className="h-4 w-4" />
-                    Manage Accounts
-                  </span>
-                  <ArrowRight className="h-4 w-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
-                </Button>
-              </Link>
-              <Link href="/suggestions">
-                <Button variant="outline" className="w-full justify-between group rounded-xl">
-                  <span className="flex items-center gap-2">
-                    <TrendingUp className="h-4 w-4" />
-                    Smart Suggestions
-                  </span>
-                  <ArrowRight className="h-4 w-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all" />
-                </Button>
-              </Link>
+            <CardContent className="space-y-4">
+              <div className="rounded-xl bg-muted/40 p-3">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Total Created</p>
+                <p className="mt-1 text-2xl font-semibold">{lastMonthTotal}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Success rate: {lastMonthSuccessRate}%</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="rounded-lg border p-2">
+                  <p className="text-[11px] text-muted-foreground">Booked</p>
+                  <p className="mt-0.5 font-semibold text-green-600">{lastMonthBooked}</p>
+                </div>
+                <div className="rounded-lg border p-2">
+                  <p className="text-[11px] text-muted-foreground">Failed</p>
+                  <p className="mt-0.5 font-semibold text-red-600">{lastMonthFailed}</p>
+                </div>
+                <div className="rounded-lg border p-2">
+                  <p className="text-[11px] text-muted-foreground">Cancelled</p>
+                  <p className="mt-0.5 font-semibold text-orange-600">{lastMonthCancelled}</p>
+                </div>
+                <div className="rounded-lg border p-2">
+                  <p className="text-[11px] text-muted-foreground">Pending</p>
+                  <p className="mt-0.5 font-semibold text-amber-600">{lastMonthPending}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </motion.div>
