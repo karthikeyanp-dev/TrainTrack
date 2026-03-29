@@ -150,8 +150,11 @@ export async function getHandlerStatsForHandlers(
     );
     const bookingRecordsSnapshot = await getDocs(recordsQuery);
     
-    // Count bookings per handler
+    // Count unique bookings per handler
     const handlerUsage = new Map<string, { count: number; lastDate?: string }>();
+    const processedTransactionIds = new Set<string>();
+    const processedGroupIds = new Set<string>();
+    const processedDocIds = new Set<string>();
 
     const toDateSafe = (value: any): Date | null => {
       if (!value) return null;
@@ -178,15 +181,38 @@ export async function getHandlerStatsForHandlers(
       const data = doc.data();
       const bookedBy = data.bookedBy;
       const createdAt = toDateSafe(data.createdAt);
+      const transactionId = data.bookingTransactionId;
+      const groupId = data.groupId;
       
-      if (bookedBy) {
+      if (bookedBy && createdAt && createdAt >= fromDate) {
+        let shouldCount = false;
+
+        if (transactionId) {
+          if (!processedTransactionIds.has(transactionId)) {
+            processedTransactionIds.add(transactionId);
+            shouldCount = true;
+          }
+        } else if (groupId) {
+          if (!processedGroupIds.has(groupId)) {
+            processedGroupIds.add(groupId);
+            shouldCount = true;
+          }
+        } else if (!processedDocIds.has(doc.id)) {
+          processedDocIds.add(doc.id);
+          shouldCount = true;
+        }
+
+        if (!shouldCount) {
+          return;
+        }
+
         const existing = handlerUsage.get(bookedBy) || { count: 0 };
         const existingDate = existing.lastDate ? new Date(existing.lastDate) : null;
-        const currentDate = createdAt ? createdAt : null;
+        const currentDate = createdAt;
         
         handlerUsage.set(bookedBy, {
           count: existing.count + 1,
-          lastDate: (currentDate && (!existingDate || currentDate > existingDate))
+          lastDate: (!existingDate || currentDate > existingDate)
             ? currentDate.toISOString().split('T')[0]
             : existing.lastDate,
         });

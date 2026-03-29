@@ -1031,6 +1031,7 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
        const bookedAccountUsername = groupRecordData.bookedAccountUsername;
        const trainName = groupRecordData.trainName;
        const bookingTransactionId = groupRecordData.bookingTransactionId; // Preserve transaction ID
+      const groupRecordCreatedAt = groupRecordData.createdAt;
 
        // Calculate total passengers across all bookings
        const totalPassengers = bookingsData.reduce((sum, booking: any) => 
@@ -1045,22 +1046,18 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
          const passengerCount = booking.passengers?.length || 0;
          const proportionalAmount = Number((amountPerPassenger * passengerCount).toFixed(2));
 
-         // Create individual record
-         const recordData = {
+         const baseRecordData = {
            bookingId: booking.id,
-           groupId: deleteField(), // Remove group reference
            bookedBy,
            bookedAccountUsername,
            amountCharged: proportionalAmount,
            methodUsed,
-           bookingTransactionId, // Preserve the same transaction ID
+           bookingTransactionId,
            updatedAt: serverTimestamp(),
-         } as any;
+         } as Record<string, any>;
 
          if (trainName) {
-           recordData.trainName = trainName;
-         } else {
-           recordData.trainName = deleteField();
+           baseRecordData.trainName = trainName;
          }
 
          // Check if individual record already exists for this booking (without groupId)
@@ -1079,14 +1076,22 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
          }
          
          if (!existingDoc) {
-           // Create new individual record
            await addDoc(recordsCollection, {
-             ...recordData,
-             createdAt: serverTimestamp(),
+             ...baseRecordData,
+            createdAt: groupRecordCreatedAt || serverTimestamp(),
            });
          } else {
-           // Update existing individual record
-           await updateDoc(doc(firestore, "bookingRecords", existingDoc.id), recordData);
+           const updateData: Record<string, any> = {
+             ...baseRecordData,
+             groupId: deleteField(),
+             bookingIds: deleteField(),
+           };
+
+           if (!trainName) {
+             updateData.trainName = deleteField();
+           }
+
+           await updateDoc(doc(firestore, "bookingRecords", existingDoc.id), updateData);
          }
        });
 
