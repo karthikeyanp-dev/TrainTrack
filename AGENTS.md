@@ -48,7 +48,9 @@ TrainTrack is a Next.js 15 static-export app for train booking operations. The f
 - The app is deployed to Firebase Hosting from the static `out/` directory.
 - `next.config.mjs` currently ignores TypeScript and ESLint errors during build, so do not assume a successful production build means the codebase is clean.
 - **Payment tracking**: Bookings have `paymentReceived` and `amountSettled` fields for tracking customer payments and handler settlements. Use `isEligibleForPaymentTracking()` helper to filter bookings created/updated after March 6, 2026.
-- **Group bookings**: Bookings can be grouped using `bookingGroups/` collection. Group operations include creation, status updates, and record editing.
+- **Group bookings**: Bookings can be grouped using `bookingGroups/` collection. Group operations include creation, status updates, and record editing. Ungrouping splits one group `bookingRecords` doc into individual records while preserving the original `createdAt` timestamp to keep date-bucketed counts stable.
 - **Train names**: Booking records now include `trainName` field for better identification.
 - **Upgrade preferred**: Booking records now include `upgradePreferred` field to indicate if an upgrade is preferred.
+- **Booking count deduplication**: Both `accountsClient.ts` (`getAccountStats`) and `handlersClient.ts` (`getHandlerStatsForHandlers`) deduplicate booking records using the same priority: `bookingTransactionId` → `groupId` → document ID. A group booking always counts as 1, even after ungrouping.
+- **Ungroup Firestore safety**: `ungroupBookings()` in `firestoreClient.ts` separates new-record creation (`addDoc`) from existing-record updates (`updateDoc`). `deleteField()` is only used in update paths — never in `addDoc()`, which Firestore rejects.
 - Existing repo guidance also lives in `CLAUDE.md`; keep both files aligned if architecture or workflows change.

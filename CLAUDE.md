@@ -55,10 +55,12 @@ All data operations use Firestore client SDK with React Query hooks:
 **Important patterns:**
 - Firestore client methods: `collection()`, `doc()`, `getDocs()`, `addDoc()`, `updateDoc()`, `deleteDoc()`
 - React Query for caching; `useBookings` uses `onSnapshot()`, accounts/handlers use polling
-- Optional fields cleaned up with `deleteField()` on update (not set to `null`)
+- Optional fields cleaned up with `deleteField()` on update (not set to `null`). **Never use `deleteField()` inside `addDoc()` calls** — Firestore only allows it in `updateDoc()` or `set()` with merge.
 - Firestore Timestamp conversion to ISO strings for client compatibility
 - **Payment tracking**: Booking records include `paymentReceived` and `amountSettled` fields; filter by eligibility date using helper function
 - **Group bookings**: Use `createBookingGroup()`, `updateBookingGroupStatus()`, `saveGroupBookingRecords()` from `firestoreClient.ts`
+- **Ungrouping bookings**: `ungroupBookings()` splits one group `bookingRecords` doc into individual records. It preserves the original group record's `createdAt` timestamp so date/month-bucketed counts remain stable. The function separates creation (`addDoc` with clean data) from updates (`updateDoc` with `deleteField()` for `groupId`, `bookingIds`, optionally `trainName`).
+- **Booking count deduplication**: Both `getAccountStats()` (accountsClient) and `getHandlerStatsForHandlers()` (handlersClient) use the same deduplication strategy when counting bookings: first by `bookingTransactionId`, then by `groupId`, then by document ID. This ensures a group booking always counts as 1 — even after ungrouping into individual records.
 
 ### Firebase Integration
 
@@ -233,7 +235,8 @@ Current Firestore rules (`firestore.rules`) allow unrestricted read/write. In pr
 - `TOAST_LIMIT = 1` — only one toast notification visible at a time
 - Optional env var `NEXT_PUBLIC_BASE_PATH` for subdirectory deployments
 - **Payment tracking**: Use `isEligibleForPaymentTracking()` helper in BookingsView to filter bookings created/updated after feature start date (March 6, 2026)
-- **Group bookings**: Multiple bookings can be grouped together using `bookingGroups/` collection; supports bulk status updates and record editing
+- **Group bookings**: Multiple bookings can be grouped together using `bookingGroups/` collection; supports bulk status updates and record editing. Ungrouping preserves original `createdAt` and uses deduplication to keep counts stable.
+- **Ungroup Firestore constraint**: `deleteField()` must never appear inside `addDoc()`. The `ungroupBookings()` function separates the creation path (clean data, no `deleteField`) from the update path (uses `deleteField` for `groupId`, `bookingIds`, `trainName`).
 
 ## Testing
 
