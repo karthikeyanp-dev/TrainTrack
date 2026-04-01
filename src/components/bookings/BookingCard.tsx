@@ -618,13 +618,14 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
 
   return (
     <motion.div
+      className="h-full"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -2 }}
       transition={{ duration: 0.2 }}
     >
     <Card className={cn(
-      "w-full shadow-md hover:shadow-lg transition-shadow duration-200 flex flex-col relative",
+      "w-full h-full shadow-md hover:shadow-lg transition-shadow duration-200 flex flex-col relative",
       isSelected && "ring-2 ring-primary border-primary"
     )}>
       <CardHeader className="pb-2">
