@@ -110,8 +110,8 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
   const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
 
   const lastMonthBookings = allBookings.filter((b) => {
-    const createdAt = new Date(b.createdAt);
-    return createdAt >= lastMonthStart && createdAt <= lastMonthEnd;
+    const bookingDate = new Date(b.bookingDate);
+    return bookingDate >= lastMonthStart && bookingDate <= lastMonthEnd;
   });
 
   const lastMonthTotal = lastMonthBookings.length;

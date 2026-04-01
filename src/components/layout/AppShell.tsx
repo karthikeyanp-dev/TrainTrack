@@ -1,12 +1,13 @@
 "use client";
 
-import { type ReactNode, useState } from "react";
+import { Suspense, type ReactNode, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   TrainFront, 
   Plus, 
+  Search, 
   Users, 
   LayoutDashboard,
   Calendar,
@@ -17,6 +18,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
+import { SearchBarClient } from "./SearchBarClient";
 import { CommandPalette } from "@/components/command-palette/CommandPalette";
 import { cn } from "@/lib/utils";
 import { fadeIn, slideUp, staggerContainer, staggerItem } from "@/lib/animations";
@@ -112,14 +114,14 @@ function MobileNav({ activeTab }: { activeTab?: string }) {
       {/* Mobile Header */}
       <header className="fixed top-0 left-0 right-0 z-50 lg:hidden">
         <div className="glass border-b">
-          <div className="flex h-14 items-center justify-between gap-2 px-4">
-            <Link href="/" className="flex min-w-0 items-center gap-2">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80">
+          <div className="flex h-14 items-center justify-between px-4">
+            <Link href="/" className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary to-primary/80">
                 <TrainFront className="h-4 w-4 text-primary-foreground" />
               </div>
-              <span className="truncate font-bold gradient-text">TrainTrack</span>
+              <span className="font-bold gradient-text">TrainTrack</span>
             </Link>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2">
               <CommandPalette />
               <ThemeSwitcher />
               <Button
@@ -251,6 +253,12 @@ function MobileNav({ activeTab }: { activeTab?: string }) {
 }
 
 export function AppShell({ children, showAddButton = false, activeTab }: AppShellProps) {
+  const searchBarFallback = (
+    <Button variant="ghost" size="icon-sm" disabled aria-label="Loading search">
+      <Search className="h-4 w-4 opacity-50" />
+    </Button>
+  );
+
   return (
     <div className="min-h-screen bg-background">
       {/* Desktop Sidebar */}
@@ -274,6 +282,9 @@ export function AppShell({ children, showAddButton = false, activeTab }: AppShel
                 </h1>
               </div>
               <nav className="flex items-center gap-2">
+                <Suspense fallback={searchBarFallback}>
+                  <SearchBarClient />
+                </Suspense>
                 <ThemeSwitcher />
               </nav>
             </div>

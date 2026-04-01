@@ -632,14 +632,17 @@ export async function saveBookingRecord(data: {
       });
     }
 
-    // Update lastBookedDate
-    const today = new Date().toISOString().split('T')[0]; // "YYYY-MM-DD"
+    // Fetch the booking to get its 'Book by' date (bookingDate), not today's date
+    const bookingForDate = await getBookingById(data.bookingId);
+    const bookingDate = bookingForDate?.bookingDate || new Date().toISOString().split('T')[0];
+
+    // Update lastBookedDate on account using the booking's bookingDate
     const currentLastBookedDate = accountData.lastBookedDate || "";
     
-    // Only update if this is a new record or if the date has changed
-    if (!isUpdate || currentLastBookedDate !== today) {
+    // Only update if this is a new record or if the booking date has changed
+    if (!isUpdate || currentLastBookedDate !== bookingDate) {
       await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
-        lastBookedDate: today,
+        lastBookedDate: bookingDate,
         previousLastBookedDate: currentLastBookedDate || deleteField(),
         updatedAt: serverTimestamp(),
       });
@@ -651,6 +654,7 @@ export async function saveBookingRecord(data: {
       bookedAccountUsername: data.bookedAccountUsername,
       amountCharged: data.amountCharged,
       methodUsed: data.methodUsed,
+      bookingDate,   // Store the booking's 'Book by' date for stats queries
       updatedAt: serverTimestamp(),
     };
 
@@ -789,13 +793,16 @@ export async function saveGroupBookingRecords(data: {
       });
     }
 
-    // Update lastBookedDate
-    const today = new Date().toISOString().split('T')[0];
+    // Fetch a booking to get its 'Book by' date (bookingDate), not today's date
+    const bookingForDate = data.bookingIds.length > 0 ? await getBookingById(data.bookingIds[0]) : null;
+    const bookingDate = bookingForDate?.bookingDate || new Date().toISOString().split('T')[0];
+
+    // Update lastBookedDate on account using the booking's bookingDate
     const currentLastBookedDate = accountData.lastBookedDate || "";
     
-    if (!isUpdate || currentLastBookedDate !== today) {
+    if (!isUpdate || currentLastBookedDate !== bookingDate) {
       await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
-        lastBookedDate: today,
+        lastBookedDate: bookingDate,
         previousLastBookedDate: currentLastBookedDate || deleteField(),
         updatedAt: serverTimestamp(),
       });
@@ -816,6 +823,7 @@ export async function saveGroupBookingRecords(data: {
       amountCharged: data.totalAmount, // Total amount for entire group
       methodUsed: data.methodUsed,
       bookingTransactionId,          // Track this booking transaction
+      bookingDate,                   // Store the booking's 'Book by' date for stats queries
       updatedAt: serverTimestamp(),
     };
 

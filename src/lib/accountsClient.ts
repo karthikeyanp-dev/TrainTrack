@@ -192,11 +192,16 @@ export async function getAccountStats(): Promise<AccountStats[]> {
       const data = doc.data();
       const username = data.bookedAccountUsername;
       const createdAt = data.createdAt?.toDate?.();
+      const bookingDateStr = data.bookingDate as string | undefined; // "YYYY-MM-DD" stored in record
       const transactionId = data.bookingTransactionId;
       const groupId = data.groupId;
       
-      // Only count bookings from current month
-      if (username && createdAt && createdAt >= startOfCurrentMonth) {
+      // Use bookingDate (Book by date) if stored; fall back to createdAt for older records
+      const effectiveDateStr = bookingDateStr || (createdAt ? createdAt.toISOString().split('T')[0] : null);
+      const effectiveDate = effectiveDateStr ? new Date(effectiveDateStr) : null;
+      
+      // Only count bookings from current month (by Book by date, not when record was created)
+      if (username && effectiveDate && effectiveDate >= startOfCurrentMonth) {
         let shouldCount = false;
         
         // Priority 1: Use transaction ID if available (new system)
@@ -224,12 +229,11 @@ export async function getAccountStats(): Promise<AccountStats[]> {
         if (shouldCount) {
           const existing = accountUsage.get(username) || { count: 0 };
           const existingDate = existing.lastDate ? new Date(existing.lastDate) : null;
-          const currentDate = createdAt;
           
           accountUsage.set(username, {
             count: existing.count + 1,
-            lastDate: (!existingDate || currentDate > existingDate) 
-              ? createdAt.toISOString().split('T')[0]
+            lastDate: (!existingDate || effectiveDate > existingDate)
+              ? effectiveDateStr!
               : existing.lastDate,
           });
         }

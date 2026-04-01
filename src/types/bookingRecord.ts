@@ -12,6 +12,7 @@ export interface BookingRecord {
   amountCharged: number;    // Final transaction cost (total for group)
   methodUsed: PaymentMethod;
   trainName?: string;       // Optional train name/number at time of booking
+  bookingDate?: string;     // YYYY-MM-DD - the 'Book by' date from the source booking
   createdAt: string;        // ISO string
   updatedAt: string;        // ISO string
   bookingTransactionId?: string; // Unique ID to track related booking records from same transaction
