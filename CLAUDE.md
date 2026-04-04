@@ -61,6 +61,7 @@ All data operations use Firestore client SDK with React Query hooks:
 - **Group bookings**: Use `createBookingGroup()`, `updateBookingGroupStatus()`, `saveGroupBookingRecords()` from `firestoreClient.ts`
 - **Ungrouping bookings**: `ungroupBookings()` splits one group `bookingRecords` doc into individual records. It preserves the original group record's `createdAt` timestamp so date/month-bucketed counts remain stable. The function separates creation (`addDoc` with clean data) from updates (`updateDoc` with `deleteField()` for `groupId`, `bookingIds`, optionally `trainName`).
 - **Booking count deduplication**: Both `getAccountStats()` (accountsClient) and `getHandlerStatsForHandlers()` (handlersClient) use the same deduplication strategy when counting bookings: first by `bookingTransactionId`, then by `groupId`, then by document ID. This ensures a group booking always counts as 1 — even after ungrouping into individual records.
+- **Booking date tracking**: Both `saveBookingRecord()` and `saveGroupBookingRecords()` fetch the source booking's `bookingDate` (the "Book by" date) and store it in the booking record. Account stats (`getAccountStats`) and dashboard month-bucketing filter by `bookingDate` instead of `createdAt` for accuracy; older records without `bookingDate` fall back to `createdAt`. The `lastBookedDate` on accounts is set from the booking's `bookingDate`, not today's date.
 
 ### Firebase Integration
 
@@ -109,6 +110,8 @@ All types defined in `src/types/`:
   - `BookingGroup` for grouping multiple bookings together
 - `account.ts` - `IrctcAccount` interface
 - `bookingRecord.ts` - `BookingRecord`, `PaymentMethod` enum (`"Wallet" | "UPI" | "Others"`)
+  - `BookingRecord` includes `bookingDate` field (`YYYY-MM-DD`) storing the "Book by" date for accurate stats
+  - `BookingRecord` includes `trainName` and `bookingTransactionId` fields
 - `handler.ts` - `Handler` interface
 
 ### UI Components

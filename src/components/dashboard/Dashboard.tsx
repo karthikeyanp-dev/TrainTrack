@@ -104,26 +104,66 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
     b => (b.status === "Booking Failed (Paid)" || b.status === "CNF & Cancelled") && !b.refundDetails
   ).length;
 
-  // Last month analysis (calendar month)
-  const now = new Date();
-  const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-  const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59, 999);
+  const currentYear = new Date().getFullYear();
+  const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
-  const lastMonthBookings = allBookings.filter((b) => {
-    const bookingDate = new Date(b.bookingDate);
-    return bookingDate >= lastMonthStart && bookingDate <= lastMonthEnd;
+  const parseBookByDate = (dateValue: string): Date | null => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
+    if (match) {
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      const day = Number(match[3]);
+      return new Date(year, month - 1, day);
+    }
+
+    const parsed = new Date(dateValue);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  };
+
+  const monthlyPerformance = monthLabels.map((label, monthIndex) => {
+    const monthBookings = allBookings.filter((booking) => {
+      const bookByDate = parseBookByDate(booking.bookingDate);
+      return (
+        bookByDate !== null &&
+        bookByDate.getFullYear() === currentYear &&
+        bookByDate.getMonth() === monthIndex
+      );
+    });
+
+    const total = monthBookings.length;
+    const booked = monthBookings.filter((booking) => booking.status === "Booked").length;
+    const failed = monthBookings.filter(
+      (booking) => booking.status === "Booking Failed (Unpaid)" || booking.status === "Booking Failed (Paid)"
+    ).length;
+    const cancelled = monthBookings.filter(
+      (booking) => booking.status === "User Cancelled" || booking.status === "CNF & Cancelled"
+    ).length;
+    const pending = monthBookings.filter((booking) => booking.status === "Requested").length;
+    const userCancelled = monthBookings.filter((booking) => booking.status === "User Cancelled").length;
+    const successRateDenominator = total - (userCancelled + pending);
+    const successRate = successRateDenominator > 0
+      ? Math.round((booked / successRateDenominator) * 100)
+      : 0;
+
+    return {
+      label,
+      monthIndex,
+      total,
+      booked,
+      failed,
+      cancelled,
+      pending,
+      successRate,
+    };
   });
-
-  const lastMonthTotal = lastMonthBookings.length;
-  const lastMonthBooked = lastMonthBookings.filter((b) => b.status === "Booked").length;
-  const lastMonthFailed = lastMonthBookings.filter(
-    (b) => b.status === "Booking Failed (Unpaid)" || b.status === "Booking Failed (Paid)"
-  ).length;
-  const lastMonthCancelled = lastMonthBookings.filter(
-    (b) => b.status === "User Cancelled" || b.status === "CNF & Cancelled"
-  ).length;
-  const lastMonthPending = lastMonthBookings.filter((b) => b.status === "Requested").length;
-  const lastMonthSuccessRate = lastMonthTotal > 0 ? Math.round((lastMonthBooked / lastMonthTotal) * 100) : 0;
+  const currentMonthIndex = new Date().getMonth();
+  const visibleMonthlyPerformance = monthlyPerformance.filter(
+    (month) => month.monthIndex <= currentMonthIndex || month.total > 0
+  );
+  const currentMonthPerformance = monthlyPerformance[currentMonthIndex];
+  const previousMonthsPerformance = visibleMonthlyPerformance.filter(
+    (month) => month.monthIndex !== currentMonthIndex
+  );
 
   // Recent bookings (last 5)
   const recentBookings = [...allBookings]
@@ -205,45 +245,119 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
         />
       </div>
 
-      {/* Last Month Analysis & Recent Activity */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Last Month Analysis */}
+      {/* Current Year Performance & Recent Activity */}
+      <div className="grid gap-6 lg:grid-cols-5">
+        {/* Current Year Performance */}
         <motion.div
-          className="lg:col-span-1"
+          className="lg:col-span-3"
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
           transition={{ delay: 0.3, duration: 0.4 }}
         >
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Last Month Analysis</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="rounded-xl bg-muted/40 p-3">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Total Created</p>
-                <p className="mt-1 text-2xl font-semibold">{lastMonthTotal}</p>
-                <p className="mt-1 text-xs text-muted-foreground">Success rate: {lastMonthSuccessRate}%</p>
+          <div className="space-y-8">
+            {/* Snapshot Card */}
+            <div className="rounded-[1.5rem] bg-[#0f1225] p-6 text-white shadow-lg border border-slate-800/50">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-indigo-400 mb-6">Current Month Snapshot</p>
+              
+              <div className="flex items-end gap-3 mb-6">
+                <span className="text-5xl font-bold leading-none">{currentMonthPerformance.total}</span>
+                <span className="text-sm text-slate-400 mb-1 font-medium">total requests</span>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="rounded-lg border p-2">
-                  <p className="text-[11px] text-muted-foreground">Booked</p>
-                  <p className="mt-0.5 font-semibold text-green-600">{lastMonthBooked}</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                <div className="rounded-xl bg-[#1a1f36] border border-slate-700/50 p-4 flex flex-col gap-3 shadow-sm">
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
+                    <div className="rounded-full bg-emerald-500/10 p-1.5">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                    </div>
+                    Successfully Booked
+                  </div>
+                  <span className="text-2xl font-bold ml-[34px]">{currentMonthPerformance.booked}</span>
                 </div>
-                <div className="rounded-lg border p-2">
-                  <p className="text-[11px] text-muted-foreground">Failed</p>
-                  <p className="mt-0.5 font-semibold text-red-600">{lastMonthFailed}</p>
+
+                <div className="rounded-xl bg-[#1a1f36] border border-slate-700/50 p-4 flex flex-col gap-3 shadow-sm">
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
+                    <div className="rounded-full bg-blue-500/10 p-1.5">
+                      <Clock className="h-4 w-4 text-blue-400" />
+                    </div>
+                    Pending
+                  </div>
+                  <span className="text-2xl font-bold ml-[34px]">{currentMonthPerformance.pending}</span>
                 </div>
-                <div className="rounded-lg border p-2">
-                  <p className="text-[11px] text-muted-foreground">Cancelled</p>
-                  <p className="mt-0.5 font-semibold text-orange-600">{lastMonthCancelled}</p>
+
+                <div className="rounded-xl bg-[#1a1f36] border border-slate-700/50 p-4 flex flex-col gap-3 shadow-sm">
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
+                    <div className="rounded-full bg-rose-500/10 p-1.5">
+                      <XCircle className="h-4 w-4 text-rose-400" />
+                    </div>
+                    Failed
+                  </div>
+                  <span className="text-2xl font-bold ml-[34px]">{currentMonthPerformance.failed}</span>
                 </div>
-                <div className="rounded-lg border p-2">
-                  <p className="text-[11px] text-muted-foreground">Pending</p>
-                  <p className="mt-0.5 font-semibold text-amber-600">{lastMonthPending}</p>
+
+                <div className="rounded-xl bg-[#1a1f36] border border-slate-700/50 p-4 flex flex-col gap-3 shadow-sm">
+                  <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
+                    <div className="rounded-full bg-orange-500/10 p-1.5">
+                      <XCircle className="h-4 w-4 text-orange-400" />
+                    </div>
+                    Cancelled
+                  </div>
+                  <span className="text-2xl font-bold ml-[34px]">{currentMonthPerformance.cancelled}</span>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+
+              <div className="flex items-center justify-between text-sm mb-3 px-1">
+                <span className="text-slate-300 font-medium">Success Rate</span>
+                <span className="text-emerald-400 font-bold">{currentMonthPerformance.successRate}%</span>
+              </div>
+              <div className="h-2.5 w-full bg-[#1a1f36] rounded-full overflow-hidden shadow-inner">
+                <div 
+                  className="h-full bg-emerald-400 rounded-full transition-all duration-1000 ease-out" 
+                  style={{ width: `${currentMonthPerformance.successRate}%` }}
+                />
+              </div>
+            </div>
+
+            {/* Monthly Breakdown */}
+            <div>
+              <h3 className="text-lg font-bold mb-4 text-foreground">Monthly Breakdown</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {previousMonthsPerformance.map((month) => (
+                  <div key={month.label} className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex items-center justify-between mb-5">
+                      <div className="flex items-center gap-2 font-bold text-base">
+                        <Calendar className="h-4 w-4 text-indigo-400" />
+                        {month.label}
+                      </div>
+                      <div className="flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 text-xs font-semibold">
+                        <TrendingUp className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
+                        <span className="text-foreground">{month.successRate}%</span>
+                      </div>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground font-medium">Total</span>
+                        <span className="font-bold text-foreground">{month.total}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground font-medium">Booked</span>
+                        <span className="font-bold text-emerald-500">{month.booked}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground font-medium">Failed</span>
+                        <span className="font-bold text-rose-500">{month.failed}</span>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground font-medium">Cancelled</span>
+                        <span className="font-bold text-orange-500">{month.cancelled}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
         </motion.div>
 
         {/* Recent Bookings */}

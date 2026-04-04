@@ -38,7 +38,7 @@ TrainTrack is a Next.js 15 static-export app for train booking operations. The f
 
 ## Current Repo State
 
-- `git pull --ff-only` reported `Already up to date.` on March 9, 2026.
+- `git pull --ff-only` reported `Already up to date.` on April 3, 2026.
 - `npm.cmd run typecheck` passes.
 - `npm.cmd run lint` currently fails because `next lint` hits a circular JSON/config error from `.eslintrc.json`; linting likely needs migration to the ESLint CLI for reliable execution on Next 15/16-era tooling.
 
@@ -53,4 +53,6 @@ TrainTrack is a Next.js 15 static-export app for train booking operations. The f
 - **Upgrade preferred**: Booking records now include `upgradePreferred` field to indicate if an upgrade is preferred.
 - **Booking count deduplication**: Both `accountsClient.ts` (`getAccountStats`) and `handlersClient.ts` (`getHandlerStatsForHandlers`) deduplicate booking records using the same priority: `bookingTransactionId` → `groupId` → document ID. A group booking always counts as 1, even after ungrouping.
 - **Ungroup Firestore safety**: `ungroupBookings()` in `firestoreClient.ts` separates new-record creation (`addDoc`) from existing-record updates (`updateDoc`). `deleteField()` is only used in update paths — never in `addDoc()`, which Firestore rejects.
+- **Booking date tracking**: Booking records now store `bookingDate` (`YYYY-MM-DD`) — the "Book by" date from the source booking — for accurate stats queries. Both `saveBookingRecord()` and `saveGroupBookingRecords()` fetch and store this date. Account stats and dashboard filtering use `bookingDate` instead of `createdAt` for current-month calculations; older records without `bookingDate` fall back to `createdAt`. The `lastBookedDate` on accounts is updated using the actual `bookingDate`, not today's date.
+- **Search bar in sidebar**: `SearchBarClient` is embedded in the desktop sidebar navigation (wrapped in `Suspense`) for searching across accounts and bookings.
 - Existing repo guidance also lives in `CLAUDE.md`; keep both files aligned if architecture or workflows change.
