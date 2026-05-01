@@ -23,6 +23,7 @@ export interface AccountStats {
   accountId: string;
   username: string;
   bookingCount: number;
+  previousMonthBookingCount: number;
   lastUsedDate?: string;
 }
 
@@ -173,20 +174,25 @@ export async function getAccountStats(): Promise<AccountStats[]> {
     // Get all accounts
     const accounts = await getAccounts();
     
-    // Get booking records from the current month
+    // Get booking records (we'll bucket by current vs previous month in code)
     const bookingRecordsCollection = collection(db, "bookingRecords");
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfPreviousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     
     const bookingRecordsSnapshot = await getDocs(bookingRecordsCollection);
     
-    // Count unique booking transactions per account from current month
-    const accountUsage = new Map<string, { count: number; lastDate?: string }>();
+    // Count unique booking transactions per account per bucket (current / previous month)
+    const currentMonthUsage = new Map<string, { count: number; lastDate?: string }>();
+    const previousMonthUsage = new Map<string, { count: number }>();
     
-    // Track processed transactions using different strategies
-    const processedTransactionIds = new Set<string>(); // For new bookings with transaction ID
-    const processedGroupIds = new Set<string>(); // For old group bookings
-    const processedDocIds = new Set<string>(); // For old individual bookings
+    // Track processed transactions per bucket using different strategies
+    const currentProcessedTransactionIds = new Set<string>();
+    const currentProcessedGroupIds = new Set<string>();
+    const currentProcessedDocIds = new Set<string>();
+    const previousProcessedTransactionIds = new Set<string>();
+    const previousProcessedGroupIds = new Set<string>();
+    const previousProcessedDocIds = new Set<string>();
     
     bookingRecordsSnapshot.docs.forEach(doc => {
       const data = doc.data();
@@ -200,43 +206,59 @@ export async function getAccountStats(): Promise<AccountStats[]> {
       const effectiveDateStr = bookingDateStr || (createdAt ? createdAt.toISOString().split('T')[0] : null);
       const effectiveDate = effectiveDateStr ? new Date(effectiveDateStr) : null;
       
-      // Only count bookings from current month (by Book by date, not when record was created)
-      if (username && effectiveDate && effectiveDate >= startOfCurrentMonth) {
-        let shouldCount = false;
-        
-        // Priority 1: Use transaction ID if available (new system)
-        if (transactionId) {
-          if (!processedTransactionIds.has(transactionId)) {
-            processedTransactionIds.add(transactionId);
-            shouldCount = true;
-          }
-        } 
-        // Priority 2: Use groupId for old group bookings without transaction ID
-        else if (groupId) {
-          if (!processedGroupIds.has(groupId)) {
-            processedGroupIds.add(groupId);
-            shouldCount = true;
-          }
-        } 
-        // Priority 3: Fall back to document ID for old individual bookings
-        else {
-          if (!processedDocIds.has(doc.id)) {
-            processedDocIds.add(doc.id);
-            shouldCount = true;
-          }
+      if (!username || !effectiveDate) return;
+      
+      // Determine bucket: current month, previous month, or skip
+      let bucket: "current" | "previous" | null = null;
+      if (effectiveDate >= startOfCurrentMonth) {
+        bucket = "current";
+      } else if (effectiveDate >= startOfPreviousMonth) {
+        bucket = "previous";
+      }
+      if (!bucket) return;
+      
+      const processedTransactionIds = bucket === "current" ? currentProcessedTransactionIds : previousProcessedTransactionIds;
+      const processedGroupIds = bucket === "current" ? currentProcessedGroupIds : previousProcessedGroupIds;
+      const processedDocIds = bucket === "current" ? currentProcessedDocIds : previousProcessedDocIds;
+      
+      let shouldCount = false;
+      
+      // Priority 1: Use transaction ID if available (new system)
+      if (transactionId) {
+        if (!processedTransactionIds.has(transactionId)) {
+          processedTransactionIds.add(transactionId);
+          shouldCount = true;
         }
-        
-        if (shouldCount) {
-          const existing = accountUsage.get(username) || { count: 0 };
-          const existingDate = existing.lastDate ? new Date(existing.lastDate) : null;
-          
-          accountUsage.set(username, {
-            count: existing.count + 1,
-            lastDate: (!existingDate || effectiveDate > existingDate)
-              ? effectiveDateStr!
-              : existing.lastDate,
-          });
+      } 
+      // Priority 2: Use groupId for old group bookings without transaction ID
+      else if (groupId) {
+        if (!processedGroupIds.has(groupId)) {
+          processedGroupIds.add(groupId);
+          shouldCount = true;
         }
+      } 
+      // Priority 3: Fall back to document ID for old individual bookings
+      else {
+        if (!processedDocIds.has(doc.id)) {
+          processedDocIds.add(doc.id);
+          shouldCount = true;
+        }
+      }
+      
+      if (!shouldCount) return;
+      
+      if (bucket === "current") {
+        const existing = currentMonthUsage.get(username) || { count: 0 };
+        const existingDate = existing.lastDate ? new Date(existing.lastDate) : null;
+        currentMonthUsage.set(username, {
+          count: existing.count + 1,
+          lastDate: (!existingDate || effectiveDate > existingDate)
+            ? effectiveDateStr!
+            : existing.lastDate,
+        });
+      } else {
+        const existing = previousMonthUsage.get(username) || { count: 0 };
+        previousMonthUsage.set(username, { count: existing.count + 1 });
       }
     });
 
@@ -244,8 +266,9 @@ export async function getAccountStats(): Promise<AccountStats[]> {
     const stats: AccountStats[] = accounts.map(account => ({
       accountId: account.id,
       username: account.username,
-      bookingCount: accountUsage.get(account.username)?.count || 0,
-      lastUsedDate: accountUsage.get(account.username)?.lastDate,
+      bookingCount: currentMonthUsage.get(account.username)?.count || 0,
+      previousMonthBookingCount: previousMonthUsage.get(account.username)?.count || 0,
+      lastUsedDate: currentMonthUsage.get(account.username)?.lastDate,
     }));
 
     return stats;

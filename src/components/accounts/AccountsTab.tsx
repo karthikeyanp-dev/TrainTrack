@@ -525,6 +525,10 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
                 {stats?.bookingCount ?? 0}
               </div>
               <div>
+                <span style={labelHighlightStyle}>Booked ({new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleString('default', { month: 'long' })}): </span>
+                {stats?.previousMonthBookingCount ?? 0}
+              </div>
+              <div>
                 <span style={labelHighlightStyle}>Last Booked: </span>
                 {account.lastBookedDate || "—"}
               </div>
