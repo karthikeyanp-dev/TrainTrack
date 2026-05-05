@@ -613,8 +613,28 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
     return classMap[classType] || classType;
   };
 
+  // Determine card background tint based on booking category
+  const getBookingCardBackgroundClasses = (bookingType: string, classType: string): string => {
+    const isGeneral = ['General', 'Regular'].includes(String(bookingType));
+    const isSL = ['SL', 'UR', '2S'].includes(classType);
+
+    if (isGeneral) {
+      return "bg-amber-50/80 border-amber-200/60 dark:bg-amber-950/30 dark:border-amber-900/40";
+    }
+
+    if (isSL) {
+      return "bg-green-50/80 border-green-200/60 dark:bg-green-950/30 dark:border-green-900/40";
+    }
+
+    // Tatkal AC
+    return "bg-blue-50/80 border-blue-200/60 dark:bg-blue-950/30 dark:border-blue-900/40";
+  };
+
   const compactClass = getCompactClassDisplay(booking.classType);
   const displayClass = `${booking.bookingType === 'Tatkal' ? 'T' : 'G'}-${compactClass}`;
+
+  // Background tint based on booking type and class for quick visual identification
+  const bookingCardBg = getBookingCardBackgroundClasses(booking.bookingType, booking.classType);
 
   return (
     <motion.div
@@ -626,6 +646,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
     >
     <Card className={cn(
       "w-full h-full shadow-md hover:shadow-lg transition-shadow duration-200 flex flex-col relative",
+      bookingCardBg,
       isSelected && "ring-2 ring-primary border-primary"
     )}>
       <CardHeader className="pb-2">
