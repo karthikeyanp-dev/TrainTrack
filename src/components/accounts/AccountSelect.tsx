@@ -27,6 +27,7 @@ interface AccountSelectProps {
   disabled?: boolean
   placeholder?: string
   className?: string
+  excludedUsernames?: Set<string>
 }
 
 export function AccountSelect({
@@ -35,7 +36,8 @@ export function AccountSelect({
   onChange,
   disabled,
   placeholder = "Select account...",
-  className
+  className,
+  excludedUsernames
 }: AccountSelectProps) {
   const [open, setOpen] = React.useState(false)
 
@@ -68,24 +70,28 @@ export function AccountSelect({
           <CommandList>
             <CommandEmpty>No account found.</CommandEmpty>
             <CommandGroup>
-              {sortedAccounts.map((account) => (
-                <CommandItem
-                  key={account.id}
-                  value={account.username}
-                  onSelect={() => {
-                    onChange(account.username)
-                    setOpen(false)
-                  }}
-                >
-                  <Check
-                    className={cn(
-                      "mr-2 h-4 w-4",
-                      value === account.username ? "opacity-100" : "opacity-0"
-                    )}
-                  />
-                  {account.username}
-                </CommandItem>
-              ))}
+              {sortedAccounts.map((account) => {
+                const isExcluded = excludedUsernames?.has(account.username) && account.username !== value
+                if (isExcluded) return null
+                return (
+                  <CommandItem
+                    key={account.id}
+                    value={account.username}
+                    onSelect={() => {
+                      onChange(account.username)
+                      setOpen(false)
+                    }}
+                  >
+                    <Check
+                      className={cn(
+                        "mr-2 h-4 w-4",
+                        value === account.username ? "opacity-100" : "opacity-0"
+                      )}
+                    />
+                    {account.username}
+                  </CommandItem>
+                )
+              })}
             </CommandGroup>
           </CommandList>
         </Command>

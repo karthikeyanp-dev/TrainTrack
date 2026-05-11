@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -46,6 +46,7 @@ import { getAccounts } from "@/lib/accountsClient";
 import type { IrctcAccount } from "@/types/account";
 import { getHandlers } from "@/lib/handlersClient";
 import type { Handler } from "@/types/handler";
+import { usePendingBookings } from "@/hooks/useBookings";
 
 const PreparedAccountSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -85,6 +86,28 @@ export function BookingRequirementsSheet({
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const IconComponent = iconComponent || ClipboardList;
+
+  const { data: pendingBookings } = usePendingBookings();
+
+  const excludedUsernames = useMemo(() => {
+    const currentBookingIds = new Set<string>(
+      isGroupMode
+        ? [...groupBookings.map((b) => b.id), booking.id]
+        : [booking.id]
+    );
+
+    const usernames = new Set<string>();
+    pendingBookings?.forEach((pb) => {
+      if (currentBookingIds.has(pb.id)) return;
+      pb.preparedAccounts?.forEach((acc) => {
+        if (acc.username) {
+          usernames.add(acc.username);
+        }
+      });
+    });
+
+    return usernames;
+  }, [pendingBookings, booking.id, isGroupMode, groupBookings]);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(FormSchema),
@@ -271,6 +294,7 @@ export function BookingRequirementsSheet({
                                   }
                                 }}
                                 placeholder="Select an account"
+                                excludedUsernames={excludedUsernames}
                               />
                               <FormMessage />
                             </FormItem>
