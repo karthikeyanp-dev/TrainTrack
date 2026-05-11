@@ -43,7 +43,7 @@ npm run typecheck
 All data operations use Firestore client SDK with React Query hooks:
 
 **Custom hooks in `src/hooks/`:**
-- `useBookings.ts` - Real-time bookings via `onSnapshot()` listener; also exports `usePendingBookings()`, `useBookingDates()`
+- `useBookings.ts` - Real-time bookings via `onSnapshot()` listener; also exports `usePendingBookings()`, `useBookingDates()`. `usePendingBookings()` is also used by `BookingRequirementsSheet` to compute account assignment conflicts.
 - `useAccounts.ts` - IRCTC account management via React Query (polling, not real-time); also exports `useAccountStats()`
 - `useHandlers.ts` - Handler/agent management; also exports `useHandlerStats()`
 
@@ -62,6 +62,7 @@ All data operations use Firestore client SDK with React Query hooks:
 - **Ungrouping bookings**: `ungroupBookings()` splits one group `bookingRecords` doc into individual records. It preserves the original group record's `createdAt` timestamp so date/month-bucketed counts remain stable. The function separates creation (`addDoc` with clean data) from updates (`updateDoc` with `deleteField()` for `groupId`, `bookingIds`, optionally `trainName`).
 - **Booking count deduplication**: Both `getAccountStats()` (accountsClient) and `getHandlerStatsForHandlers()` (handlersClient) use the same deduplication strategy when counting bookings: first by `bookingTransactionId`, then by `groupId`, then by document ID. This ensures a group booking always counts as 1 — even after ungrouping into individual records.
 - **Booking date tracking**: Both `saveBookingRecord()` and `saveGroupBookingRecords()` fetch the source booking's `bookingDate` (the "Book by" date) and store it in the booking record. Account stats (`getAccountStats`) and dashboard month-bucketing filter by `bookingDate` instead of `createdAt` for accuracy; older records without `bookingDate` fall back to `createdAt`. The `lastBookedDate` on accounts is set from the booking's `bookingDate`, not today's date.
+- **Account assignment conflict prevention**: `BookingRequirementsSheet` uses `usePendingBookings()` to compute `excludedUsernames` — a `Set<string>` of account usernames already assigned to other pending bookings' `preparedAccounts`. This set is passed to `AccountSelect` via its `excludedUsernames` prop, which hides those accounts from the dropdown unless they're the currently selected value. This prevents duplicate account assignments across pending bookings in real-time (via Firestore `onSnapshot`), and works for both individual and group booking modes. In group mode, all bookings in the group plus the current booking are excluded from the conflict check.
 
 ### Firebase Integration
 
@@ -121,7 +122,7 @@ All types defined in `src/types/`:
 **Custom components:**
 - `layout/AppShell.tsx` - Main wrapper with header, FAB, bottom nav
 - `bookings/*` - Booking-specific components with infinite scroll pattern
-- `accounts/*` - Account management views
+- `accounts/*` - Account management views; `AccountSelect` accepts `excludedUsernames?: Set<string>` to filter out accounts already assigned to other pending bookings
 
 ### Styling
 
@@ -240,6 +241,7 @@ Current Firestore rules (`firestore.rules`) allow unrestricted read/write. In pr
 - **Payment tracking**: Use `isEligibleForPaymentTracking()` helper in BookingsView to filter bookings created/updated after feature start date (March 6, 2026)
 - **Group bookings**: Multiple bookings can be grouped together using `bookingGroups/` collection; supports bulk status updates and record editing. Ungrouping preserves original `createdAt` and uses deduplication to keep counts stable.
 - **Ungroup Firestore constraint**: `deleteField()` must never appear inside `addDoc()`. The `ungroupBookings()` function separates the creation path (clean data, no `deleteField`) from the update path (uses `deleteField` for `groupId`, `bookingIds`, `trainName`).
+- **Account assignment conflict prevention**: When adding accounts via `BookingRequirementsSheet`, the `AccountSelect` dropdown filters out accounts already assigned to other pending bookings. This is powered by `usePendingBookings()` → `excludedUsernames` → `AccountSelect.excludedUsernames` prop. Conflicts update in real-time via Firestore `onSnapshot`. In group mode, all bookings in the group are excluded from the conflict check.
 
 ## Testing
 

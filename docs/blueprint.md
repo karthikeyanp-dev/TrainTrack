@@ -6,6 +6,7 @@
 - Booking Dashboard: Tabbed interface ('Pending' and 'Completed') to efficiently manage and view bookings, with a default view set to 'Pending'.
 - Add Booking Form: Intuitive booking form accessible via an 'Add Booking' button/icon, allowing quick entry of booking details such as source, destination, and passenger info.
 - One-Click Updates: Allow single click modification of the booking to easily track progress.
+- Account Assignment Validation: Prevents duplicate account assignments across pending bookings. The requirements sheet dropdown filters out accounts already assigned to other pending bookings, with real-time conflict detection.
 - Smart Suggestion Tool: AI-powered tool to suggest potential destinations and routes based on past booking data and popular travel trends.
 
 ## Style Guidelines:
