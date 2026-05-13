@@ -664,10 +664,9 @@ export async function saveBookingRecord(data: {
       : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     recordData.bookingTransactionId = bookingTransactionId;
 
+    // Only set trainName when provided; never use deleteField() until we know it's an update
     if (data.trainName && data.trainName.trim() !== "") {
       recordData.trainName = data.trainName.trim();
-    } else {
-      recordData.trainName = deleteField();
     }
 
     let docId: string;
@@ -676,9 +675,15 @@ export async function saveBookingRecord(data: {
       // Update existing record
       const existingDoc = querySnapshot.docs[0];
       docId = existingDoc.id;
+      
+      // For updates, use deleteField() to remove trainName if it was cleared
+      if (!data.trainName || data.trainName.trim() === "") {
+        recordData.trainName = deleteField();
+      }
+      
       await updateDoc(doc(db, "bookingRecords", docId), recordData);
     } else {
-      // Create new record
+      // Create new record - deleteField() must NOT be used here
       const docRef = await addDoc(recordsCollection, {
         ...recordData,
         createdAt: serverTimestamp(),
@@ -829,8 +834,6 @@ export async function saveGroupBookingRecords(data: {
 
     if (data.trainName && data.trainName.trim() !== "") {
       recordData.trainName = data.trainName.trim();
-    } else {
-      recordData.trainName = deleteField();
     }
 
     let docId: string;
@@ -838,8 +841,15 @@ export async function saveGroupBookingRecords(data: {
     if (isUpdate) {
       const existingDoc = groupSnapshot.docs[0];
       docId = existingDoc.id;
+      
+      // For updates, use deleteField() to remove trainName if it was cleared
+      if (!data.trainName || data.trainName.trim() === "") {
+        recordData.trainName = deleteField();
+      }
+      
       await updateDoc(doc(db, "bookingRecords", docId), recordData);
     } else {
+      // Create new record - deleteField() must NOT be used here
       const docRef = await addDoc(recordsCollection, {
         ...recordData,
         createdAt: serverTimestamp(),
