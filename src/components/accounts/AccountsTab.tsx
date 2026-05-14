@@ -190,17 +190,28 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
     if (!accountToTopUp) return;
     
     const amountToAdd = Number(topUpAmount);
-    if (isNaN(amountToAdd) || amountToAdd <= 0) {
+    if (isNaN(amountToAdd) || amountToAdd === 0) {
       toast({
         title: "Invalid Amount",
-        description: "Please enter a valid positive amount.",
+        description: "Please enter a valid non-zero amount.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const newWalletAmount = accountToTopUp.walletAmount + amountToAdd;
+    
+    // Ensure wallet balance never goes negative
+    if (newWalletAmount < 0) {
+      toast({
+        title: "Insufficient Balance",
+        description: `Cannot deduct more than available balance. Available: ₹${accountToTopUp.walletAmount.toFixed(2)}`,
         variant: "destructive",
       });
       return;
     }
 
     setIsUpdatingWallet(true);
-    const newWalletAmount = accountToTopUp.walletAmount + amountToAdd;
     
     // We need to pass all required fields to updateAccount
     const result = await updateAccount(accountToTopUp.id, {
@@ -210,9 +221,10 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
     if (result.success) {
       const updatedAccount = { ...accountToTopUp, walletAmount: newWalletAmount };
       setAccounts(prev => prev.map(acc => acc.id === accountToTopUp.id ? updatedAccount : acc).sort((a, b) => b.walletAmount - a.walletAmount));
+      const action = amountToAdd > 0 ? "Added" : "Deducted";
       toast({
         title: "Wallet Updated",
-        description: `Added ₹${amountToAdd} to wallet. New balance: ₹${newWalletAmount.toFixed(2)}`,
+        description: `${action} ₹${Math.abs(amountToAdd).toFixed(2)} ${amountToAdd > 0 ? 'to' : 'from'} wallet. New balance: ₹${newWalletAmount.toFixed(2)}`,
       });
       setAccountToTopUp(null);
       setTopUpAmount("");
@@ -572,9 +584,9 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
       <Dialog open={!!accountToTopUp} onOpenChange={(open) => !open && setAccountToTopUp(null)}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Add Wallet Amount</DialogTitle>
+            <DialogTitle>Adjust Wallet Balance</DialogTitle>
             <DialogDescription>
-              Add money to your IRCTC wallet balance.
+              Add or deduct money from your IRCTC wallet balance. Use a negative amount (e.g. -500) to deduct.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -583,20 +595,20 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
               <div className="col-span-3">₹{accountToTopUp?.walletAmount.toFixed(2)}</div>
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
-              <Label htmlFor="amount" className="text-right">Amount to Add</Label>
+              <Label htmlFor="amount" className="text-right">Amount</Label>
               <Input
                 id="amount"
                 type="number"
                 value={topUpAmount}
                 onChange={(e) => setTopUpAmount(e.target.value)}
                 className="col-span-3"
-                placeholder="e.g. 500"
-                min="0"
+                placeholder="e.g. 500 or -500"
+                step="0.01"
               />
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label className="text-right font-bold">New Total</Label>
-              <div className="col-span-3 font-bold">
+              <div className={`col-span-3 font-bold ${(Number(topUpAmount) || 0) < 0 ? 'text-destructive' : ''}`}>
                 ₹{((accountToTopUp?.walletAmount || 0) + (Number(topUpAmount) || 0)).toFixed(2)}
               </div>
             </div>
