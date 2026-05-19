@@ -662,12 +662,12 @@ function GroupStatusUpdate({ bookings, groupId }: GroupStatusUpdateProps) {
   });
 
   const handleStatusSelect = (newStatus: string) => {
-    if (newStatus === "Booked" || newStatus === "Booking Failed (Paid)") {
+    if (newStatus === "Booked") {
       // Show the booked details dialog
       setStatusToConfirm(newStatus as BookingStatus);
       setShowBookedDetailsDialog(true);
-    } else if (newStatus === "Missed" || newStatus === "Booking Failed (Unpaid)" || newStatus === "CNF & Cancelled" || newStatus === "User Cancelled") {
-      // Show reason dialog for Missed, Failed, and Cancelled statuses
+    } else if (newStatus === "Missed" || newStatus === "CNF & Cancelled" || newStatus === "User Cancelled") {
+      // Show reason dialog for Missed and Cancelled statuses
       setStatusToConfirm(newStatus as BookingStatus);
       setShowReasonDialog(true);
     } else if (newStatus === "Requested" && currentStatus !== "Requested") {
@@ -675,9 +675,10 @@ function GroupStatusUpdate({ bookings, groupId }: GroupStatusUpdateProps) {
       setStatusToConfirm(newStatus as BookingStatus);
       setShowStatusConfirmDialog(true);
     } else {
-      // Show regular confirmation dialog
+      // For Booking Failed (Paid) and Booking Failed (Unpaid) - directly update without any dialog
       setStatusToConfirm(newStatus as BookingStatus);
-      setShowStatusConfirmDialog(true);
+      statusUpdateMutation.mutate({ status: newStatus as BookingStatus, reason: "", handler: "" });
+      setStatusToConfirm(null);
     }
   };
 

@@ -258,13 +258,12 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
   });
 
   const handleStatusSelect = (newStatus: string) => {
-    if (newStatus === "Booked" || newStatus === "Booking Failed (Paid)") {
-      // Show the booked details dialog (or failed payment dialog) instead of confirmation
-      // We can reuse the BookingRecordForm for "Booking Failed (Paid)" as well since we need the same details
+    if (newStatus === "Booked") {
+      // Show the booked details dialog
       setStatusToConfirm(newStatus as BookingStatus);
       setShowBookedDetailsDialog(true);
-    } else if (newStatus === "Missed" || newStatus === "Booking Failed (Unpaid)" || newStatus === "CNF & Cancelled" || newStatus === "User Cancelled") {
-      // Show reason dialog for Missed, Failed, and Cancelled statuses
+    } else if (newStatus === "Missed" || newStatus === "CNF & Cancelled" || newStatus === "User Cancelled") {
+      // Show reason dialog for Missed and Cancelled statuses
       setStatusToConfirm(newStatus as BookingStatus);
       setShowReasonDialog(true);
     } else if (newStatus === "Requested" && booking.status !== "Requested") {
@@ -272,9 +271,8 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
       setStatusToConfirm(newStatus as BookingStatus);
       setShowStatusConfirmDialog(true);
     } else {
-      // Show regular confirmation dialog for other statuses
-      setStatusToConfirm(newStatus as BookingStatus);
-      setShowStatusConfirmDialog(true);
+      // For Booking Failed (Paid) and Booking Failed (Unpaid) - directly update without any dialog
+      statusUpdateMutation.mutate({ id: booking.id, status: newStatus as BookingStatus, reason: "", handler: "" });
     }
   };
 

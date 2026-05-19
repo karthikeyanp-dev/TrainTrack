@@ -574,13 +574,13 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             variant="outline"
             onClick={() => {
               const newIndex = fields.length;
-              append({ name: "", age: "", gender: undefined, berthRequired: false });
-              // Explicitly clear the form values for the new passenger
+              append({ name: "", age: "", gender: "", berthRequired: false });
+              // Explicitly reset the field to clear any stale state
               setTimeout(() => {
-                form.setValue(`passengers.${newIndex}.name`, "");
-                form.setValue(`passengers.${newIndex}.age`, "");
-                form.resetField(`passengers.${newIndex}.gender`);
-                form.setValue(`passengers.${newIndex}.berthRequired`, false);
+                form.setValue(`passengers.${newIndex}.name`, "", { shouldValidate: false });
+                form.setValue(`passengers.${newIndex}.age`, "", { shouldValidate: false });
+                form.setValue(`passengers.${newIndex}.gender`, "", { shouldValidate: false });
+                form.setValue(`passengers.${newIndex}.berthRequired`, false, { shouldValidate: false });
               }, 0);
             }}
             className="mt-2"
