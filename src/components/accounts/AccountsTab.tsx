@@ -720,8 +720,17 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
     try {
       const fetchedHandlers = await getHandlers();
       const stats = await getHandlerStatsForHandlers(fetchedHandlers);
-      setHandlers(fetchedHandlers);
       setHandlerStats(stats);
+
+      const sortedHandlers = [...fetchedHandlers].sort((a, b) => {
+        const statsA = stats.find(s => s.handlerId === a.id || s.name === a.name);
+        const statsB = stats.find(s => s.handlerId === b.id || s.name === b.name);
+        const countA = statsA?.bookingCount ?? 0;
+        const countB = statsB?.bookingCount ?? 0;
+        return countB - countA;
+      });
+
+      setHandlers(sortedHandlers);
     } catch (error) {
       toast({
         title: "Error Loading Handlers",
@@ -757,10 +766,9 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
         description: `Handler ${result.handler.name} has been saved.`,
       });
 
-      setHandlers(prev => [...prev, result.handler!].sort((a, b) => a.createdAt.localeCompare(b.createdAt)));
       setName("");
       setShowAddForm(false);
-      // Refresh stats to include any newly recorded bookings mapping to this handler name
+      // Refresh stats and re-sort to include any newly recorded bookings mapping to this handler name
       loadHandlers();
     } else {
       const errorMessage = result.error || "Failed to add handler";
@@ -832,13 +840,8 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
         description: `Handler ${updatedHandler.name} has been updated.`,
       });
 
-      setHandlers(prev =>
-        prev
-          .map(h => (h.id === handlerToEdit.id ? updatedHandler : h))
-          .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-      );
       setHandlerToEdit(null);
-      // Refresh stats in case the handler name changed
+      // Refresh stats and re-sort in case the handler name changed
       loadHandlers();
     } else {
       const errorMessage = result.error || "Failed to update handler";
