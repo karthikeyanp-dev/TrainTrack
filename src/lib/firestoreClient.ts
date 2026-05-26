@@ -1120,13 +1120,30 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
        await deleteDoc(doc(firestore, "bookingRecords", groupRecordDoc.id));
      }
 
-     // Remove groupId from all bookings
-     const promises = group.bookingIds.map(bid => 
-       updateDoc(doc(firestore, "bookings", bid), { 
+     // Find shared preparedAccounts from the first booking in the group that has them
+     const sharedPreparedAccounts = bookingsData.find(
+       (b: any) => b.preparedAccounts && b.preparedAccounts.length > 0
+     )?.preparedAccounts;
+
+     // Remove groupId from all bookings and propagate preparedAccounts to those missing them
+     const promises = group.bookingIds.map((bid) => {
+       const booking = bookingsData.find((b: any) => b.id === bid);
+       const updateData: Record<string, any> = {
          groupId: deleteField(),
-         updatedAt: serverTimestamp()
-       })
-     );
+         updatedAt: serverTimestamp(),
+       };
+
+       // Copy shared preparedAccounts to bookings that don't have them
+       if (
+         sharedPreparedAccounts &&
+         sharedPreparedAccounts.length > 0 &&
+         (!booking?.preparedAccounts || booking.preparedAccounts.length === 0)
+       ) {
+         updateData.preparedAccounts = sharedPreparedAccounts;
+       }
+
+       return updateDoc(doc(firestore, "bookings", bid), updateData);
+     });
      await Promise.all(promises);
 
      // Delete the group
