@@ -96,6 +96,8 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     paymentReceived: data.paymentReceived as boolean | undefined,
     amountSettled: data.amountSettled as boolean | undefined,
     refundDetails: data.refundDetails as RefundDetails | undefined,
+    groupId: data.groupId as string | undefined,
+    wasGrouped: data.wasGrouped as boolean | undefined,
   };
 };
 
@@ -1130,6 +1132,7 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
        const booking = bookingsData.find((b: any) => b.id === bid);
        const updateData: Record<string, any> = {
          groupId: deleteField(),
+         wasGrouped: true,
          updatedAt: serverTimestamp(),
        };
 

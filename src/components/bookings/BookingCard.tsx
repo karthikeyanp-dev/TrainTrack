@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "./StatusBadge";
-import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X, CreditCard, Receipt, Loader2, ArrowRight } from "lucide-react";
+import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X, CreditCard, Receipt, Loader2, ArrowRight, Layers } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateBookingStatus, deleteBooking, getBookingRecordByBookingId, deleteBookingRefundDetails, deleteBookingRecord, updateBookingPaymentTracking, updateBookingRefundDetails } from "@/lib/firestoreClient";
 import type { BookingRecord } from "@/types/bookingRecord";
@@ -511,7 +511,7 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
         const walletInfo = acc.walletAmount !== undefined ? ` (₹${acc.walletAmount.toFixed(2)})` : '';
         return `${index + 1}. ${acc.username} | ${acc.password} | Master: ${acc.isMasterAdded ? '✅' : '❌'} | Wallet: ${acc.isWalletLoaded ? '✅' : '❌'}${walletInfo}${handlingInfo}`;
       }).join('\n');
-      preparedAccountsText = `\n-\nID(s) for Booking:\n${accountsDetails}`;
+      preparedAccountsText = `\n-\nID(s) for Booking${booking.wasGrouped ? ' (ex-group)' : ''}:\n${accountsDetails}`;
     }
 
     const bookingDetailsText = `
@@ -820,6 +820,12 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                   <span className="bg-primary/10 text-primary text-xs px-2 py-0.5 rounded-full">
                     {booking.preparedAccounts.length}
                   </span>
+                  {booking.wasGrouped && (
+                    <span className="flex items-center gap-1 text-xs text-muted-foreground" title="Inherited from group booking">
+                      <Layers className="h-3 w-3" />
+                      <span className="hidden sm:inline">ex-group</span>
+                    </span>
+                  )}
                 </span>
               </AccordionTrigger>
               <AccordionContent>

@@ -65,6 +65,7 @@ export interface Booking {
   amountSettled?: boolean;
   refundDetails?: RefundDetails;
   groupId?: string; // ID of the booking group this booking belongs to
+  wasGrouped?: boolean; // True if this booking was previously part of a group (set on ungroup)
 }
 
 export interface BookingGroup {
