@@ -613,7 +613,7 @@ async function revertAccountBookingEffects(
     const markerMatches =
       lastBookedRecordId
         ? lastBookedRecordId === recordMarker
-        : currentLastBookedDate && recordMarker && currentLastBookedDate === previousRecord.bookingDate;
+        : currentLastBookedDate && currentLastBookedDate === previousRecord.bookingDate;
 
     if (markerMatches) {
       if (accountData.previousLastBookedDate) {
@@ -1041,9 +1041,10 @@ export async function deleteBookingRecord(id: string): Promise<{ success: boolea
     const recordData = docSnap.data();
     const { bookedAccountUsername, amountCharged, methodUsed } = recordData;
 
-    // If payment was via wallet, refund the amount
-    if (methodUsed === "Wallet" && bookedAccountUsername && amountCharged) {
-      // Find the account by username
+    // Look up the account that was charged. We always need it to revert the
+    // lastBookedDate / lastBookedRecordId bookkeeping (regardless of payment
+    // method). The wallet refund is only applied for Wallet records.
+    if (bookedAccountUsername) {
       const accountsCollection = collection(db, "irctcAccounts");
       const accountQuery = query(accountsCollection, where("username", "==", bookedAccountUsername));
       const accountSnapshot = await getDocs(accountQuery);
@@ -1051,25 +1052,35 @@ export async function deleteBookingRecord(id: string): Promise<{ success: boolea
       if (!accountSnapshot.empty) {
         const accountDoc = accountSnapshot.docs[0];
         const accountData = accountDoc.data();
-        const currentWalletAmount = accountData.walletAmount || 0;
-        const newWalletAmount = currentWalletAmount + amountCharged;
 
         const updateData: any = {
-          walletAmount: newWalletAmount,
           updatedAt: serverTimestamp(),
         };
 
+        // Wallet refund — only for records that were actually paid from the wallet.
+        if (methodUsed === "Wallet" && amountCharged) {
+          const currentWalletAmount = accountData.walletAmount || 0;
+          updateData.walletAmount = currentWalletAmount + amountCharged;
+        }
+
+        // Revert lastBookedDate / lastBookedRecordId — these are tracked for
+        // every record (not just Wallet), so they must be reverted for any
+        // payment method. Only run when this record was the one that last set
+        // them.
         const currentLastBookedDate = accountData.lastBookedDate || "";
         const recordMarker = recordData.bookingTransactionId || "";
 
-        // Revert lastBookedDate only if this record was the one that last set it.
         // Primary: compare `lastBookedRecordId` (account) vs `bookingTransactionId` (record).
-        // Fallback: when `lastBookedRecordId` is absent, use `bookingDate` comparison.
+        // Fallback: when `lastBookedRecordId` is absent (legacy accounts), use
+        // `bookingDate` comparison. We do not require `recordMarker` here, because
+        // legacy accounts without the marker often pair with records that also
+        // lack `bookingTransactionId` — gating the fallback on it would defeat
+        // the very purpose of the fallback path.
         const lastBookedRecordId = accountData.lastBookedRecordId || "";
         const markerMatches =
           lastBookedRecordId
             ? lastBookedRecordId === recordMarker
-            : currentLastBookedDate && recordMarker && currentLastBookedDate === recordData.bookingDate;
+            : currentLastBookedDate && currentLastBookedDate === recordData.bookingDate;
 
         if (markerMatches) {
           if (accountData.previousLastBookedDate) {
@@ -1082,7 +1093,11 @@ export async function deleteBookingRecord(id: string): Promise<{ success: boolea
           updateData.lastBookedRecordId = deleteField();
         }
 
-        await updateDoc(doc(db, "irctcAccounts", accountDoc.id), updateData);
+        // Skip the write if nothing meaningful changed (only updatedAt would be written).
+        const fieldCount = Object.keys(updateData).length;
+        if (fieldCount > 1) {
+          await updateDoc(doc(db, "irctcAccounts", accountDoc.id), updateData);
+        }
       }
     }
 
