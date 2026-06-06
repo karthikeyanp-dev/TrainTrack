@@ -556,10 +556,12 @@ export async function getBookingRecordByBookingId(bookingId: string): Promise<an
  *  - refund the wallet if the previous method was Wallet
  *  - restore lastBookedDate from previousLastBookedDate (or clear it)
  *
- * Best-effort: if the account is not found we log and continue, mirroring the
- * tolerance of deleteBookingRecord. Used when an edit reassigns a record from
- * one account to another so the prior account is cleaned up before the new
- * account is charged.
+ * Best-effort for missing accounts: if the account is not found we log and
+ * continue, mirroring the tolerance of deleteBookingRecord. Other failures
+ * (permission, network, etc.) are rethrown so the caller fails fast instead of
+ * silently charging the new account while leaving the old one un-reverted.
+ * Used when an edit reassigns a record from one account to another so the
+ * prior account is cleaned up before the new account is charged.
  */
 async function revertAccountBookingEffects(
   username: string | undefined,
@@ -591,16 +593,27 @@ async function revertAccountBookingEffects(
       }
     }
 
-    if (accountData.previousLastBookedDate) {
-      updateData.lastBookedDate = accountData.previousLastBookedDate;
-      updateData.previousLastBookedDate = deleteField();
-    } else if (accountData.lastBookedDate) {
-      updateData.lastBookedDate = deleteField();
+    const currentLastBookedDate = accountData.lastBookedDate || "";
+    const recordBookingDate = previousRecord.bookingDate || "";
+
+    // Only revert lastBookedDate if this record was the one that last updated it
+    if (currentLastBookedDate && currentLastBookedDate === recordBookingDate) {
+      if (accountData.previousLastBookedDate) {
+        updateData.lastBookedDate = accountData.previousLastBookedDate;
+        updateData.previousLastBookedDate = deleteField();
+      } else {
+        updateData.lastBookedDate = deleteField();
+      }
     }
 
     await updateDoc(doc(db, "irctcAccounts", accountDoc.id), updateData);
   } catch (error) {
     console.error(`[revertAccountBookingEffects] Failed for "${username}":`, error);
+    // Rethrow so callers (e.g., saveBookingRecord on cross-account edits) fail
+    // fast instead of silently charging the new account while leaving the
+    // old one un-reverted. Missing-account cases are handled above via
+    // accountSnapshot.empty and never reach this catch.
+    throw error;
   }
 }
 
@@ -998,15 +1011,22 @@ export async function deleteBookingRecord(id: string): Promise<{ success: boolea
         const currentWalletAmount = accountData.walletAmount || 0;
         const newWalletAmount = currentWalletAmount + amountCharged;
 
-        // Restore previousLastBookedDate if it exists
         const updateData: any = {
           walletAmount: newWalletAmount,
           updatedAt: serverTimestamp(),
         };
 
-        if (accountData.previousLastBookedDate) {
-          updateData.lastBookedDate = accountData.previousLastBookedDate;
-          updateData.previousLastBookedDate = deleteField();
+        const currentLastBookedDate = accountData.lastBookedDate || "";
+        const recordBookingDate = recordData.bookingDate || "";
+
+        // Only revert lastBookedDate if this record was the one that last updated it
+        if (currentLastBookedDate && currentLastBookedDate === recordBookingDate) {
+          if (accountData.previousLastBookedDate) {
+            updateData.lastBookedDate = accountData.previousLastBookedDate;
+            updateData.previousLastBookedDate = deleteField();
+          } else {
+            updateData.lastBookedDate = deleteField();
+          }
         }
 
         await updateDoc(doc(db, "irctcAccounts", accountDoc.id), updateData);
