@@ -596,16 +596,26 @@ async function revertAccountBookingEffects(
     const currentLastBookedDate = accountData.lastBookedDate || "";
     const recordMarker = previousRecord.bookingTransactionId || "";
 
-    // Only revert lastBookedDate if this record was the one that last updated it.
-    // We compare against `lastBookedRecordId` (the bookingTransactionId of the
-    // record that last set lastBookedDate) instead of `bookingDate`, since
-    // `bookingDate` is not unique — multiple records can share the same date.
+    // Revert lastBookedDate only if this record was the one that last set it.
+    //
+    // Primary path (new data): compare `lastBookedRecordId` (on account) against
+    // `bookingTransactionId` (on record). Both fields are guaranteed unique, so
+    // this is unambiguous.
+    //
+    // Fallback path (legacy data): when `lastBookedRecordId` is absent, fall
+    // back to comparing `account.lastBookedDate === record.bookingDate`. This
+    // catches older records that were created before the marker field existed.
+    // Using `bookingDate` as a fallback is acceptable because legacy accounts
+    // without `lastBookedRecordId` can only have one record per date — the marker
+    // was introduced precisely to handle the case of multiple records sharing
+    // a date, which is a newer problem.
     const lastBookedRecordId = accountData.lastBookedRecordId || "";
-    if (
-      currentLastBookedDate &&
-      recordMarker &&
-      lastBookedRecordId === recordMarker
-    ) {
+    const markerMatches =
+      lastBookedRecordId
+        ? lastBookedRecordId === recordMarker
+        : currentLastBookedDate && recordMarker && currentLastBookedDate === previousRecord.bookingDate;
+
+    if (markerMatches) {
       if (accountData.previousLastBookedDate) {
         updateData.lastBookedDate = accountData.previousLastBookedDate;
         updateData.previousLastBookedDate = deleteField();
@@ -616,7 +626,11 @@ async function revertAccountBookingEffects(
       updateData.lastBookedRecordId = deleteField();
     }
 
-    await updateDoc(doc(db, "irctcAccounts", accountDoc.id), updateData);
+    // Skip the write if nothing meaningful changed (only updatedAt would be written).
+    const fieldCount = Object.keys(updateData).length;
+    if (fieldCount > 1) {
+      await updateDoc(doc(db, "irctcAccounts", accountDoc.id), updateData);
+    }
   } catch (error) {
     console.error(`[revertAccountBookingEffects] Failed for "${username}":`, error);
     // Rethrow so callers (e.g., saveBookingRecord on cross-account edits) fail
@@ -655,17 +669,19 @@ export async function saveBookingRecord(data: {
     }
 
     // Detect a cross-account edit: the user changed which account this booking
-    // is attributed to. We must revert the old account's wallet/lastBookedDate
-    // before applying anything to the new account, otherwise the previous
-    // account is left with a stale deduction and stale date.
+    // is attributed to. We must revert the old account's wallet/lastBookedDate,
+    // but only after the new account has been successfully updated — otherwise
+    // a partial failure (record write or new-account update fails) would leave
+    // the old account refunded while the booking still points to it.
     const accountChanged =
       isUpdate &&
       !!previousRecord &&
       previousRecord.bookedAccountUsername !== data.bookedAccountUsername;
 
-    if (accountChanged) {
-      await revertAccountBookingEffects(previousRecord!.bookedAccountUsername, previousRecord);
-    }
+    // Capture revert context; will be called only after new-account update succeeds.
+    const revertContext = accountChanged
+      ? { username: previousRecord!.bookedAccountUsername, record: previousRecord! }
+      : null;
 
     // When the account changes, the new account should be treated as if this
     // booking were brand new — no "refund the previous amount" logic against
@@ -782,6 +798,20 @@ export async function saveBookingRecord(data: {
     const accountFieldCount = Object.keys(accountUpdateData).length;
     if (accountFieldCount > 1) {
       await updateDoc(doc(db, "irctcAccounts", accountDoc.id), accountUpdateData);
+
+      // New account updated successfully — now safely revert the old account.
+      // If this throws, the caller will see a partial failure (new-account
+      // updated, old-account revert failed). We let it propagate since the
+      // data state is now recoverable by retrying the full operation.
+      if (revertContext) {
+        await revertAccountBookingEffects(revertContext.username, revertContext.record);
+      }
+    } else if (revertContext) {
+      // No meaningful new-account update, but we still need to revert the old
+      // account since the record now points to the new account. The record
+      // write already committed, so the booking is attributed to the new
+      // account even though the old account's state was never changed.
+      await revertAccountBookingEffects(revertContext.username, revertContext.record);
     }
 
     const record = {
@@ -836,15 +866,19 @@ export async function saveGroupBookingRecords(data: {
       previousRecord = existingDoc.data();
     }
 
-    // Detect cross-account edit and revert the prior account first.
+    // Detect cross-account edit: the record now points to a different account.
+    // We defer the revert until after the new-account update succeeds so that
+    // a partial failure cannot leave the old account refunded while the booking
+    // record still points to it.
     const accountChanged =
       isUpdate &&
       !!previousRecord &&
       previousRecord.bookedAccountUsername !== data.bookedAccountUsername;
 
-    if (accountChanged) {
-      await revertAccountBookingEffects(previousRecord!.bookedAccountUsername, previousRecord);
-    }
+    // Capture revert context; will be called only after new-account update succeeds.
+    const revertContext = accountChanged
+      ? { username: previousRecord!.bookedAccountUsername, record: previousRecord! }
+      : null;
 
     const treatAsNew = !isUpdate || accountChanged;
 
@@ -958,6 +992,15 @@ export async function saveGroupBookingRecords(data: {
     const accountFieldCount = Object.keys(accountUpdateData).length;
     if (accountFieldCount > 1) {
       await updateDoc(doc(db, "irctcAccounts", accountDoc.id), accountUpdateData);
+
+      // New account updated successfully — now safely revert the old account.
+      if (revertContext) {
+        await revertAccountBookingEffects(revertContext.username, revertContext.record);
+      }
+    } else if (revertContext) {
+      // No meaningful new-account update, but we still need to revert the old
+      // account since the record now points to the new account.
+      await revertAccountBookingEffects(revertContext.username, revertContext.record);
     }
 
     const record = {
@@ -1019,16 +1062,16 @@ export async function deleteBookingRecord(id: string): Promise<{ success: boolea
         const currentLastBookedDate = accountData.lastBookedDate || "";
         const recordMarker = recordData.bookingTransactionId || "";
 
-        // Only revert lastBookedDate if this record was the one that last updated it.
-        // We compare against `lastBookedRecordId` (the bookingTransactionId of the
-        // record that last set lastBookedDate) instead of `bookingDate`, since
-        // `bookingDate` is not unique — multiple records can share the same date.
+        // Revert lastBookedDate only if this record was the one that last set it.
+        // Primary: compare `lastBookedRecordId` (account) vs `bookingTransactionId` (record).
+        // Fallback: when `lastBookedRecordId` is absent, use `bookingDate` comparison.
         const lastBookedRecordId = accountData.lastBookedRecordId || "";
-        if (
-          currentLastBookedDate &&
-          recordMarker &&
-          lastBookedRecordId === recordMarker
-        ) {
+        const markerMatches =
+          lastBookedRecordId
+            ? lastBookedRecordId === recordMarker
+            : currentLastBookedDate && recordMarker && currentLastBookedDate === recordData.bookingDate;
+
+        if (markerMatches) {
           if (accountData.previousLastBookedDate) {
             updateData.lastBookedDate = accountData.previousLastBookedDate;
             updateData.previousLastBookedDate = deleteField();
