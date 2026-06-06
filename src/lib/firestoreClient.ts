@@ -594,16 +594,26 @@ async function revertAccountBookingEffects(
     }
 
     const currentLastBookedDate = accountData.lastBookedDate || "";
-    const recordBookingDate = previousRecord.bookingDate || "";
+    const recordMarker = previousRecord.bookingTransactionId || "";
 
-    // Only revert lastBookedDate if this record was the one that last updated it
-    if (currentLastBookedDate && currentLastBookedDate === recordBookingDate) {
+    // Only revert lastBookedDate if this record was the one that last updated it.
+    // We compare against `lastBookedRecordId` (the bookingTransactionId of the
+    // record that last set lastBookedDate) instead of `bookingDate`, since
+    // `bookingDate` is not unique — multiple records can share the same date.
+    const lastBookedRecordId = accountData.lastBookedRecordId || "";
+    if (
+      currentLastBookedDate &&
+      recordMarker &&
+      lastBookedRecordId === recordMarker
+    ) {
       if (accountData.previousLastBookedDate) {
         updateData.lastBookedDate = accountData.previousLastBookedDate;
         updateData.previousLastBookedDate = deleteField();
       } else {
         updateData.lastBookedDate = deleteField();
       }
+      // Clear the marker so subsequent reverts don't accidentally match.
+      updateData.lastBookedRecordId = deleteField();
     }
 
     await updateDoc(doc(db, "irctcAccounts", accountDoc.id), updateData);
@@ -675,61 +685,48 @@ export async function saveBookingRecord(data: {
     const accountData = accountDoc.data();
     const currentWalletAmount = accountData.walletAmount || 0;
 
-    // Handle wallet deduction logic
-    if (data.methodUsed === "Wallet") {
-      // If this is an update on the SAME account, check if we need to refund previous amount first
-      if (!treatAsNew && previousRecord?.methodUsed === "Wallet") {
-        // Refund the previous amount if it was also wallet
-        const refundAmount = previousRecord.amountCharged || 0;
-        const newWalletAfterRefund = currentWalletAmount + refundAmount;
-        
-        // Now check if we have enough for the new amount
-        if (newWalletAfterRefund < data.amountCharged) {
-          return { success: false, error: `Insufficient wallet balance. Available: ₹${newWalletAfterRefund.toFixed(2)}, Required: ₹${data.amountCharged.toFixed(2)}` };
-        }
-        
-        // Update account with new deduction (refund + deduct in one operation)
-        const finalWalletAmount = newWalletAfterRefund - data.amountCharged;
-        await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
-          walletAmount: finalWalletAmount,
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        // New record, account changed, or previous was not wallet - just deduct
-        if (currentWalletAmount < data.amountCharged) {
-          return { success: false, error: `Insufficient wallet balance. Available: ₹${currentWalletAmount.toFixed(2)}, Required: ₹${data.amountCharged.toFixed(2)}` };
-        }
-        
-        const newWalletAmount = currentWalletAmount - data.amountCharged;
-        await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
-          walletAmount: newWalletAmount,
-          updatedAt: serverTimestamp(),
-        });
-      }
-    } else if (!treatAsNew && previousRecord?.methodUsed === "Wallet") {
-      // Same account, payment method changed from Wallet to something else - refund previous amount
-      const refundAmount = previousRecord.amountCharged || 0;
-      const newWalletAmount = currentWalletAmount + refundAmount;
-      await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
-        walletAmount: newWalletAmount,
-        updatedAt: serverTimestamp(),
-      });
-    }
-
     // Fetch the booking to get its 'Book by' date (bookingDate), not today's date
     const bookingForDate = await getBookingById(data.bookingId);
     const bookingDate = bookingForDate?.bookingDate || new Date().toISOString().split('T')[0];
 
-    // Update lastBookedDate on account using the booking's bookingDate
+    // Generate or preserve transaction ID for consistent booking tracking.
+    const bookingTransactionId = isUpdate && previousRecord?.bookingTransactionId
+      ? previousRecord.bookingTransactionId
+      : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+    // Compute account updates (wallet + date) but don't apply them yet.
+    // We write them only after the record document is successfully saved so
+    // that a failed record write leaves the account untouched.
+    const accountUpdateData: Record<string, any> = { updatedAt: serverTimestamp() };
+
+    // Wallet deduction / refund logic
+    if (data.methodUsed === "Wallet") {
+      if (!treatAsNew && previousRecord?.methodUsed === "Wallet") {
+        const refundAmount = previousRecord.amountCharged || 0;
+        const newWalletAfterRefund = currentWalletAmount + refundAmount;
+        if (newWalletAfterRefund < data.amountCharged) {
+          return { success: false, error: `Insufficient wallet balance. Available: ₹${newWalletAfterRefund.toFixed(2)}, Required: ₹${data.amountCharged.toFixed(2)}` };
+        }
+        accountUpdateData.walletAmount = newWalletAfterRefund - data.amountCharged;
+      } else {
+        if (currentWalletAmount < data.amountCharged) {
+          return { success: false, error: `Insufficient wallet balance. Available: ₹${currentWalletAmount.toFixed(2)}, Required: ₹${data.amountCharged.toFixed(2)}` };
+        }
+        accountUpdateData.walletAmount = currentWalletAmount - data.amountCharged;
+      }
+    } else if (!treatAsNew && previousRecord?.methodUsed === "Wallet") {
+      const refundAmount = previousRecord.amountCharged || 0;
+      accountUpdateData.walletAmount = currentWalletAmount + refundAmount;
+    }
+
+    // lastBookedDate update — only if the date actually changed (or is new)
     const currentLastBookedDate = accountData.lastBookedDate || "";
-    
-    // Only update if this is a new record (incl. cross-account edits) or the booking date changed
     if (treatAsNew || currentLastBookedDate !== bookingDate) {
-      await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
-        lastBookedDate: bookingDate,
-        previousLastBookedDate: currentLastBookedDate || deleteField(),
-        updatedAt: serverTimestamp(),
-      });
+      accountUpdateData.lastBookedDate = bookingDate;
+      accountUpdateData.previousLastBookedDate = currentLastBookedDate || deleteField();
+      // Marker so revert paths can identify which record last set lastBookedDate.
+      // bookingDate alone is not unique across records.
+      accountUpdateData.lastBookedRecordId = bookingTransactionId;
     }
 
     const recordData: Record<string, any> = {
@@ -742,10 +739,6 @@ export async function saveBookingRecord(data: {
       updatedAt: serverTimestamp(),
     };
 
-    // Generate or preserve transaction ID for consistent booking tracking
-    const bookingTransactionId = isUpdate && previousRecord?.bookingTransactionId 
-      ? previousRecord.bookingTransactionId 
-      : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
     recordData.bookingTransactionId = bookingTransactionId;
 
     // Only set trainName when provided; never use deleteField() until we know it's an update
@@ -782,6 +775,15 @@ export async function saveBookingRecord(data: {
     }
 
     const savedData = savedDoc.data();
+
+    // Now that the record is safely written, apply account updates.
+    // Only touch the account document when there is something meaningful
+    // to change (wallet or date), so we don't stamp updatedAt unnecessarily.
+    const accountFieldCount = Object.keys(accountUpdateData).length;
+    if (accountFieldCount > 1) {
+      await updateDoc(doc(db, "irctcAccounts", accountDoc.id), accountUpdateData);
+    }
+
     const record = {
       id: savedDoc.id,
       bookingId: savedData.bookingId,
@@ -859,60 +861,49 @@ export async function saveGroupBookingRecords(data: {
     const accountData = accountDoc.data();
     const currentWalletAmount = accountData.walletAmount || 0;
 
-    // Handle wallet deduction logic
-    if (data.methodUsed === "Wallet") {
-      if (!treatAsNew && previousRecord?.methodUsed === "Wallet") {
-        const refundAmount = previousRecord.amountCharged || 0;
-        const newWalletAfterRefund = currentWalletAmount + refundAmount;
-        
-        if (newWalletAfterRefund < data.totalAmount) {
-          return { success: false, error: `Insufficient wallet balance. Available: ₹${newWalletAfterRefund.toFixed(2)}, Required: ₹${data.totalAmount.toFixed(2)}` };
-        }
-        
-        const finalWalletAmount = newWalletAfterRefund - data.totalAmount;
-        await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
-          walletAmount: finalWalletAmount,
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        if (currentWalletAmount < data.totalAmount) {
-          return { success: false, error: `Insufficient wallet balance. Available: ₹${currentWalletAmount.toFixed(2)}, Required: ₹${data.totalAmount.toFixed(2)}` };
-        }
-        
-        const newWalletAmount = currentWalletAmount - data.totalAmount;
-        await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
-          walletAmount: newWalletAmount,
-          updatedAt: serverTimestamp(),
-        });
-      }
-    } else if (!treatAsNew && previousRecord?.methodUsed === "Wallet") {
-      const refundAmount = previousRecord.amountCharged || 0;
-      const newWalletAmount = currentWalletAmount + refundAmount;
-      await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
-        walletAmount: newWalletAmount,
-        updatedAt: serverTimestamp(),
-      });
-    }
-
     // Fetch a booking to get its 'Book by' date (bookingDate), not today's date
     const bookingForDate = data.bookingIds.length > 0 ? await getBookingById(data.bookingIds[0]) : null;
     const bookingDate = bookingForDate?.bookingDate || new Date().toISOString().split('T')[0];
 
-    // Update lastBookedDate on account using the booking's bookingDate
-    const currentLastBookedDate = accountData.lastBookedDate || "";
-    
-    if (treatAsNew || currentLastBookedDate !== bookingDate) {
-      await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
-        lastBookedDate: bookingDate,
-        previousLastBookedDate: currentLastBookedDate || deleteField(),
-        updatedAt: serverTimestamp(),
-      });
+    // Generate or preserve transaction ID for consistent booking tracking.
+    const bookingTransactionId = isUpdate && previousRecord?.bookingTransactionId
+      ? previousRecord.bookingTransactionId
+      : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+
+    // Compute account updates (wallet + date) but don't apply them yet.
+    // We write them only after the record document is successfully saved so
+    // that a failed record write leaves the account untouched.
+    const accountUpdateData: Record<string, any> = { updatedAt: serverTimestamp() };
+
+    // Wallet deduction / refund logic
+    if (data.methodUsed === "Wallet") {
+      if (!treatAsNew && previousRecord?.methodUsed === "Wallet") {
+        const refundAmount = previousRecord.amountCharged || 0;
+        const newWalletAfterRefund = currentWalletAmount + refundAmount;
+        if (newWalletAfterRefund < data.totalAmount) {
+          return { success: false, error: `Insufficient wallet balance. Available: ₹${newWalletAfterRefund.toFixed(2)}, Required: ₹${data.totalAmount.toFixed(2)}` };
+        }
+        accountUpdateData.walletAmount = newWalletAfterRefund - data.totalAmount;
+      } else {
+        if (currentWalletAmount < data.totalAmount) {
+          return { success: false, error: `Insufficient wallet balance. Available: ₹${currentWalletAmount.toFixed(2)}, Required: ₹${data.totalAmount.toFixed(2)}` };
+        }
+        accountUpdateData.walletAmount = currentWalletAmount - data.totalAmount;
+      }
+    } else if (!treatAsNew && previousRecord?.methodUsed === "Wallet") {
+      const refundAmount = previousRecord.amountCharged || 0;
+      accountUpdateData.walletAmount = currentWalletAmount + refundAmount;
     }
 
-    // Generate a unique transaction ID for this booking event
-    const bookingTransactionId = isUpdate && previousRecord?.bookingTransactionId 
-      ? previousRecord.bookingTransactionId 
-      : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    // lastBookedDate update — only if the date actually changed (or is new)
+    const currentLastBookedDate = accountData.lastBookedDate || "";
+    if (treatAsNew || currentLastBookedDate !== bookingDate) {
+      accountUpdateData.lastBookedDate = bookingDate;
+      accountUpdateData.previousLastBookedDate = currentLastBookedDate || deleteField();
+      // Marker so revert paths can identify which record last set lastBookedDate.
+      // bookingDate alone is not unique across records.
+      accountUpdateData.lastBookedRecordId = bookingTransactionId;
+    }
 
     // Create single record for the entire group
     const recordData: Record<string, any> = {
@@ -960,6 +951,15 @@ export async function saveGroupBookingRecords(data: {
     }
 
     const savedData = savedDoc.data();
+
+    // Now that the record is safely written, apply account updates.
+    // Only touch the account document when there is something meaningful
+    // to change (wallet or date), so we don't stamp updatedAt unnecessarily.
+    const accountFieldCount = Object.keys(accountUpdateData).length;
+    if (accountFieldCount > 1) {
+      await updateDoc(doc(db, "irctcAccounts", accountDoc.id), accountUpdateData);
+    }
+
     const record = {
       id: savedDoc.id,
       bookingId: savedData.bookingId,
@@ -1017,16 +1017,26 @@ export async function deleteBookingRecord(id: string): Promise<{ success: boolea
         };
 
         const currentLastBookedDate = accountData.lastBookedDate || "";
-        const recordBookingDate = recordData.bookingDate || "";
+        const recordMarker = recordData.bookingTransactionId || "";
 
-        // Only revert lastBookedDate if this record was the one that last updated it
-        if (currentLastBookedDate && currentLastBookedDate === recordBookingDate) {
+        // Only revert lastBookedDate if this record was the one that last updated it.
+        // We compare against `lastBookedRecordId` (the bookingTransactionId of the
+        // record that last set lastBookedDate) instead of `bookingDate`, since
+        // `bookingDate` is not unique — multiple records can share the same date.
+        const lastBookedRecordId = accountData.lastBookedRecordId || "";
+        if (
+          currentLastBookedDate &&
+          recordMarker &&
+          lastBookedRecordId === recordMarker
+        ) {
           if (accountData.previousLastBookedDate) {
             updateData.lastBookedDate = accountData.previousLastBookedDate;
             updateData.previousLastBookedDate = deleteField();
           } else {
             updateData.lastBookedDate = deleteField();
           }
+          // Clear the marker so subsequent reverts don't accidentally match.
+          updateData.lastBookedRecordId = deleteField();
         }
 
         await updateDoc(doc(db, "irctcAccounts", accountDoc.id), updateData);

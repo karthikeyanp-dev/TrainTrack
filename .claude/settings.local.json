@@ -3,7 +3,9 @@
     "allow": [
       "Bash(dir:*)",
       "Bash(findstr:*)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(git stash *)",
+      "Bash(Select-String \"BookingForm.tsx\")"
     ]
   }
 }
