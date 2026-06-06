@@ -551,6 +551,59 @@ export async function getBookingRecordByBookingId(bookingId: string): Promise<an
   }
 }
 
+/**
+ * Revert the effects a previous booking record had on its account:
+ *  - refund the wallet if the previous method was Wallet
+ *  - restore lastBookedDate from previousLastBookedDate (or clear it)
+ *
+ * Best-effort: if the account is not found we log and continue, mirroring the
+ * tolerance of deleteBookingRecord. Used when an edit reassigns a record from
+ * one account to another so the prior account is cleaned up before the new
+ * account is charged.
+ */
+async function revertAccountBookingEffects(
+  username: string | undefined,
+  previousRecord: any
+): Promise<void> {
+  if (!db || !username || !previousRecord) return;
+
+  try {
+    const accountsCollection = collection(db, "irctcAccounts");
+    const accountQuery = query(accountsCollection, where("username", "==", username));
+    const accountSnapshot = await getDocs(accountQuery);
+
+    if (accountSnapshot.empty) {
+      console.warn(`[revertAccountBookingEffects] Account "${username}" not found; skipping revert`);
+      return;
+    }
+
+    const accountDoc = accountSnapshot.docs[0];
+    const accountData = accountDoc.data();
+    const updateData: Record<string, any> = {
+      updatedAt: serverTimestamp(),
+    };
+
+    if (previousRecord.methodUsed === "Wallet") {
+      const refundAmount = previousRecord.amountCharged || 0;
+      if (refundAmount > 0) {
+        const currentWalletAmount = accountData.walletAmount || 0;
+        updateData.walletAmount = currentWalletAmount + refundAmount;
+      }
+    }
+
+    if (accountData.previousLastBookedDate) {
+      updateData.lastBookedDate = accountData.previousLastBookedDate;
+      updateData.previousLastBookedDate = deleteField();
+    } else if (accountData.lastBookedDate) {
+      updateData.lastBookedDate = deleteField();
+    }
+
+    await updateDoc(doc(db, "irctcAccounts", accountDoc.id), updateData);
+  } catch (error) {
+    console.error(`[revertAccountBookingEffects] Failed for "${username}":`, error);
+  }
+}
+
 export async function saveBookingRecord(data: {
   bookingId: string;
   bookedBy: string;
@@ -578,6 +631,24 @@ export async function saveBookingRecord(data: {
       previousRecord = existingDoc.data();
     }
 
+    // Detect a cross-account edit: the user changed which account this booking
+    // is attributed to. We must revert the old account's wallet/lastBookedDate
+    // before applying anything to the new account, otherwise the previous
+    // account is left with a stale deduction and stale date.
+    const accountChanged =
+      isUpdate &&
+      !!previousRecord &&
+      previousRecord.bookedAccountUsername !== data.bookedAccountUsername;
+
+    if (accountChanged) {
+      await revertAccountBookingEffects(previousRecord!.bookedAccountUsername, previousRecord);
+    }
+
+    // When the account changes, the new account should be treated as if this
+    // booking were brand new — no "refund the previous amount" logic against
+    // it, since it was never charged in the first place.
+    const treatAsNew = !isUpdate || accountChanged;
+
     // Find the account by username
     const accountsCollection = collection(db, "irctcAccounts");
     const accountQuery = query(accountsCollection, where("username", "==", data.bookedAccountUsername));
@@ -593,8 +664,8 @@ export async function saveBookingRecord(data: {
 
     // Handle wallet deduction logic
     if (data.methodUsed === "Wallet") {
-      // If this is an update, check if we need to refund previous amount first
-      if (isUpdate && previousRecord?.methodUsed === "Wallet") {
+      // If this is an update on the SAME account, check if we need to refund previous amount first
+      if (!treatAsNew && previousRecord?.methodUsed === "Wallet") {
         // Refund the previous amount if it was also wallet
         const refundAmount = previousRecord.amountCharged || 0;
         const newWalletAfterRefund = currentWalletAmount + refundAmount;
@@ -611,7 +682,7 @@ export async function saveBookingRecord(data: {
           updatedAt: serverTimestamp(),
         });
       } else {
-        // New record or previous was not wallet - just deduct
+        // New record, account changed, or previous was not wallet - just deduct
         if (currentWalletAmount < data.amountCharged) {
           return { success: false, error: `Insufficient wallet balance. Available: ₹${currentWalletAmount.toFixed(2)}, Required: ₹${data.amountCharged.toFixed(2)}` };
         }
@@ -622,8 +693,8 @@ export async function saveBookingRecord(data: {
           updatedAt: serverTimestamp(),
         });
       }
-    } else if (isUpdate && previousRecord?.methodUsed === "Wallet") {
-      // Payment method changed from Wallet to something else - refund previous amount
+    } else if (!treatAsNew && previousRecord?.methodUsed === "Wallet") {
+      // Same account, payment method changed from Wallet to something else - refund previous amount
       const refundAmount = previousRecord.amountCharged || 0;
       const newWalletAmount = currentWalletAmount + refundAmount;
       await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
@@ -639,8 +710,8 @@ export async function saveBookingRecord(data: {
     // Update lastBookedDate on account using the booking's bookingDate
     const currentLastBookedDate = accountData.lastBookedDate || "";
     
-    // Only update if this is a new record or if the booking date has changed
-    if (!isUpdate || currentLastBookedDate !== bookingDate) {
+    // Only update if this is a new record (incl. cross-account edits) or the booking date changed
+    if (treatAsNew || currentLastBookedDate !== bookingDate) {
       await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
         lastBookedDate: bookingDate,
         previousLastBookedDate: currentLastBookedDate || deleteField(),
@@ -750,6 +821,18 @@ export async function saveGroupBookingRecords(data: {
       previousRecord = existingDoc.data();
     }
 
+    // Detect cross-account edit and revert the prior account first.
+    const accountChanged =
+      isUpdate &&
+      !!previousRecord &&
+      previousRecord.bookedAccountUsername !== data.bookedAccountUsername;
+
+    if (accountChanged) {
+      await revertAccountBookingEffects(previousRecord!.bookedAccountUsername, previousRecord);
+    }
+
+    const treatAsNew = !isUpdate || accountChanged;
+
     // Find the account by username
     const accountsCollection = collection(db, "irctcAccounts");
     const accountQuery = query(accountsCollection, where("username", "==", data.bookedAccountUsername));
@@ -765,7 +848,7 @@ export async function saveGroupBookingRecords(data: {
 
     // Handle wallet deduction logic
     if (data.methodUsed === "Wallet") {
-      if (isUpdate && previousRecord?.methodUsed === "Wallet") {
+      if (!treatAsNew && previousRecord?.methodUsed === "Wallet") {
         const refundAmount = previousRecord.amountCharged || 0;
         const newWalletAfterRefund = currentWalletAmount + refundAmount;
         
@@ -789,7 +872,7 @@ export async function saveGroupBookingRecords(data: {
           updatedAt: serverTimestamp(),
         });
       }
-    } else if (isUpdate && previousRecord?.methodUsed === "Wallet") {
+    } else if (!treatAsNew && previousRecord?.methodUsed === "Wallet") {
       const refundAmount = previousRecord.amountCharged || 0;
       const newWalletAmount = currentWalletAmount + refundAmount;
       await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
@@ -805,7 +888,7 @@ export async function saveGroupBookingRecords(data: {
     // Update lastBookedDate on account using the booking's bookingDate
     const currentLastBookedDate = accountData.lastBookedDate || "";
     
-    if (!isUpdate || currentLastBookedDate !== bookingDate) {
+    if (treatAsNew || currentLastBookedDate !== bookingDate) {
       await updateDoc(doc(db, "irctcAccounts", accountDoc.id), {
         lastBookedDate: bookingDate,
         previousLastBookedDate: currentLastBookedDate || deleteField(),
