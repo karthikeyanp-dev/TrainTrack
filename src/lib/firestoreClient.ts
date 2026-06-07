@@ -694,9 +694,10 @@ export async function saveBookingRecord(data: {
       ? previousRecord.bookingTransactionId
       : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
-    // Compute account updates (wallet + date) but don't apply them yet.
-    // We write them only after the record document is successfully saved so
-    // that a failed record write leaves the account untouched.
+    // Compute account updates (wallet + date) but don't apply them yet. They
+    // are committed in the same `writeBatch` as the record write (see below),
+    // so the record and account changes land atomically together — either all
+    // writes succeed or none do, leaving the account untouched on failure.
     const accountUpdateData: Record<string, any> = { updatedAt: serverTimestamp() };
 
     // Wallet deduction / refund logic
@@ -924,9 +925,10 @@ export async function saveGroupBookingRecords(data: {
       ? previousRecord.bookingTransactionId
       : `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
 
-    // Compute account updates (wallet + date) but don't apply them yet.
-    // We write them only after the record document is successfully saved so
-    // that a failed record write leaves the account untouched.
+    // Compute account updates (wallet + date) but don't apply them yet. They
+    // are committed in the same `writeBatch` as the record write (see below),
+    // so the record and account changes land atomically together — either all
+    // writes succeed or none do, leaving the account untouched on failure.
     const accountUpdateData: Record<string, any> = { updatedAt: serverTimestamp() };
 
     // Wallet deduction / refund logic
