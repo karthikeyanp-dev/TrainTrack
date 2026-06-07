@@ -553,23 +553,14 @@ export async function getBookingRecordByBookingId(bookingId: string): Promise<an
 }
 
 /**
- * Revert the effects a previous booking record had on its account:
+ * Compute the account update payload needed to revert a previous booking
+ * record's effects on its account:
  *  - refund the wallet if the previous method was Wallet
  *  - restore lastBookedDate from previousLastBookedDate (or clear it)
  *
- * Best-effort for missing accounts: if the account is not found we log and
- * continue, mirroring the tolerance of deleteBookingRecord. Other failures
- * (permission, network, etc.) are rethrown so the caller fails fast instead of
- * silently charging the new account while leaving the old one un-reverted.
- * Used when an edit reassigns a record from one account to another so the
- * prior account is cleaned up before the new account is charged.
- */
-/**
- * Compute the account update payload needed to revert a previous booking
- * record's effects (wallet refund + lastBookedDate marker) without actually
- * writing it. Callers that want to compose the write into a `writeBatch` can
- * use this directly; callers that want a standalone write use
- * `revertAccountBookingEffects` below.
+ * This only computes the payload; it does not write. Callers compose the
+ * returned update into a `writeBatch` so the revert lands atomically with the
+ * new-record and new-account writes (see `saveBookingRecord`).
  *
  * Returns `null` when the account is missing, or when there's nothing
  * meaningful to write (only `updatedAt` would change).
@@ -607,10 +598,10 @@ async function computeAccountRevertUpdate(
   // Fallback path (legacy data): when `lastBookedRecordId` is absent, fall
   // back to comparing `account.lastBookedDate === record.bookingDate`. This
   // catches older records that were created before the marker field existed.
-  // Using `bookingDate` as a fallback is acceptable because legacy accounts
-  // without `lastBookedRecordId` can only have one record per date — the marker
-  // was introduced precisely to handle the case of multiple records sharing
-  // a date, which is a newer problem.
+  // This fallback is best-effort: nothing guarantees a date is unique across
+  // records, so if multiple legacy records share the same `bookingDate` a
+  // date-only match could revert the wrong record's effects. The marker field
+  // was introduced precisely to disambiguate that case for newer records.
   const lastBookedRecordId = accountData.lastBookedRecordId || "";
   const markerMatches =
     lastBookedRecordId
@@ -631,37 +622,6 @@ async function computeAccountRevertUpdate(
   // Skip the write if nothing meaningful changed (only updatedAt would be written).
   const fieldCount = Object.keys(updateData).length;
   return fieldCount > 1 ? updateData : null;
-}
-
-async function revertAccountBookingEffects(
-  username: string | undefined,
-  previousRecord: any
-): Promise<void> {
-  if (!db || !username || !previousRecord) return;
-
-  try {
-    const accountsCollection = collection(db, "irctcAccounts");
-    const accountQuery = query(accountsCollection, where("username", "==", username));
-    const accountSnapshot = await getDocs(accountQuery);
-
-    if (accountSnapshot.empty) {
-      console.warn(`[revertAccountBookingEffects] Account "${username}" not found; skipping revert`);
-      return;
-    }
-
-    const accountDoc = accountSnapshot.docs[0];
-    const updateData = await computeAccountRevertUpdate(accountDoc, previousRecord);
-    if (updateData) {
-      await updateDoc(doc(db, "irctcAccounts", accountDoc.id), updateData);
-    }
-  } catch (error) {
-    console.error(`[revertAccountBookingEffects] Failed for "${username}":`, error);
-    // Rethrow so callers (e.g., saveBookingRecord on cross-account edits) fail
-    // fast instead of silently charging the new account while leaving the
-    // old one un-reverted. Missing-account cases are handled above via
-    // accountSnapshot.empty and never reach this catch.
-    throw error;
-  }
 }
 
 export async function saveBookingRecord(data: {
@@ -692,16 +652,17 @@ export async function saveBookingRecord(data: {
     }
 
     // Detect a cross-account edit: the user changed which account this booking
-    // is attributed to. We must revert the old account's wallet/lastBookedDate,
-    // but only after the new account has been successfully updated — otherwise
-    // a partial failure (record write or new-account update fails) would leave
-    // the old account refunded while the booking still points to it.
+    // is attributed to. The old account's wallet/lastBookedDate must be
+    // reverted. The revert is composed into the same writeBatch as the
+    // new-record and new-account writes (see below) so all three land
+    // atomically — a partial failure can never leave the old account refunded
+    // while the booking record still points to it.
     const accountChanged =
       isUpdate &&
       !!previousRecord &&
       previousRecord.bookedAccountUsername !== data.bookedAccountUsername;
 
-    // Capture revert context; will be called only after new-account update succeeds.
+    // Capture revert context for the old account; consumed when building the batch.
     const revertContext = accountChanged
       ? { username: previousRecord!.bookedAccountUsername, record: previousRecord! }
       : null;
@@ -758,23 +719,22 @@ export async function saveBookingRecord(data: {
       accountUpdateData.walletAmount = currentWalletAmount + refundAmount;
     }
 
-    // lastBookedDate update — only if the date actually changed (or is new).
-    // We persist `previousLastBookedDate` and the `lastBookedRecordId` marker
-    // *only* when the date changes, so we never overwrite the "previous" slot
-    // with the current date and never rebind the marker to a record that
+    // lastBookedDate update — only when the date actually changes. Writing it
+    // when it's already equal to bookingDate would stamp updatedAt for no
+    // reason. When the date changes we also persist `previousLastBookedDate`
+    // and the `lastBookedRecordId` marker, so we never overwrite the "previous"
+    // slot with the current date and never rebind the marker to a record that
     // didn't actually move the account's most-recent-booking pointer.
     const currentLastBookedDate = accountData.lastBookedDate || "";
-    if (treatAsNew || currentLastBookedDate !== bookingDate) {
+    if (currentLastBookedDate !== bookingDate) {
       accountUpdateData.lastBookedDate = bookingDate;
-      if (currentLastBookedDate !== bookingDate) {
-        accountUpdateData.previousLastBookedDate = currentLastBookedDate || deleteField();
-        // Marker so revert paths can identify which record last set lastBookedDate.
-        // This is a best-effort heuristic — bookingDate is not unique across
-        // records, and bookingTransactionId is generated client-side via
-        // Date.now()+Math.random() (not a UUID). It is sufficient for the
-        // single-account sequential case the revert logic targets.
-        accountUpdateData.lastBookedRecordId = bookingTransactionId;
-      }
+      accountUpdateData.previousLastBookedDate = currentLastBookedDate || deleteField();
+      // Marker so revert paths can identify which record last set lastBookedDate.
+      // This is a best-effort heuristic — bookingDate is not unique across
+      // records, and bookingTransactionId is generated client-side via
+      // Date.now()+Math.random() (not a UUID). It is sufficient for the
+      // single-account sequential case the revert logic targets.
+      accountUpdateData.lastBookedRecordId = bookingTransactionId;
     }
 
     const recordData: Record<string, any> = {
@@ -926,15 +886,16 @@ export async function saveGroupBookingRecords(data: {
     }
 
     // Detect cross-account edit: the record now points to a different account.
-    // We defer the revert until after the new-account update succeeds so that
-    // a partial failure cannot leave the old account refunded while the booking
-    // record still points to it.
+    // The old account's revert is composed into the same writeBatch as the
+    // new-record and new-account writes (see below) so all three land
+    // atomically — a partial failure can never leave the old account refunded
+    // while the booking record still points to it.
     const accountChanged =
       isUpdate &&
       !!previousRecord &&
       previousRecord.bookedAccountUsername !== data.bookedAccountUsername;
 
-    // Capture revert context; will be called only after new-account update succeeds.
+    // Capture revert context for the old account; consumed when building the batch.
     const revertContext = accountChanged
       ? { username: previousRecord!.bookedAccountUsername, record: previousRecord! }
       : null;
@@ -988,23 +949,22 @@ export async function saveGroupBookingRecords(data: {
       accountUpdateData.walletAmount = currentWalletAmount + refundAmount;
     }
 
-    // lastBookedDate update — only if the date actually changed (or is new).
-    // We persist `previousLastBookedDate` and the `lastBookedRecordId` marker
-    // *only* when the date changes, so we never overwrite the "previous" slot
-    // with the current date and never rebind the marker to a record that
+    // lastBookedDate update — only when the date actually changes. Writing it
+    // when it's already equal to bookingDate would stamp updatedAt for no
+    // reason. When the date changes we also persist `previousLastBookedDate`
+    // and the `lastBookedRecordId` marker, so we never overwrite the "previous"
+    // slot with the current date and never rebind the marker to a record that
     // didn't actually move the account's most-recent-booking pointer.
     const currentLastBookedDate = accountData.lastBookedDate || "";
-    if (treatAsNew || currentLastBookedDate !== bookingDate) {
+    if (currentLastBookedDate !== bookingDate) {
       accountUpdateData.lastBookedDate = bookingDate;
-      if (currentLastBookedDate !== bookingDate) {
-        accountUpdateData.previousLastBookedDate = currentLastBookedDate || deleteField();
-        // Marker so revert paths can identify which record last set lastBookedDate.
-        // This is a best-effort heuristic — bookingDate is not unique across
-        // records, and bookingTransactionId is generated client-side via
-        // Date.now()+Math.random() (not a UUID). It is sufficient for the
-        // single-account sequential case the revert logic targets.
-        accountUpdateData.lastBookedRecordId = bookingTransactionId;
-      }
+      accountUpdateData.previousLastBookedDate = currentLastBookedDate || deleteField();
+      // Marker so revert paths can identify which record last set lastBookedDate.
+      // This is a best-effort heuristic — bookingDate is not unique across
+      // records, and bookingTransactionId is generated client-side via
+      // Date.now()+Math.random() (not a UUID). It is sufficient for the
+      // single-account sequential case the revert logic targets.
+      accountUpdateData.lastBookedRecordId = bookingTransactionId;
     }
 
     // Create single record for the entire group
