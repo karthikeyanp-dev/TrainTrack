@@ -1,7 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    
+
+    // App-wide PIN config (used by the client-side PIN lock screen)
+    match /appConfig/pin {
+      allow read, write: if true;
+    }
+
     // Existing bookings collection rules
     match /bookings/{bookingId} {
       allow read, write: if true;

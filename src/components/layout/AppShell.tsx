@@ -14,12 +14,15 @@ import {
   Settings,
   Menu,
   X,
-  ChevronRight
+  ChevronRight,
+  Lock,
+  KeyRound
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { SearchBarClient } from "./SearchBarClient";
 import { CommandPalette } from "@/components/command-palette/CommandPalette";
+import { PinGate, usePinLock } from "@/components/auth/PinGate";
 import { cn } from "@/lib/utils";
 import { fadeIn, slideUp, staggerContainer, staggerItem } from "@/lib/animations";
 
@@ -37,7 +40,8 @@ const navItems = [
 
 function Sidebar({ activeTab, onClose }: { activeTab?: string; onClose?: () => void }) {
   const pathname = usePathname();
-  
+  const { lock, startChangePin } = usePinLock();
+
   return (
     <motion.aside
       initial={{ x: -100, opacity: 0 }}
@@ -95,7 +99,27 @@ function Sidebar({ activeTab, onClose }: { activeTab?: string; onClose?: () => v
         </nav>
 
         {/* Footer */}
-        <div className="border-t p-4">
+        <div className="border-t p-4 space-y-3">
+          <div className="flex items-center justify-center gap-2">
+            <Button
+              variant="outline"
+              size="icon-sm"
+              title="Lock app"
+              aria-label="Lock app"
+              onClick={lock}
+            >
+              <Lock className="h-4 w-4" />
+            </Button>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              title="Change PIN"
+              aria-label="Change PIN"
+              onClick={startChangePin}
+            >
+              <KeyRound className="h-4 w-4" />
+            </Button>
+          </div>
           <p className="text-xs text-muted-foreground text-center">
             © {new Date().getFullYear()} TrainTrack
           </p>
@@ -108,6 +132,7 @@ function Sidebar({ activeTab, onClose }: { activeTab?: string; onClose?: () => v
 function MobileNav({ activeTab }: { activeTab?: string }) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
+  const { lock } = usePinLock();
 
   return (
     <>
@@ -124,6 +149,15 @@ function MobileNav({ activeTab }: { activeTab?: string }) {
             <div className="flex items-center gap-2">
               <CommandPalette />
               <ThemeSwitcher />
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                title="Lock app"
+                aria-label="Lock app"
+                onClick={lock}
+              >
+                <Lock className="h-5 w-5" />
+              </Button>
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -260,7 +294,8 @@ export function AppShell({ children, showAddButton = false, activeTab }: AppShel
   );
 
   return (
-    <div className="min-h-screen bg-background">
+    <PinGate>
+      <div className="min-h-screen bg-background">
       {/* Desktop Sidebar */}
       <Sidebar activeTab={activeTab} />
 
@@ -326,5 +361,6 @@ export function AppShell({ children, showAddButton = false, activeTab }: AppShel
         )}
       </AnimatePresence>
     </div>
+    </PinGate>
   );
 }
