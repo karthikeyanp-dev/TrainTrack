@@ -574,12 +574,12 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             variant="outline"
             onClick={() => {
               const newIndex = fields.length;
-              append({ name: "", age: "", gender: "", berthRequired: false });
+              append({ name: "", age: "", gender: undefined, berthRequired: false });
               // Explicitly reset the field to clear any stale state
               setTimeout(() => {
                 form.setValue(`passengers.${newIndex}.name`, "", { shouldValidate: false });
                 form.setValue(`passengers.${newIndex}.age`, "", { shouldValidate: false });
-                form.setValue(`passengers.${newIndex}.gender`, "", { shouldValidate: false });
+                form.setValue(`passengers.${newIndex}.gender`, undefined, { shouldValidate: false });
                 form.setValue(`passengers.${newIndex}.berthRequired`, false, { shouldValidate: false });
               }, 0);
             }}
