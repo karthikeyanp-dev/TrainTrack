@@ -30,7 +30,7 @@ TrainTrack is a Next.js 15 static-export app for train booking operations. The f
 
 ## Commands
 
-- `npm run dev` starts Next.js on port `9002`
+- `npm run dev` starts Next.js on port `9020`
 - `npm run genkit:dev` starts the Genkit dev server
 - `npm run genkit:watch` starts Genkit with reload
 - `npm run build` creates the static export

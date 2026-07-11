@@ -198,20 +198,29 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
   };
 
   const handleShare = () => {
-    const bookingsText = bookings.map((b, index) => {
-      const passengerDetailsText = b.passengers.map((p, pIndex) => {
-        const isChild = p.age >= 5 && p.age <= 11;
-        const berthInfo = isChild ? (p.berthRequired ? " [Berth Required]" : " [No Berth]") : "";
-        return `${pIndex + 1}. ${p.name} ${p.age} ${p.gender.toUpperCase()}${berthInfo}`;
-      }).join("\n");
+    const formatBookingDate = (date: string) => {
+      const formattedDate = formatDate(date);
+      return formattedDate !== "N/A" ? formattedDate : (date || "N/A");
+    };
 
-      const formattedJourney = formatDate(b.journeyDate);
-      const journeyDateFormatted = formattedJourney !== "N/A" ? formattedJourney : (b.journeyDate || "N/A");
-      const formattedBooking = formatDate(b.bookingDate);
-      const bookingDateFormatted = formattedBooking !== "N/A" ? formattedBooking : (b.bookingDate || "N/A");
+    const combineValues = (values: string[]) =>
+      Array.from(new Set(values.filter(Boolean))).join(", ") || "N/A";
 
-      return `Booking ${index + 1} (For ${b.userName}):\nFrom: ${b.source.toUpperCase()}\nTo: ${b.destination.toUpperCase()}\nJourney Date: ${journeyDateFormatted}\nBook By: ${bookingDateFormatted}\nType: ${b.bookingType}\nClass: ${b.classType}\nPassengers:\n${passengerDetailsText}${b.trainPreference ? `\nTrain Preference: ${b.trainPreference}` : ""}${b.upgradePreferred ? `\nUpgrade Preferred: Yes` : ""}${b.remarks ? `\nRemarks: ${b.remarks}` : ""}`;
-    }).join("\n-\n");
+    const passengerDetailsText = bookings
+      .flatMap(booking => booking.passengers)
+      .map((passenger, index) => {
+        const isChild = passenger.age >= 5 && passenger.age <= 11;
+        const berthInfo = isChild ? (passenger.berthRequired ? " [Berth Required]" : " [No Berth]") : "";
+        return `${index + 1}. ${passenger.name} ${passenger.age} ${passenger.gender.toUpperCase()}${berthInfo}`;
+      })
+      .join("\n");
+
+    const trainPreference = combineValues(bookings.map(b => b.trainPreference || ""));
+    const remarks = combineValues(bookings.map(b => b.remarks || ""));
+    const preferencesText = [
+      trainPreference !== "N/A" ? `Train Preference: ${trainPreference}` : "",
+      bookings.some(b => b.upgradePreferred) ? "Upgrade Preferred: Yes" : "",
+    ].filter(Boolean).join("\n");
 
     let preparedAccountsText = "";
     if (firstBookingWithAccounts.preparedAccounts && firstBookingWithAccounts.preparedAccounts.length > 0) {
@@ -220,28 +229,31 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
         const walletInfo = acc.walletAmount !== undefined ? ` (₹${acc.walletAmount.toFixed(2)})` : "";
         return `${index + 1}. ${acc.username} | ${acc.password} | Master: ${acc.isMasterAdded ? "✅" : "❌"} | Wallet: ${acc.isWalletLoaded ? "✅" : "❌"}${walletInfo}${handlingInfo}`;
       }).join("\n");
-      preparedAccountsText = `\n-\nID(s) for Booking (Shared):\n${accountsDetails}`;
+      preparedAccountsText = `\n---\nAccounts:\n${accountsDetails}`;
     }
 
     let bookedDetailsText = "";
     if (groupBookingDetails) {
       const splitLines = groupBookingDetails.splitByBooking
-        .map(x => `- ${x.bookingFor} (${x.passengers} pax): ₹${x.amountCharged.toFixed(2)}`)
+        .map(x => `• ${x.bookingFor} (${x.passengers} pax): ₹${x.amountCharged.toFixed(2)}`)
         .join("\n");
 
-      bookedDetailsText = `\n-\nBooked Details (Shared):\nBooked By: ${groupBookingDetails.bookedBy}\nAccount Used: ${groupBookingDetails.bookedAccountUsername}\nPayment Method: ${groupBookingDetails.methodUsed}\nTotal Amount: ₹${groupBookingDetails.totalAmount.toFixed(2)}\nSplit:\n${splitLines}`;
+      bookedDetailsText = `\n---\nBooked details:\nBooked by: ${groupBookingDetails.bookedBy}\nAccount: ${groupBookingDetails.bookedAccountUsername}\nPayment: ${groupBookingDetails.methodUsed} | Total: ₹${groupBookingDetails.totalAmount.toFixed(2)}\nSplit:\n${splitLines}`;
     }
 
     const groupDetailsText = `
-Group Booking Details:
-----------------------
-Bookings: ${bookings.length}
-Total Passengers: ${totalPassengers}
-Route: ${uniqueSources.join(", ").toUpperCase()} → ${uniqueDestinations.join(", ").toUpperCase()}
-Classes: ${classes.join(", ")}
-----------------------
-${bookingsText}${preparedAccountsText}${bookedDetailsText}
-----------------------
+*GROUP BOOKING*
+From: ${combineValues(bookings.map(b => b.source.toUpperCase()))}
+To: ${combineValues(bookings.map(b => b.destination.toUpperCase()))}
+---
+Journey Date: ${combineValues(bookings.map(b => formatBookingDate(b.journeyDate)))}
+Book By: ${combineValues(bookings.map(b => formatBookingDate(b.bookingDate)))}
+---
+Type: ${combineValues(bookings.map(b => b.bookingType))}
+Class: ${combineValues(bookings.map(b => b.classType))}
+---
+Passengers:
+${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${remarks !== "N/A" ? `\n---\nRemarks: ${remarks}` : ""}${preparedAccountsText}${bookedDetailsText}
     `.trim().replace(/^\n+|\n+$/g, "").replace(/\n\n+/g, "\n");
 
     if (navigator.share) {

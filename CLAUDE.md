@@ -9,7 +9,7 @@ TrainTrack is a Next.js 15 train booking management application with Firebase Fi
 ## Development Commands
 
 ```bash
-# Start Next.js development server on port 9002 (use this for development)
+# Start Next.js development server on port 9020 (use this for development)
 npm run dev
 
 # Build static export for production (only needed for deployment)
@@ -231,7 +231,7 @@ Current Firestore rules (`firestore.rules`) allow unrestricted read/write. In pr
 
 ### Known Quirks
 
-- Development server runs on port 9002 with Turbopack (`next dev --turbopack -p 9002`)
+- Development server runs on port 9020 with Turbopack (`next dev --turbopack -p 9020`)
 - Date conversion required for all Firestore Timestamp fields
 - React Query stale time set to 60 seconds; accounts hook has no refetch-on-focus
 - All components must use `"use client"` directive for CSR
