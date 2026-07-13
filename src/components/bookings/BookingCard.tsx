@@ -617,15 +617,15 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
     const isSL = ['SL', 'UR', '2S'].includes(classType);
 
     if (isGeneral) {
-      return "bg-amber-50/80 border-amber-200/60 dark:bg-amber-950/30 dark:border-amber-900/40";
+      return "border-2 bg-amber-50/80 border-amber-300 dark:bg-amber-950/30 dark:border-amber-700/50";
     }
 
     if (isSL) {
-      return "bg-green-50/80 border-green-200/60 dark:bg-green-950/30 dark:border-green-900/40";
+      return "border-2 bg-green-50/80 border-green-300 dark:bg-green-950/30 dark:border-green-700/50";
     }
 
     // Tatkal AC
-    return "bg-blue-50/80 border-blue-200/60 dark:bg-blue-950/30 dark:border-blue-900/40";
+    return "border-2 bg-blue-50/80 border-blue-300 dark:bg-blue-950/30 dark:border-blue-700/50";
   };
 
   const compactClass = getCompactClassDisplay(booking.classType);
