@@ -264,19 +264,16 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
     };
 
     // Categorize groups
-    const generalAcGroups: [string, Booking[]][] = [];
-    const generalSlGroups: [string, Booking[]][] = [];
+    // General bookings are combined (AC + SL) since they all book at the same time.
+    // Tatkal bookings are split by AC/SL since they have different booking windows.
+    const generalGroups: [string, Booking[]][] = [];
     const tatkalAcGroups: [string, Booking[]][] = [];
     const tatkalSlGroups: [string, Booking[]][] = [];
 
     Object.entries(groups).forEach(([groupId, groupBookings]) => {
         const { isGeneral, isSL } = categorizeGroup(groupBookings);
         if (isGeneral) {
-            if (isSL) {
-                generalSlGroups.push([groupId, groupBookings]);
-            } else {
-                generalAcGroups.push([groupId, groupBookings]);
-            }
+            generalGroups.push([groupId, groupBookings]);
         } else {
             if (isSL) {
                 tatkalSlGroups.push([groupId, groupBookings]);
@@ -290,11 +287,7 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
     const generalBookings = singles.filter(b => ['General', 'Regular'].includes(String(b.bookingType)));
     const tatkalBookings = singles.filter(b => b.bookingType === 'Tatkal');
     
-    // For General, separate by AC/SL classes
-    const generalAcBookings = generalBookings.filter(b => !SL_CLASSES.includes(b.classType));
-    const generalSlBookings = generalBookings.filter(b => SL_CLASSES.includes(b.classType));
-    
-    // For Tatkal, separate by AC/SL classes
+    // For Tatkal, separate by AC/SL classes (different booking times)
     const tatkalAcBookings = tatkalBookings.filter(b => !SL_CLASSES.includes(b.classType));
     const tatkalSlBookings = tatkalBookings.filter(b => SL_CLASSES.includes(b.classType));
 
@@ -322,18 +315,11 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
 
     return (
       <>
-        {(generalAcGroups.length > 0 || generalAcBookings.length > 0) && (
+        {(generalGroups.length > 0 || generalBookings.length > 0) && (
           <div className="mt-4">
-            <h4 className="text-lg font-medium mb-2 text-amber-700 dark:text-amber-600">General - AC Bookings</h4>
-            {renderGroupCards(generalAcGroups)}
-            {generalAcBookings.length > 0 && <BookingList bookings={generalAcBookings} {...listProps} />}
-          </div>
-        )}
-        {(generalSlGroups.length > 0 || generalSlBookings.length > 0) && (
-          <div className="mt-4">
-            <h4 className="text-lg font-medium mb-2 text-amber-700 dark:text-amber-600">General - SL Bookings</h4>
-            {renderGroupCards(generalSlGroups)}
-            {generalSlBookings.length > 0 && <BookingList bookings={generalSlBookings} {...listProps} />}
+            <h4 className="text-lg font-medium mb-2 text-amber-700 dark:text-amber-600">General Bookings</h4>
+            {renderGroupCards(generalGroups)}
+            {generalBookings.length > 0 && <BookingList bookings={generalBookings} {...listProps} />}
           </div>
         )}
         {(tatkalAcGroups.length > 0 || tatkalAcBookings.length > 0) && (

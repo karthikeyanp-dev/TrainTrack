@@ -27,43 +27,43 @@ const statusConfig: Record<BookingStatus, {
   "Requested": {
     icon: Clock,
     label: "Requested",
-    className: "bg-blue-500/10 text-blue-600 border-blue-500/20",
+    className: "bg-blue-600 text-white border-blue-700",
     pulse: true,
   },
   "Booked": {
     icon: CheckCircle2,
     label: "Booked",
-    className: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
+    className: "bg-emerald-600 text-white border-emerald-700",
     pulse: false,
   },
   "Missed": {
     icon: AlertTriangle,
     label: "Missed",
-    className: "bg-amber-500/10 text-amber-600 border-amber-500/20",
+    className: "bg-amber-500 text-black border-amber-600",
     pulse: false,
   },
   "Booking Failed (Unpaid)": {
     icon: XCircle,
     label: "Failed",
-    className: "bg-rose-500/10 text-rose-600 border-rose-500/20",
+    className: "bg-rose-600 text-white border-rose-700",
     pulse: false,
   },
   "Booking Failed (Paid)": {
     icon: XCircle,
     label: "Failed (Paid)",
-    className: "bg-rose-500/10 text-rose-600 border-rose-500/20",
+    className: "bg-rose-600 text-white border-rose-700",
     pulse: false,
   },
   "User Cancelled": {
     icon: UserX,
     label: "Cancelled",
-    className: "bg-orange-500/10 text-orange-600 border-orange-500/20",
+    className: "bg-orange-500 text-white border-orange-600",
     pulse: false,
   },
   "CNF & Cancelled": {
     icon: UserX,
     label: "CNF & Cancelled",
-    className: "bg-purple-500/10 text-purple-600 border-purple-500/20",
+    className: "bg-purple-600 text-white border-purple-700",
     pulse: false,
   },
 };
@@ -84,7 +84,7 @@ export function StatusBadge({ status, size = "md", pulse: forcePulse }: StatusBa
   const config = statusConfig[status] || {
     icon: Info,
     label: status,
-    className: "bg-muted text-muted-foreground border-border",
+    className: "bg-slate-500 text-white border-slate-600",
     pulse: false,
   };
 
@@ -96,7 +96,7 @@ export function StatusBadge({ status, size = "md", pulse: forcePulse }: StatusBa
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       className={cn(
-        "inline-flex items-center rounded-full border font-medium",
+        "inline-flex items-center rounded-[2px] border font-medium shadow-sm",
         sizeClasses[size],
         config.className,
       )}
@@ -104,7 +104,7 @@ export function StatusBadge({ status, size = "md", pulse: forcePulse }: StatusBa
       <span className="relative flex">
         <Icon className={iconSizes[size]} />
         {shouldPulse && (
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full opacity-20">
+          <span className="absolute inline-flex h-full w-full animate-ping opacity-20">
             <Icon className={iconSizes[size]} />
           </span>
         )}

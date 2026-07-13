@@ -312,12 +312,12 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
 
 
   return (
-    <Card className="w-full border-2 border-primary/20 overflow-hidden">
+    <Card className="w-full border-2 overflow-hidden bg-slate-100/80 dark:bg-slate-800/40" style={{ borderColor: 'rgb(186 190 197 / 40%)' }}>
       {/* Header Section */}
       <div className="bg-muted/30 p-4 flex flex-col gap-4">
         <div className="flex justify-between items-start">
           <div className="flex gap-3 items-center">
-             <div className="bg-primary/10 p-2 rounded-full">
+             <div className="p-2 rounded-full bg-white">
                 <Layers className="h-6 w-6 text-primary" />
              </div>
              <div>
@@ -333,7 +333,7 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                 variant="ghost"
                 size="sm"
                 onClick={handleShare}
-                className="h-8 w-8 px-0 justify-center bg-primary/10 hover:bg-primary/20 text-primary hover:text-primary"
+                className="h-8 w-8 px-0 justify-center bg-white hover:bg-white/90 text-primary hover:text-primary"
                 title="Share"
               >
                 <Share2 className="h-5 w-5" />
@@ -344,7 +344,7 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                   variant="ghost"
                   size="sm"
                   onClick={() => setShowUngroupDialog(true)} 
-                  className="h-8 w-8 px-0 justify-center bg-destructive/15 hover:bg-destructive/25 text-[hsl(0_50%_53%)] hover:text-[hsl(0_50%_53%)] border border-destructive/30 hover:border-destructive/50"
+                  className="h-8 w-8 px-0 justify-center bg-white hover:bg-white/90 text-[hsl(0_50%_53%)] hover:text-[hsl(0_50%_53%)]"
                   title="Ungroup"
               >
                   <Link2Off className="h-5 w-5 text-[hsl(0_50%_53%)]" />
@@ -359,6 +359,22 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
              {classes.map(c => <Badge key={c} variant="secondary">{c}</Badge>)}
         </div>
       </div>
+
+      {/* Individual Bookings List */}
+      <CardContent className="p-4 bg-muted/10 space-y-4 border-t">
+        <h4 className="font-medium text-sm text-muted-foreground mb-2">Individual Bookings</h4>
+        {bookings.map(booking => (
+          <BookingCard 
+            key={booking.id} 
+            booking={booking}
+            selectionMode={selectionMode}
+            isSelected={selectedBookingIds?.has(booking.id)}
+            onToggleSelection={onToggleSelection}
+            hideActions={true} // Hide actions on individual cards when in group
+            hideSharedDetails={true} // Hide shared details (IDs, Booked Details) - shown at group level
+          />
+        ))}
+      </CardContent>
 
       {/* Shared Actions Section */}
       <CardContent className="p-4 border-t bg-muted/5 grid grid-cols-1 gap-4">
@@ -550,22 +566,6 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
       {/* Group Status Update Section */}
       <CardContent className="p-4 border-t bg-muted/5">
         <GroupStatusUpdate bookings={bookings} groupId={groupId} />
-      </CardContent>
-
-      {/* Individual Bookings List */}
-      <CardContent className="p-4 bg-muted/10 space-y-4 border-t">
-        <h4 className="font-medium text-sm text-muted-foreground mb-2">Individual Bookings</h4>
-        {bookings.map(booking => (
-          <BookingCard 
-            key={booking.id} 
-            booking={booking}
-            selectionMode={selectionMode}
-            isSelected={selectedBookingIds?.has(booking.id)}
-            onToggleSelection={onToggleSelection}
-            hideActions={true} // Hide actions on individual cards when in group
-            hideSharedDetails={true} // Hide shared details (IDs, Booked Details) - shown at group level
-          />
-        ))}
       </CardContent>
 
       {/* Ungroup Dialog */}
