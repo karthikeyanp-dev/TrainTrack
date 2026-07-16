@@ -951,7 +951,9 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
                   {stats?.bookingCount ?? 0}
                 </div>
                 <div className="text-xs text-muted-foreground">
-                  Last Updated: {new Date(handler.updatedAt).toLocaleDateString()}
+                  Last Updated: {stats?.lastAssignedDate
+                    ? new Date(`${stats.lastAssignedDate}T00:00:00`).toLocaleDateString()
+                    : new Date(handler.updatedAt).toLocaleDateString()}
                 </div>
               </CardContent>
             </Card>
