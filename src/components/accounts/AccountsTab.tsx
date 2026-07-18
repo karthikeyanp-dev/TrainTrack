@@ -5,8 +5,9 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, Edit3, Eye, EyeOff, Plus, X, CreditCard, UserCircle, Wallet, Calendar, TrendingUp, Users, Briefcase, Search } from "lucide-react";
+import { Loader2, Trash2, Edit3, Eye, EyeOff, Plus, X, CreditCard, UserCircle, Wallet, Calendar, TrendingUp, Users, Briefcase, Search, CheckCircle2 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { IrctcAccount } from "@/types/account";
 import { getAccounts, addAccount, deleteAccount, updateAccount, getAccountStats, type AccountStats } from "@/lib/accountsClient";
@@ -37,6 +38,7 @@ const labelHighlightStyle = { color: '#AB945E', fontWeight: 700 };
 interface AccountFormState {
   username: string;
   password: string;
+  isVerified: boolean;
   walletAmount: string;
   lastBookedDate: string;
 }
@@ -59,6 +61,7 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
   const [form, setForm] = useState<AccountFormState>({
     username: "",
     password: "",
+    isVerified: false,
     walletAmount: "",
     lastBookedDate: "",
   });
@@ -66,6 +69,7 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
   const [editForm, setEditForm] = useState<AccountFormState>({
     username: "",
     password: "",
+    isVerified: false,
     walletAmount: "",
     lastBookedDate: "",
   });
@@ -127,6 +131,7 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
     const result = await addAccount({
       username: form.username.trim(),
       password: form.password.trim(),
+      isVerified: form.isVerified,
       walletAmount: walletAmountNum,
       lastBookedDate: form.lastBookedDate || "",
     });
@@ -142,6 +147,7 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
       setForm({
         username: "",
         password: "",
+        isVerified: false,
         walletAmount: "",
         lastBookedDate: "",
       });
@@ -243,6 +249,7 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
     setEditForm({
       username: account.username,
       password: account.password,
+      isVerified: account.isVerified ?? false,
       walletAmount: account.walletAmount.toString(),
       lastBookedDate: account.lastBookedDate || "",
     });
@@ -282,6 +289,7 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
     const result = await updateAccount(accountToEdit.id, {
       username: editForm.username.trim(),
       password: editForm.password.trim(),
+      isVerified: editForm.isVerified,
       walletAmount: walletAmountNum,
       lastBookedDate: editForm.lastBookedDate || "",
     });
@@ -291,6 +299,7 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
         ...accountToEdit,
         username: editForm.username.trim(),
         password: editForm.password.trim(),
+        isVerified: editForm.isVerified,
         walletAmount: walletAmountNum,
         lastBookedDate: editForm.lastBookedDate || "",
       };
@@ -412,6 +421,16 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
               />
             </div>
 
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="isVerified"
+                checked={form.isVerified}
+                onCheckedChange={(checked) => setForm(prev => ({ ...prev, isVerified: checked === true }))}
+                disabled={isSubmitting}
+              />
+              <Label htmlFor="isVerified" className="cursor-pointer">Verified</Label>
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="walletAmount">Wallet Amount</Label>
               <Input
@@ -467,8 +486,14 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
           <Card className="group hover:shadow-lg transition-shadow duration-300">
             <CardHeader className="pb-3">
               <div className="flex justify-between items-start">
-                <CardTitle className="text-base">
+                <CardTitle className="text-base flex items-center gap-1.5">
                   {account.username}
+                  {account.isVerified && (
+                    <CheckCircle2
+                      className="h-4 w-4 fill-green-600 text-white"
+                      aria-label="Verified"
+                    />
+                  )}
                 </CardTitle>
                 <div className="flex gap-1">
                   <Button
@@ -655,6 +680,16 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
                 required
                 disabled={isSubmitting}
               />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="edit-isVerified"
+                checked={editForm.isVerified}
+                onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, isVerified: checked === true }))}
+                disabled={isSubmitting}
+              />
+              <Label htmlFor="edit-isVerified" className="cursor-pointer">Verified</Label>
             </div>
 
             <div className="space-y-2">

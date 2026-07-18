@@ -2,7 +2,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { format, isToday, isTomorrow } from "date-fns";
+import { format, isToday, isTomorrow, isYesterday } from "date-fns";
 
 interface DateGroupHeadingProps {
   dateString: string;
@@ -23,6 +23,8 @@ export function DateGroupHeading({ dateString, isJourneyDate = false }: DateGrou
       dateText = `Today (${format(localDateAtMidnight, "EEEE")})`;
     } else if (isTomorrow(localDateAtMidnight)) {
       dateText = `Tomorrow (${format(localDateAtMidnight, "EEEE")})`;
+    } else if (isYesterday(localDateAtMidnight)) {
+      dateText = `Yesterday (${format(localDateAtMidnight, "EEEE")})`;
     } else {
       // Change format to short month name (e.g., "Jan 20, 2024") and weekday in parentheses
       dateText = format(localDateAtMidnight, "MMM d, yyyy (EEEE)");
