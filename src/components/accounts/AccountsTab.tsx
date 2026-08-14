@@ -175,8 +175,8 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
   const [isVerifiedOpen, setIsVerifiedOpen] = useState(true);
   const [isNonVerifiedOpen, setIsNonVerifiedOpen] = useState(true);
 
-  const [verifiedSort, setVerifiedSort] = useState<AccountSortOption>("wallet-desc");
-  const [nonVerifiedSort, setNonVerifiedSort] = useState<AccountSortOption>("wallet-desc");
+  const [verifiedSort, setVerifiedSort] = useState<AccountSortOption>("last-booked-asc");
+  const [nonVerifiedSort, setNonVerifiedSort] = useState<AccountSortOption>("last-booked-asc");
 
   const [form, setForm] = useState<AccountFormState>({
     username: "",
@@ -205,8 +205,8 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
         getAccounts(),
         getAccountStats()
       ]);
-      setAccounts(fetchedAccounts.sort((a, b) => b.walletAmount - a.walletAmount));
       setAccountStats(fetchedStats);
+      setAccounts(sortAccounts(fetchedAccounts, "last-booked-asc", fetchedStats));
     } catch (error) {
       toast({
         title: "Error Loading Accounts",
