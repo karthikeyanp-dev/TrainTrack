@@ -42,9 +42,11 @@ interface BookingGroupCardProps {
   selectionMode?: boolean;
   selectedBookingIds?: Set<string>;
   onToggleSelection?: (id: string) => void;
+  /** Hide the Ungroup action (view-only surfaces such as the Upcoming Journeys tab). */
+  allowUngroup?: boolean;
 }
 
-export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBookingIds, onToggleSelection }: BookingGroupCardProps) {
+export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBookingIds, onToggleSelection, allowUngroup = true }: BookingGroupCardProps) {
   const [showUngroupDialog, setShowUngroupDialog] = useState(false);
   const [isUngrouping, setIsUngrouping] = useState(false);
   const [showEditRecordForm, setShowEditRecordForm] = useState(false);
@@ -339,11 +341,11 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                 <Share2 className="h-5 w-5" />
               </Button>
             )}
-            {!selectionMode && (
+            {!selectionMode && allowUngroup && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setShowUngroupDialog(true)} 
+                  onClick={() => setShowUngroupDialog(true)}
                   className="h-8 w-8 px-0 justify-center bg-white hover:bg-white/90 text-[hsl(0_50%_53%)] hover:text-[hsl(0_50%_53%)]"
                   title="Ungroup"
               >

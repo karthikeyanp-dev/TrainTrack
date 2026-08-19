@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { Booking, TrainClass } from '@/types/booking';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Search, Loader2, Calendar, CheckCircle2, Clock, Receipt, Layers, X } from "lucide-react";
+import { AlertCircle, Search, Loader2, CalendarDays, CheckCircle2, Clock, Receipt, Layers, X } from "lucide-react";
 import { DateGroupHeading } from "@/components/bookings/DateGroupHeading";
 import { BookingList } from "@/components/bookings/BookingList";
 import { BookingGroupCard } from "@/components/bookings/BookingGroupCard";
@@ -37,6 +37,22 @@ const isEligibleForPaymentTracking = (booking: Booking): boolean => {
   const relevantDate = updatedAt > createdAt ? updatedAt : createdAt;
   return relevantDate >= PAYMENT_TRACKING_START_DATE;
 };
+
+const getLocalDateKey = (date: Date = new Date()): string => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const toDateKey = (value: string): string => {
+  const match = /^(\d{4}-\d{2}-\d{2})/.exec(value);
+  return match ? match[1] : value;
+};
+
+const isRefundPending = (booking: Booking): boolean =>
+  (booking.status === "Booking Failed (Paid)" || booking.status === "CNF & Cancelled") &&
+  !booking.refundDetails;
 
 // Payment filter types
 export type PaymentFilterType = 'all' | 'payment-pending' | 'settlement-pending';
@@ -72,6 +88,20 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
     const [selectedBookingIds, setSelectedBookingIds] = useState<Set<string>>(new Set());
     const [isGrouping, setIsGrouping] = useState(false);
     const [paymentFilter, setPaymentFilter] = useState<PaymentFilterType>('all');
+    const [activeTab, setActiveTab] = useState('pending');
+    // Today's date key, refreshed so an open page rolls over past midnight
+    const [todayKey, setTodayKey] = useState(() => getLocalDateKey());
+
+    useEffect(() => {
+        const interval = setInterval(() => {
+            // Only triggers a re-render on an actual day change
+            setTodayKey(prev => {
+                const next = getLocalDateKey();
+                return prev === next ? prev : next;
+            });
+        }, 60 * 1000);
+        return () => clearInterval(interval);
+    }, []);
 
     // Filter bookings by local search query
     const { allBookings, pendingBookings } = useMemo(() => {
@@ -184,8 +214,20 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
     }, [searchQuery]);
 
 
-    const { pendingBookingsByDate, pendingDates, completedBookingsByDate, completedDates, paymentPendingCount, settlementPendingCount } = useMemo(() => {
+    const hasRefunds = useMemo(
+        () => rawAllBookings.some(isRefundPending),
+        [rawAllBookings]
+    );
+
+    useEffect(() => {
+        if (activeTab === 'refunds' && !hasRefunds) {
+            setActiveTab('pending');
+        }
+    }, [activeTab, hasRefunds]);
+
+    const { pendingBookingsByDate, pendingDates, completedBookingsByDate, completedDates, paymentPendingCount, settlementPendingCount, upcomingBookingsByDate, upcomingDates } = useMemo(() => {
         const sourceBookings = allBookings;
+        const today = todayKey;
 
         // --- Pending Bookings Logic (now uses pre-fetched pendingBookings prop) ---
         const pendingSource = searchQuery ? pendingBookings.filter(b => b.status === 'Requested') : pendingBookings;
@@ -200,8 +242,7 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
                 const visibleDateSet = new Set(visibleDates);
                 // Completed bookings exclude Requested
                 // Exclude Booking Failed (Paid) and CNF & Cancelled IF they don't have refundDetails (those go to Refunds tab)
-                if (b.status === 'Booking Failed (Paid)' && !b.refundDetails) return false;
-                if (b.status === 'CNF & Cancelled' && !b.refundDetails) return false;
+                if (isRefundPending(b)) return false;
                 
                 return b.status !== 'Requested' && visibleDateSet.has(b.bookingDate);
             });
@@ -236,11 +277,30 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
         );
         const completedDates = Object.keys(completedBookingsByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
-        return { pendingBookingsByDate, pendingDates, completedBookingsByDate, completedDates, paymentPendingCount, settlementPendingCount };
-    }, [allBookings, pendingBookings, visibleDates, searchQuery, paymentFilter]);
+        // --- Upcoming Journeys: booked tickets with journey date today or later ---
+        const upcomingBookingsToDisplay = sourceBookings.filter(b => {
+            if (b.status !== 'Booked') return false;
+            return toDateKey(b.journeyDate) >= today;
+        });
+
+        const upcomingBookingsByDate = upcomingBookingsToDisplay.reduce((acc, booking) => {
+            const key = toDateKey(booking.journeyDate);
+            if (!acc[key]) {
+                acc[key] = [];
+            }
+            acc[key].push(booking);
+            return acc;
+        }, {} as Record<string, Booking[]>);
+
+        const upcomingDates = Object.keys(upcomingBookingsByDate).sort((a, b) => a.localeCompare(b));
+
+        return { pendingBookingsByDate, pendingDates, completedBookingsByDate, completedDates, paymentPendingCount, settlementPendingCount, upcomingBookingsByDate, upcomingDates };
+    }, [allBookings, pendingBookings, visibleDates, searchQuery, paymentFilter, todayKey]);
 
 
-  const renderBookingsForDate = (bookingsForDate: Booking[]) => {
+  // `selectable: false` renders a read-only list (no checkboxes) — used by the Upcoming tab,
+  // which is view-only and has no grouping actions.
+  const renderBookingsForDate = (bookingsForDate: Booking[], { selectable = true }: { selectable?: boolean } = {}) => {
     // 1. Extract groups and singles
     const groups: Record<string, Booking[]> = {};
     const singles: Booking[] = [];
@@ -291,21 +351,28 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
     const tatkalAcBookings = tatkalBookings.filter(b => !SL_CLASSES.includes(b.classType));
     const tatkalSlBookings = tatkalBookings.filter(b => SL_CLASSES.includes(b.classType));
 
-    const listProps = {
-        selectionMode,
-        selectedBookingIds,
-        onToggleSelection: handleToggleSelection
-    };
+    const listProps = selectable
+        ? {
+            selectionMode,
+            selectedBookingIds,
+            onToggleSelection: handleToggleSelection
+        }
+        : {
+            selectionMode: false,
+            selectedBookingIds: new Set<string>(),
+            onToggleSelection: () => {}
+        };
 
     // Helper to render groups for a category
     const renderGroupCards = (categoryGroups: [string, Booking[]][]) => (
         categoryGroups.length > 0 && (
             <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 mb-4">
                 {categoryGroups.map(([groupId, groupBookings]) => (
-                    <BookingGroupCard 
-                        key={groupId} 
-                        groupId={groupId} 
-                        bookings={groupBookings} 
+                    <BookingGroupCard
+                        key={groupId}
+                        groupId={groupId}
+                        bookings={groupBookings}
+                        allowUngroup={selectable}
                         {...listProps}
                     />
                 ))}
@@ -346,6 +413,9 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
     const noCompletedMessage = searchQuery
         ? "No completed bookings found matching your search."
         : "No bookings have been marked as 'Booked', 'Missed', 'Failed', 'Cancelled' etc. yet.";
+    const noUpcomingMessage = searchQuery
+        ? "No upcoming bookings found matching your search."
+        : "No booked journeys for today or future dates. Completed bookings with upcoming journey dates will appear here.";
 
     const clearSelectionState = () => {
         setSelectionMode(false);
@@ -406,29 +476,41 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
               )}
             </div>
 
-            <Tabs defaultValue="pending" className="w-full">
-              <TabsList className="inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground w-full md:w-[420px]">
+            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+              <TabsList className={cn(
+                "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground w-full",
+                hasRefunds ? "md:w-[560px]" : "md:w-[420px]"
+              )}>
                 <TabsTrigger 
                     value="pending" 
-                    className="inline-flex items-center justify-center gap-2 rounded-sm px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
+                    className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-sm px-2 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
                 >
-                    <Clock className="h-4 w-4" />
+                    <Clock className="h-4 w-4 shrink-0" />
                     Pending
                 </TabsTrigger>
                 <TabsTrigger 
                     value="completed"
-                    className="inline-flex items-center justify-center gap-2 rounded-sm px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
+                    className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-sm px-2 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
                 >
-                    <CheckCircle2 className="h-4 w-4" />
+                    <CheckCircle2 className="h-4 w-4 shrink-0" />
                     Completed
                 </TabsTrigger>
                 <TabsTrigger 
-                    value="refunds"
-                    className="inline-flex items-center justify-center gap-2 rounded-sm px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
+                    value="upcoming"
+                    className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-sm px-2 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
                 >
-                    <Receipt className="h-4 w-4" />
-                    Refunds
+                    <CalendarDays className="h-4 w-4 shrink-0" />
+                    Upcoming
                 </TabsTrigger>
+                {hasRefunds && (
+                  <TabsTrigger 
+                      value="refunds"
+                      className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-sm px-2 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
+                  >
+                      <Receipt className="h-4 w-4 shrink-0" />
+                      Refunds
+                  </TabsTrigger>
+                )}
               </TabsList>
 
               <TabsContent value="pending" className="mt-6">
@@ -597,17 +679,68 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
                 )}
               </TabsContent>
 
-              <TabsContent value="refunds" className="mt-6">
-                <RefundsManager />
+              <TabsContent value="upcoming" className="mt-6">
+                <motion.div variants={staggerItem}>
+                    <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                        <div className="flex items-center gap-3 min-w-0">
+                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10">
+                                <CalendarDays className="h-5 w-5 text-indigo-600" />
+                            </div>
+                            <div className="min-w-0">
+                                <h2 className="text-heading-3 font-semibold">Upcoming Journeys</h2>
+                                <p className="text-sm text-muted-foreground">
+                                    {upcomingDates.length} date{upcomingDates.length !== 1 ? 's' : ''} with upcoming journeys
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </motion.div>
+                {upcomingDates.length === 0 ? (
+                  <motion.div variants={staggerItem}>
+                    <Alert className="mt-4 border-dashed">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
+                            {searchQuery ? <Search className="h-5 w-5" /> : <CalendarDays className="h-5 w-5" />}
+                        </div>
+                        <AlertTitle className="mt-2">{searchQuery ? "Search Results" : "No Upcoming Journeys"}</AlertTitle>
+                        <AlertDescription>{noUpcomingMessage}</AlertDescription>
+                    </Alert>
+                  </motion.div>
+                ) : (
+                  <Accordion type="multiple" className="w-full space-y-4" defaultValue={upcomingDates.length > 0 ? [upcomingDates[0]] : []}>
+                    {upcomingDates.map((date, index) => (
+                      <motion.div
+                        key={`upcoming-${date}`}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                      >
+                        <AccordionItem value={date} className="border rounded-2xl px-4 bg-card shadow-elevation-1">
+                            <AccordionTrigger className="py-4 hover:no-underline">
+                                <DateGroupHeading dateString={date} isJourneyDate />
+                            </AccordionTrigger>
+                            <AccordionContent className="pb-4">
+                                {renderBookingsForDate(upcomingBookingsByDate[date], { selectable: false })}
+                            </AccordionContent>
+                        </AccordionItem>
+                      </motion.div>
+                    ))}
+                  </Accordion>
+                )}
               </TabsContent>
+
+              {hasRefunds && (
+                <TabsContent value="refunds" className="mt-6">
+                  <RefundsManager />
+                </TabsContent>
+              )}
             </Tabs>
 
-            {!searchQuery && hasMore && (
+            {activeTab === "completed" && !searchQuery && hasMore && (
               <div ref={ref} className="flex justify-center items-center p-4 h-10">
                 {isLoading && <Loader2 className="h-8 w-8 animate-spin text-primary" />}
               </div>
             )}
-            {!searchQuery && !hasMore && allBookingDates.length > 0 && (
+            {activeTab === "completed" && !searchQuery && !hasMore && allBookingDates.length > 0 && (
               <motion.div 
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
