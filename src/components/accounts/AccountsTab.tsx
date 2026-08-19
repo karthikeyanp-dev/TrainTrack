@@ -7,13 +7,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, Edit3, Eye, EyeOff, Plus, X, CreditCard, UserCircle, Wallet, Calendar, TrendingUp, Users, Briefcase, Search, CheckCircle2 } from "lucide-react";
+import { Loader2, Trash2, Edit3, Eye, EyeOff, Plus, X, CreditCard, UserCircle, Wallet, Calendar, TrendingUp, Users, Briefcase, Search, CheckCircle2, ChevronDown, ShieldCheck, ShieldAlert, ArrowUpDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { cn } from "@/lib/utils";
 import type { IrctcAccount } from "@/types/account";
 import { getAccounts, addAccount, deleteAccount, updateAccount, getAccountStats, type AccountStats } from "@/lib/accountsClient";
 import type { Handler } from "@/types/handler";
 import { getHandlers, addHandler, updateHandler, deleteHandler, getHandlerStatsForHandlers, type HandlerStats } from "@/lib/handlersClient";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -43,6 +51,112 @@ interface AccountFormState {
   lastBookedDate: string;
 }
 
+export type AccountSortOption =
+  | "wallet-desc"
+  | "wallet-asc"
+  | "last-booked-asc"
+  | "last-booked-desc"
+  | "current-month-asc"
+  | "current-month-desc"
+  | "prev-month-asc"
+  | "prev-month-desc"
+  | "username-asc";
+
+function sortAccounts(
+  accountsList: IrctcAccount[],
+  sortOption: AccountSortOption,
+  statsList: AccountStats[]
+): IrctcAccount[] {
+  const statsMap = new Map(statsList.map(s => [s.accountId, s]));
+
+  return [...accountsList].sort((a, b) => {
+    const statsA = statsMap.get(a.id);
+    const statsB = statsMap.get(b.id);
+
+    switch (sortOption) {
+      case "wallet-desc":
+        return b.walletAmount - a.walletAmount;
+
+      case "wallet-asc":
+        return a.walletAmount - b.walletAmount;
+
+      case "last-booked-asc": {
+        if (!a.lastBookedDate && !b.lastBookedDate) return 0;
+        if (!a.lastBookedDate) return -1;
+        if (!b.lastBookedDate) return 1;
+        return a.lastBookedDate.localeCompare(b.lastBookedDate);
+      }
+
+      case "last-booked-desc": {
+        if (!a.lastBookedDate && !b.lastBookedDate) return 0;
+        if (!a.lastBookedDate) return 1;
+        if (!b.lastBookedDate) return -1;
+        return b.lastBookedDate.localeCompare(a.lastBookedDate);
+      }
+
+      case "current-month-asc": {
+        const countA = statsA?.bookingCount ?? 0;
+        const countB = statsB?.bookingCount ?? 0;
+        return countA - countB;
+      }
+
+      case "current-month-desc": {
+        const countA = statsA?.bookingCount ?? 0;
+        const countB = statsB?.bookingCount ?? 0;
+        return countB - countA;
+      }
+
+      case "prev-month-asc": {
+        const countA = statsA?.previousMonthBookingCount ?? 0;
+        const countB = statsB?.previousMonthBookingCount ?? 0;
+        return countA - countB;
+      }
+
+      case "prev-month-desc": {
+        const countA = statsA?.previousMonthBookingCount ?? 0;
+        const countB = statsB?.previousMonthBookingCount ?? 0;
+        return countB - countA;
+      }
+
+      case "username-asc":
+        return a.username.localeCompare(b.username);
+
+      default:
+        return b.walletAmount - a.walletAmount;
+    }
+  });
+}
+
+function AccountSortSelect({
+  value,
+  onChange,
+}: {
+  value: AccountSortOption;
+  onChange: (value: AccountSortOption) => void;
+}) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground shrink-0 hidden sm:block" />
+      <Select value={value} onValueChange={(val) => onChange(val as AccountSortOption)}>
+        <SelectTrigger className="h-8 text-xs w-[150px] sm:w-[210px] bg-background/80 hover:bg-background border-border/80">
+          <SelectValue placeholder="Sort by..." />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="wallet-desc">Wallet Balance (High → Low)</SelectItem>
+          <SelectItem value="wallet-asc">Wallet Balance (Low → High)</SelectItem>
+          <SelectItem value="last-booked-asc">Booked Date (Earliest First)</SelectItem>
+          <SelectItem value="last-booked-desc">Booked Date (Latest First)</SelectItem>
+          <SelectItem value="current-month-asc">This Month Bookings (Low → High)</SelectItem>
+          <SelectItem value="current-month-desc">This Month Bookings (High → Low)</SelectItem>
+          <SelectItem value="prev-month-asc">Last Month Bookings (Low → High)</SelectItem>
+          <SelectItem value="prev-month-desc">Last Month Bookings (High → Low)</SelectItem>
+          <SelectItem value="username-asc">Username (A → Z)</SelectItem>
+        </SelectContent>
+      </Select>
+    </div>
+  );
+}
+
 function AccountsManager({ searchQuery }: { searchQuery: string }) {
   const [accounts, setAccounts] = useState<IrctcAccount[]>([]);
   const [accountStats, setAccountStats] = useState<AccountStats[]>([]);
@@ -57,6 +171,12 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
   const [topUpAmount, setTopUpAmount] = useState<string>("");
   const [isUpdatingWallet, setIsUpdatingWallet] = useState(false);
   const { toast } = useToast();
+
+  const [isVerifiedOpen, setIsVerifiedOpen] = useState(true);
+  const [isNonVerifiedOpen, setIsNonVerifiedOpen] = useState(true);
+
+  const [verifiedSort, setVerifiedSort] = useState<AccountSortOption>("last-booked-asc");
+  const [nonVerifiedSort, setNonVerifiedSort] = useState<AccountSortOption>("last-booked-asc");
 
   const [form, setForm] = useState<AccountFormState>({
     username: "",
@@ -85,8 +205,8 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
         getAccounts(),
         getAccountStats()
       ]);
-      setAccounts(fetchedAccounts.sort((a, b) => b.walletAmount - a.walletAmount));
       setAccountStats(fetchedStats);
+      setAccounts(sortAccounts(fetchedAccounts, "last-booked-asc", fetchedStats));
     } catch (error) {
       toast({
         title: "Error Loading Accounts",
@@ -194,7 +314,7 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
 
   const handleTopUpSubmit = async () => {
     if (!accountToTopUp) return;
-    
+
     const amountToAdd = Number(topUpAmount);
     if (isNaN(amountToAdd) || amountToAdd === 0) {
       toast({
@@ -206,7 +326,7 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
     }
 
     const newWalletAmount = accountToTopUp.walletAmount + amountToAdd;
-    
+
     // Ensure wallet balance never goes negative
     if (newWalletAmount < 0) {
       toast({
@@ -218,10 +338,10 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
     }
 
     setIsUpdatingWallet(true);
-    
+
     // We need to pass all required fields to updateAccount
     const result = await updateAccount(accountToTopUp.id, {
-        walletAmount: newWalletAmount,
+      walletAmount: newWalletAmount,
     });
 
     if (result.success) {
@@ -339,11 +459,23 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
   const totalAccounts = accounts.length;
   const totalWalletAmount = accounts.reduce((sum, acc) => sum + acc.walletAmount, 0);
 
-  const filteredAccounts = useMemo(() => {
-    if (!searchQuery.trim()) return accounts;
-    const q = searchQuery.toLowerCase();
-    return accounts.filter(a => a.username.toLowerCase().includes(q));
-  }, [accounts, searchQuery]);
+  const { verifiedAccounts, nonVerifiedAccounts } = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    const matches = q
+      ? accounts.filter(a => a.username.toLowerCase().includes(q))
+      : accounts;
+
+    const rawVerified = matches.filter(a => Boolean(a.isVerified));
+    const rawNonVerified = matches.filter(a => !a.isVerified);
+
+    return {
+      verifiedAccounts: sortAccounts(rawVerified, verifiedSort, accountStats),
+      nonVerifiedAccounts: sortAccounts(rawNonVerified, nonVerifiedSort, accountStats),
+    };
+  }, [accounts, searchQuery, verifiedSort, nonVerifiedSort, accountStats]);
+
+  const verifiedTotalCount = useMemo(() => accounts.filter(a => Boolean(a.isVerified)).length, [accounts]);
+  const nonVerifiedTotalCount = accounts.length - verifiedTotalCount;
 
   if (isLoading) {
     return (
@@ -354,14 +486,14 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
   }
 
   return (
-    <motion.div 
+    <motion.div
       className="space-y-8"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4 }}
     >
       {/* Stats Header */}
-      <motion.div 
+      <motion.div
         className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4"
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
@@ -372,6 +504,11 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
             <CreditCard className="h-4 w-4 text-primary" />
             <span className="text-muted-foreground">Total Accounts:</span>
             <span className="font-semibold text-foreground">{totalAccounts}</span>
+            <span className="text-xs text-muted-foreground border-l border-border/60 pl-2.5 ml-1 flex items-center gap-2">
+              <span className="text-emerald-500 font-medium">{verifiedTotalCount} Verified</span>
+              <span>•</span>
+              <span className="text-amber-500 font-medium">{nonVerifiedTotalCount} Non-Verified</span>
+            </span>
           </div>
           <div className="flex items-center gap-2 bg-muted/50 px-3 py-1.5 rounded-full">
             <Wallet className="h-4 w-4 text-primary" />
@@ -394,195 +531,425 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
               <X className="h-4 w-4" />
             </Button>
           </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={handleSubmit}>
-            <div className="space-y-2">
-              <Label htmlFor="username">Username</Label>
-              <Input
-                id="username"
-                value={form.username}
-                onChange={handleChange("username")}
-                placeholder="IRCTC username"
-                required
-                disabled={isSubmitting}
-              />
-            </div>
+          <CardContent>
+            <form className="space-y-4" onSubmit={handleSubmit}>
+              <div className="space-y-2">
+                <Label htmlFor="username">Username</Label>
+                <Input
+                  id="username"
+                  value={form.username}
+                  onChange={handleChange("username")}
+                  placeholder="IRCTC username"
+                  required
+                  disabled={isSubmitting}
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                value={form.password}
-                onChange={handleChange("password")}
-                placeholder="IRCTC password"
-                required
-                disabled={isSubmitting}
-              />
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="password">Password</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={form.password}
+                  onChange={handleChange("password")}
+                  placeholder="IRCTC password"
+                  required
+                  disabled={isSubmitting}
+                />
+              </div>
 
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="isVerified"
-                checked={form.isVerified}
-                onCheckedChange={(checked) => setForm(prev => ({ ...prev, isVerified: checked === true }))}
-                disabled={isSubmitting}
-              />
-              <Label htmlFor="isVerified" className="cursor-pointer">Verified</Label>
-            </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="isVerified"
+                  checked={form.isVerified}
+                  onCheckedChange={(checked) => setForm(prev => ({ ...prev, isVerified: checked === true }))}
+                  disabled={isSubmitting}
+                />
+                <Label htmlFor="isVerified" className="cursor-pointer">Verified</Label>
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="walletAmount">Wallet Amount</Label>
-              <Input
-                id="walletAmount"
-                type="number"
-                value={form.walletAmount}
-                onChange={handleChange("walletAmount")}
-                placeholder="e.g. 1500"
-                min={0}
-                step="0.01"
-                disabled={isSubmitting}
-              />
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="walletAmount">Wallet Amount</Label>
+                <Input
+                  id="walletAmount"
+                  type="number"
+                  value={form.walletAmount}
+                  onChange={handleChange("walletAmount")}
+                  placeholder="e.g. 1500"
+                  min={0}
+                  step="0.01"
+                  disabled={isSubmitting}
+                />
+              </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="lastBookedDate">Last Booked Date</Label>
-              <Input
-                id="lastBookedDate"
-                type="date"
-                value={form.lastBookedDate}
-                onChange={handleChange("lastBookedDate")}
-                disabled={isSubmitting}
-              />
-            </div>
+              <div className="space-y-2">
+                <Label htmlFor="lastBookedDate">Last Booked Date</Label>
+                <Input
+                  id="lastBookedDate"
+                  type="date"
+                  value={form.lastBookedDate}
+                  onChange={handleChange("lastBookedDate")}
+                  disabled={isSubmitting}
+                />
+              </div>
 
-            <Button type="submit" className="w-full" disabled={isSubmitting}>
-              {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {isSubmitting ? "Adding..." : "Add Account"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+              <Button type="submit" className="w-full" disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isSubmitting ? "Adding..." : "Add Account"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
       )}
 
-      {/* Account Cards Grid */}
-      <motion.div 
-        className="grid gap-4 md:grid-cols-2 lg:grid-cols-3"
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        transition={{ delay: 0.2 }}
-      >
-        <AnimatePresence>
-        {filteredAccounts.map((account, index) => {
-          const stats = accountStats.find(s => s.accountId === account.id);
-          return (
-          <motion.div
-            key={account.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            transition={{ delay: index * 0.05 }}
-          >
-          <Card className="group hover:shadow-lg transition-shadow duration-300">
-            <CardHeader className="pb-3">
-              <div className="flex justify-between items-start">
-                <CardTitle className="text-base flex items-center gap-1.5">
-                  {account.username}
-                  {account.isVerified && (
-                    <CheckCircle2
-                      className="h-4 w-4 fill-green-600 text-white"
-                      aria-label="Verified"
-                    />
+      {/* Account Collapsible Groups */}
+      <div className="space-y-6">
+        {/* Verified Accounts Group */}
+        <div className="rounded-xl border border-border/60 bg-card/40 overflow-hidden shadow-sm transition-all duration-200 hover:border-border">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-muted/30">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => setIsVerifiedOpen(prev => !prev)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setIsVerifiedOpen(prev => !prev);
+                }
+              }}
+              className="flex items-center justify-between flex-1 cursor-pointer select-none group/title focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg p-1 -m-1"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">
+                  <ShieldCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-foreground flex items-center gap-2 text-base group-hover/title:text-primary transition-colors">
+                    Verified Accounts
+                    <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
+                      {verifiedAccounts.length}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Verified IRCTC Accounts
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium sm:ml-4">
+                <span className="hidden md:inline">{isVerifiedOpen ? "Collapse" : "Expand"}</span>
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 transition-transform duration-200",
+                    isVerifiedOpen ? "rotate-180" : ""
                   )}
-                </CardTitle>
-                <div className="flex gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-muted-foreground hover:text-primary"
-                    onClick={() => handleEditClick(account)}
-                    title="Edit Account"
-                  >
-                    <Edit3 className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    onClick={() => handleDeleteClick(account.id)}
-                    title="Delete Account"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-border/40 shrink-0">
+              <AccountSortSelect value={verifiedSort} onChange={setVerifiedSort} />
+            </div>
+          </div>
+
+          <AnimatePresence initial={false}>
+            {isVerifiedOpen && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.25, ease: "easeInOut" }}
+                className="overflow-hidden"
+              >
+                <div className="p-4 border-t border-border/40">
+                  {verifiedAccounts.length > 0 ? (
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {verifiedAccounts.map((account, index) => {
+                        const stats = accountStats.find(s => s.accountId === account.id);
+                        return (
+                          <motion.div
+                            key={account.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ delay: index * 0.04 }}
+                          >
+                            <Card className="group hover:shadow-lg transition-shadow duration-300">
+                              <CardHeader className="pb-3">
+                                <div className="flex justify-between items-start">
+                                  <CardTitle className="text-base flex items-center gap-1.5">
+                                    {account.username}
+                                    {account.isVerified && (
+                                      <CheckCircle2
+                                        className="h-4 w-4 fill-green-600 text-white"
+                                        aria-label="Verified"
+                                      />
+                                    )}
+                                  </CardTitle>
+                                  <div className="flex gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                      onClick={() => handleEditClick(account)}
+                                      title="Edit Account"
+                                    >
+                                      <Edit3 className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-destructive hover:text-destructive"
+                                      onClick={() => handleDeleteClick(account.id)}
+                                      title="Delete Account"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </CardHeader>
+                              <CardContent className="space-y-2 text-sm">
+                                <div className="flex items-center gap-2">
+                                  <span style={labelHighlightStyle}>Password: </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-xs">
+                                      {visiblePasswords.has(account.id)
+                                        ? account.password
+                                        : maskPassword(account.password)
+                                      }
+                                    </span>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={() => togglePasswordVisibility(account.id)}
+                                      title={visiblePasswords.has(account.id) ? "Hide password" : "Show password"}
+                                    >
+                                      {visiblePasswords.has(account.id)
+                                        ? <EyeOff className="h-3 w-3" />
+                                        : <Eye className="h-3 w-3" />
+                                      }
+                                    </Button>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span style={labelHighlightStyle}>Wallet: </span>
+                                  <span>₹{account.walletAmount.toFixed(2)}</span>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 text-primary hover:text-primary px-2 text-xs"
+                                    onClick={() => {
+                                      setAccountToTopUp(account);
+                                      setTopUpAmount("");
+                                    }}
+                                    title="Add Wallet Amount"
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" /> Add
+                                  </Button>
+                                </div>
+                                <div>
+                                  <span style={labelHighlightStyle}>Booked ({new Date().toLocaleString('default', { month: 'long' })}): </span>
+                                  {stats?.bookingCount ?? 0}
+                                </div>
+                                <div>
+                                  <span style={labelHighlightStyle}>Booked ({new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleString('default', { month: 'long' })}): </span>
+                                  {stats?.previousMonthBookingCount ?? 0}
+                                </div>
+                                <div>
+                                  <span style={labelHighlightStyle}>Last Booked: </span>
+                                  {account.lastBookedDate || "—"}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground py-4 text-center">
+                      {searchQuery.trim()
+                        ? `No verified accounts match "${searchQuery}".`
+                        : "No verified accounts found."}
+                    </p>
+                  )}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Non-Verified Accounts Group */}
+        <div className="rounded-xl border border-border/60 bg-card/40 overflow-hidden shadow-sm transition-all duration-200 hover:border-border">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-muted/30">
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={() => setIsNonVerifiedOpen(prev => !prev)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.preventDefault();
+                  setIsNonVerifiedOpen(prev => !prev);
+                }
+              }}
+              className="flex items-center justify-between flex-1 cursor-pointer select-none group/title focus:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg p-1 -m-1"
+            >
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                  <ShieldAlert className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-foreground flex items-center gap-2 text-base group-hover/title:text-primary transition-colors">
+                    Non-Verified Accounts
+                    <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/20">
+                      {nonVerifiedAccounts.length}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-muted-foreground">
+                    Accounts pending verification
+                  </p>
                 </div>
               </div>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div className="flex items-center gap-2">
-                <span style={labelHighlightStyle}>Password: </span>
-                <div className="flex items-center gap-2">
-                  <span className="font-mono text-xs">
-                    {visiblePasswords.has(account.id) 
-                      ? account.password 
-                      : maskPassword(account.password)
-                    }
-                  </span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => togglePasswordVisibility(account.id)}
-                    title={visiblePasswords.has(account.id) ? "Hide password" : "Show password"}
-                  >
-                    {visiblePasswords.has(account.id) 
-                      ? <EyeOff className="h-3 w-3" /> 
-                      : <Eye className="h-3 w-3" />
-                    }
-                  </Button>
+              <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium sm:ml-4">
+                <span className="hidden md:inline">{isNonVerifiedOpen ? "Collapse" : "Expand"}</span>
+                <ChevronDown
+                  className={cn(
+                    "h-4 w-4 transition-transform duration-200",
+                    isNonVerifiedOpen ? "rotate-180" : ""
+                  )}
+                />
+              </div>
+            </div>
+            <div className="flex items-center justify-end border-t sm:border-t-0 pt-2 sm:pt-0 border-border/40 shrink-0">
+              <AccountSortSelect value={nonVerifiedSort} onChange={setNonVerifiedSort} />
+            </div>
+          </div>
+
+          <AnimatePresence initial={false}>
+            {isNonVerifiedOpen && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.25, ease: "easeInOut" }}
+                className="overflow-hidden"
+              >
+                <div className="p-4 border-t border-border/40">
+                  {nonVerifiedAccounts.length > 0 ? (
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {nonVerifiedAccounts.map((account, index) => {
+                        const stats = accountStats.find(s => s.accountId === account.id);
+                        return (
+                          <motion.div
+                            key={account.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.95 }}
+                            transition={{ delay: index * 0.04 }}
+                          >
+                            <Card className="group hover:shadow-lg transition-shadow duration-300">
+                              <CardHeader className="pb-3">
+                                <div className="flex justify-between items-start">
+                                  <CardTitle className="text-base flex items-center gap-1.5">
+                                    {account.username}
+                                    {account.isVerified && (
+                                      <CheckCircle2
+                                        className="h-4 w-4 fill-green-600 text-white"
+                                        aria-label="Verified"
+                                      />
+                                    )}
+                                  </CardTitle>
+                                  <div className="flex gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-muted-foreground hover:text-primary"
+                                      onClick={() => handleEditClick(account)}
+                                      title="Edit Account"
+                                    >
+                                      <Edit3 className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-destructive hover:text-destructive"
+                                      onClick={() => handleDeleteClick(account.id)}
+                                      title="Delete Account"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              </CardHeader>
+                              <CardContent className="space-y-2 text-sm">
+                                <div className="flex items-center gap-2">
+                                  <span style={labelHighlightStyle}>Password: </span>
+                                  <div className="flex items-center gap-2">
+                                    <span className="font-mono text-xs">
+                                      {visiblePasswords.has(account.id)
+                                        ? account.password
+                                        : maskPassword(account.password)
+                                      }
+                                    </span>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6"
+                                      onClick={() => togglePasswordVisibility(account.id)}
+                                      title={visiblePasswords.has(account.id) ? "Hide password" : "Show password"}
+                                    >
+                                      {visiblePasswords.has(account.id)
+                                        ? <EyeOff className="h-3 w-3" />
+                                        : <Eye className="h-3 w-3" />
+                                      }
+                                    </Button>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  <span style={labelHighlightStyle}>Wallet: </span>
+                                  <span>₹{account.walletAmount.toFixed(2)}</span>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 text-primary hover:text-primary px-2 text-xs"
+                                    onClick={() => {
+                                      setAccountToTopUp(account);
+                                      setTopUpAmount("");
+                                    }}
+                                    title="Add Wallet Amount"
+                                  >
+                                    <Plus className="h-3 w-3 mr-1" /> Add
+                                  </Button>
+                                </div>
+                                <div>
+                                  <span style={labelHighlightStyle}>Booked ({new Date().toLocaleString('default', { month: 'long' })}): </span>
+                                  {stats?.bookingCount ?? 0}
+                                </div>
+                                <div>
+                                  <span style={labelHighlightStyle}>Booked ({new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleString('default', { month: 'long' })}): </span>
+                                  {stats?.previousMonthBookingCount ?? 0}
+                                </div>
+                                <div>
+                                  <span style={labelHighlightStyle}>Last Booked: </span>
+                                  {account.lastBookedDate || "—"}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          </motion.div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground py-4 text-center">
+                      {searchQuery.trim()
+                        ? `No non-verified accounts match "${searchQuery}".`
+                        : "No non-verified accounts found."}
+                    </p>
+                  )}
                 </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <span style={labelHighlightStyle}>Wallet: </span>
-                <span>₹{account.walletAmount.toFixed(2)}</span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-6 text-primary hover:text-primary px-2 text-xs"
-                  onClick={() => {
-                    setAccountToTopUp(account);
-                    setTopUpAmount("");
-                  }}
-                  title="Add Wallet Amount"
-                >
-                  <Plus className="h-3 w-3 mr-1" /> Add
-                </Button>
-              </div>
-              <div>
-                <span style={labelHighlightStyle}>Booked ({new Date().toLocaleString('default', { month: 'long' })}): </span>
-                {stats?.bookingCount ?? 0}
-              </div>
-              <div>
-                <span style={labelHighlightStyle}>Booked ({new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleString('default', { month: 'long' })}): </span>
-                {stats?.previousMonthBookingCount ?? 0}
-              </div>
-              <div>
-                <span style={labelHighlightStyle}>Last Booked: </span>
-                {account.lastBookedDate || "—"}
-              </div>
-            </CardContent>
-          </Card>
-          </motion.div>
-          );
-        })}
-        {filteredAccounts.length === 0 && (
-          <p className="text-sm text-muted-foreground col-span-full">
-            {searchQuery.trim()
-              ? `No accounts found matching "${searchQuery}".`
-              : "No accounts added yet. Click 'Add Account' to add your first IRCTC account."}
-          </p>
-        )}
-        </AnimatePresence>
-      </motion.div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </div>
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
