@@ -626,6 +626,51 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
     return classMap[classType] || classType;
   };
 
+  // Color styling for classnames (e.g. 3A in purple, 2A in sky blue, SL in green, 2S in lightgreen)
+  const getClassColorClass = (classType: string): string => {
+    if (classType.startsWith('3A')) return 'text-purple-600 dark:text-purple-400';
+    if (classType.startsWith('2A')) return 'text-sky-600 dark:text-sky-400';
+    if (classType === 'SL') return 'text-emerald-600 dark:text-emerald-400';
+    if (classType === '2S') return 'text-lime-600 dark:text-lime-400';
+    if (classType.startsWith('1A')) return 'text-rose-600 dark:text-rose-400';
+    if (classType.startsWith('3E')) return 'text-teal-600 dark:text-teal-400';
+    if (classType.startsWith('EC')) return 'text-orange-600 dark:text-orange-400';
+    if (classType.startsWith('CC')) return 'text-cyan-600 dark:text-cyan-400';
+    if (classType === 'UR') return 'text-slate-600 dark:text-slate-400';
+    return 'text-foreground';
+  };
+
+  // Color styling for booking type (G in amber, T in blue/purple for AC, T in green for SL)
+  const getTypeColorClass = (bookingType: string, classType: string): string => {
+    const isGeneral = ['General', 'Regular'].includes(String(bookingType));
+    if (isGeneral) {
+      return 'text-amber-700 dark:text-amber-400';
+    }
+
+    const isSL = ['SL', 'UR', '2S'].includes(classType);
+    if (isSL) {
+      return 'text-emerald-600 dark:text-emerald-400';
+    }
+
+    // Tatkal AC
+    return 'text-primary dark:text-indigo-400';
+  };
+
+  // Container border and background for the class badge
+  const getBadgeContainerClasses = (bookingType: string, classType: string): string => {
+    const isGeneral = ['General', 'Regular'].includes(String(bookingType));
+    if (isGeneral) {
+      return 'border-amber-500/30 bg-amber-500/10 dark:bg-amber-950/20';
+    }
+
+    const isSL = ['SL', 'UR', '2S'].includes(classType);
+    if (isSL) {
+      return 'border-emerald-500/30 bg-emerald-500/10 dark:bg-emerald-950/20';
+    }
+
+    return 'border-primary/30 bg-primary/10 dark:bg-primary/20';
+  };
+
   // Determine card background tint based on booking category
   const getBookingCardBackgroundClasses = (bookingType: string, classType: string): string => {
     const isGeneral = ['General', 'Regular'].includes(String(bookingType));
@@ -644,7 +689,11 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
   };
 
   const compactClass = getCompactClassDisplay(booking.classType);
-  const displayClass = `${booking.bookingType === 'Tatkal' ? 'T' : 'G'}-${compactClass}`;
+  const typeChar = ['General', 'Regular'].includes(String(booking.bookingType)) ? 'G' : 'T';
+  const displayClass = `${typeChar}-${compactClass}`;
+  const typeColorClass = getTypeColorClass(booking.bookingType, booking.classType);
+  const classColorClass = getClassColorClass(booking.classType);
+  const badgeContainerClasses = getBadgeContainerClasses(booking.bookingType, booking.classType);
 
   // Background tint based on booking type and class for quick visual identification
   const bookingCardBg = getBookingCardBackgroundClasses(booking.bookingType, booking.classType);
@@ -756,14 +805,14 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <span
                     className={cn(
-                      "text-base sm:text-lg font-bold px-2 py-0.5 rounded-md leading-none border",
-                      booking.bookingType === 'Tatkal'
-                        ? "text-primary border-primary/30 bg-primary/10"
-                        : "text-amber-700 dark:text-amber-400 border-amber-500/30 bg-amber-500/10"
+                      "text-base sm:text-lg font-bold px-2 py-0.5 rounded-md leading-none border inline-flex items-center select-none",
+                      badgeContainerClasses
                     )}
                     title={`${booking.bookingType} - ${booking.classType}`}
                   >
-                    {displayClass}
+                    <span className={typeColorClass}>{typeChar}</span>
+                    <span className="text-muted-foreground/60 mx-0.5 font-medium">-</span>
+                    <span className={classColorClass}>{compactClass}</span>
                   </span>
                   {booking.classType.includes("(") && (
                     <span className="text-[10px] text-muted-foreground">

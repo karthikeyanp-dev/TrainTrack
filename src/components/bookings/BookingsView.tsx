@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import type { Booking, TrainClass } from '@/types/booking';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { AlertCircle, Search, Loader2, CalendarDays, CheckCircle2, Clock, Receipt, Layers, X } from "lucide-react";
+import { AlertCircle, Search, Loader2, CalendarDays, CheckCircle2, Clock, Receipt, Layers, X, Filter } from "lucide-react";
 import { DateGroupHeading } from "@/components/bookings/DateGroupHeading";
 import { BookingList } from "@/components/bookings/BookingList";
 import { BookingGroupCard } from "@/components/bookings/BookingGroupCard";
@@ -14,6 +14,13 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { createBookingGroup } from "@/lib/firestoreClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRouter } from "next/navigation";
@@ -57,6 +64,72 @@ const isRefundPending = (booking: Booking): boolean =>
 // Payment filter types
 export type PaymentFilterType = 'all' | 'payment-pending' | 'settlement-pending';
 
+// Search filter types
+export type BookingSearchFilter = 'all' | 'customer' | 'passenger' | 'others';
+
+const matchesBooking = (booking: Booking, query: string, filter: BookingSearchFilter): boolean => {
+  if (!query) return true;
+  const q = query.toLowerCase();
+
+  const matchesCustomer = Boolean(
+    booking.userName && booking.userName.toLowerCase().includes(q)
+  );
+
+  const matchesPassenger = Boolean(
+    booking.passengers &&
+    booking.passengers.some((p) => p.name && p.name.toLowerCase().includes(q))
+  );
+
+  const matchesOthers = Boolean(
+    (booking.source && booking.source.toLowerCase().includes(q)) ||
+    (booking.destination && booking.destination.toLowerCase().includes(q)) ||
+    (booking.classType && booking.classType.toLowerCase().includes(q)) ||
+    (booking.bookingType && booking.bookingType.toLowerCase().includes(q)) ||
+    (booking.trainPreference && booking.trainPreference.toLowerCase().includes(q)) ||
+    ((booking as any).trainName && String((booking as any).trainName).toLowerCase().includes(q)) ||
+    (booking.remarks && booking.remarks.toLowerCase().includes(q)) ||
+    (booking.status && booking.status.toLowerCase().includes(q)) ||
+    (booking.statusReason && booking.statusReason.toLowerCase().includes(q)) ||
+    (booking.statusHandler && booking.statusHandler.toLowerCase().includes(q)) ||
+    (booking.journeyDate && booking.journeyDate.toLowerCase().includes(q)) ||
+    (booking.bookingDate && booking.bookingDate.toLowerCase().includes(q)) ||
+    ((booking as any).pnr && String((booking as any).pnr).toLowerCase().includes(q)) ||
+    ((booking as any).bookingTransactionId && String((booking as any).bookingTransactionId).toLowerCase().includes(q)) ||
+    (booking.preparedAccounts &&
+      booking.preparedAccounts.some(
+        (acc) =>
+          (acc.username && acc.username.toLowerCase().includes(q)) ||
+          (acc.handlingBy && acc.handlingBy.toLowerCase().includes(q))
+      ))
+  );
+
+  switch (filter) {
+    case 'customer':
+      return matchesCustomer;
+    case 'passenger':
+      return matchesPassenger;
+    case 'others':
+      return matchesOthers;
+    case 'all':
+    default:
+      return matchesCustomer || matchesPassenger || matchesOthers;
+  }
+};
+
+const getSearchPlaceholder = (filter: BookingSearchFilter): string => {
+  switch (filter) {
+    case 'customer':
+      return 'Search by customer (requested by)...';
+    case 'passenger':
+      return 'Search by passenger name...';
+    case 'others':
+      return 'Search by station, train, class, remarks...';
+    case 'all':
+    default:
+      return 'Search bookings...';
+  }
+};
+
 interface BookingsViewProps {
   allBookings: Booking[];
   pendingBookings: Booking[];
@@ -81,221 +154,207 @@ const groupBookingsByDate = (bookings: Booking[], dateKey: 'bookingDate' | 'jour
 const SL_CLASSES: TrainClass[] = ["SL", "UR", "2S"];
 
 export function BookingsView({ allBookings: rawAllBookings, pendingBookings: rawPendingBookings, allBookingDates }: BookingsViewProps) {
-    const { toast } = useToast();
-    const router = useRouter();
-    const [searchQuery, setSearchQuery] = useState('');
-    const [selectionMode, setSelectionMode] = useState(false);
-    const [selectedBookingIds, setSelectedBookingIds] = useState<Set<string>>(new Set());
-    const [isGrouping, setIsGrouping] = useState(false);
-    const [paymentFilter, setPaymentFilter] = useState<PaymentFilterType>('all');
-    const [activeTab, setActiveTab] = useState('pending');
-    // Today's date key, refreshed so an open page rolls over past midnight
-    const [todayKey, setTodayKey] = useState(() => getLocalDateKey());
+  const { toast } = useToast();
+  const router = useRouter();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchFilter, setSearchFilter] = useState<BookingSearchFilter>('all');
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedBookingIds, setSelectedBookingIds] = useState<Set<string>>(new Set());
+  const [isGrouping, setIsGrouping] = useState(false);
+  const [paymentFilter, setPaymentFilter] = useState<PaymentFilterType>('all');
+  const [activeTab, setActiveTab] = useState('pending');
+  // Today's date key, refreshed so an open page rolls over past midnight
+  const [todayKey, setTodayKey] = useState(() => getLocalDateKey());
 
-    useEffect(() => {
-        const interval = setInterval(() => {
-            // Only triggers a re-render on an actual day change
-            setTodayKey(prev => {
-                const next = getLocalDateKey();
-                return prev === next ? prev : next;
-            });
-        }, 60 * 1000);
-        return () => clearInterval(interval);
-    }, []);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Only triggers a re-render on an actual day change
+      setTodayKey(prev => {
+        const next = getLocalDateKey();
+        return prev === next ? prev : next;
+      });
+    }, 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
 
-    // Filter bookings by local search query
-    const { allBookings, pendingBookings } = useMemo(() => {
-        if (!searchQuery.trim()) {
-            return { allBookings: rawAllBookings, pendingBookings: rawPendingBookings };
-        }
-        const q = searchQuery.trim().toLowerCase();
-        const filteredPending = rawPendingBookings.filter(booking => {
-            const passengerMatch = booking.passengers.some(p => p.name.toLowerCase().includes(q));
-            return passengerMatch ||
-                booking.userName.toLowerCase().includes(q) ||
-                booking.source.toLowerCase().includes(q) ||
-                booking.destination.toLowerCase().includes(q);
-        });
-        const filteredAll = rawAllBookings.filter(booking => {
-            const passengerMatch = booking.passengers.some(p => p.name.toLowerCase().includes(q));
-            return (
-                passengerMatch ||
-                booking.userName.toLowerCase().includes(q) ||
-                booking.source.toLowerCase().includes(q) ||
-                booking.destination.toLowerCase().includes(q) ||
-                booking.classType.toLowerCase().includes(q) ||
-                (booking.trainPreference && booking.trainPreference.toLowerCase().includes(q)) ||
-                (booking.remarks && booking.remarks.toLowerCase().includes(q))
-            );
-        });
-        return { allBookings: filteredAll, pendingBookings: filteredPending };
-    }, [rawAllBookings, rawPendingBookings, searchQuery]);
-
-    const handleToggleSelection = (id: string) => {
-        const newSet = new Set(selectedBookingIds);
-        if (newSet.has(id)) {
-            newSet.delete(id);
-        } else {
-            newSet.add(id);
-        }
-        setSelectedBookingIds(newSet);
-    };
-
-    const handleGroupBookings = async () => {
-        if (selectedBookingIds.size < 2) {
-            toast({ title: "Error", description: "Select at least 2 bookings to group.", variant: "destructive" });
-            return;
-        }
-
-        setIsGrouping(true);
-        try {
-            const result = await createBookingGroup(Array.from(selectedBookingIds));
-            if (result.success) {
-                toast({ title: "Group Created", description: `Successfully grouped ${selectedBookingIds.size} bookings.` });
-                setSelectionMode(false);
-                setSelectedBookingIds(new Set());
-                // Invalidate query to refresh data
-                // router.refresh() might not be enough if using client-side fetching hooks
-                // Assuming useBookings hook handles real-time updates or we need to trigger a refetch
-                // Since this component receives props, the parent page might need to refetch
-                router.refresh(); 
-            } else {
-                toast({ title: "Error", description: result.error, variant: "destructive" });
-            }
-        } catch (error) {
-            toast({ title: "Error", description: "An unexpected error occurred.", variant: "destructive" });
-        } finally {
-            setIsGrouping(false);
-        }
-    };
-
-    const [page, setPage] = useState(1);
-    const [isLoading, setIsLoading] = useState<boolean>(false);
-
-    const { ref, inView } = useInView({
-        threshold: 0,
-        triggerOnce: false,
-    });
-    
-    const visibleDates = useMemo(() => {
-        return allBookingDates.slice(0, page * DATES_PER_PAGE);
-    }, [allBookingDates, page]);
-
-    const hasMore = visibleDates.length < allBookingDates.length;
-
-    const loadMoreDates = () => {
-        if (isLoading || !hasMore || searchQuery) return;
-        setIsLoading(true);
-        // Simulate network latency for a better UX
-        setTimeout(() => {
-            setPage(prevPage => prevPage + 1);
-            setIsLoading(false);
-        }, 500); 
-    };
-
-    useEffect(() => {
-        if (inView && !isLoading) {
-            loadMoreDates();
-        }
-    }, [inView, isLoading]);
-    
-    // When a search query is cleared, reset pagination
-    useEffect(() => {
-        if (!searchQuery) {
-            setPage(1);
-        }
-    }, [searchQuery]);
-
-    // Reset payment filter when search query changes
-    useEffect(() => {
-        if (searchQuery) {
-            setPaymentFilter('all');
-        }
-    }, [searchQuery]);
-
-
-    const hasRefunds = useMemo(
-        () => rawAllBookings.some(isRefundPending),
-        [rawAllBookings]
+  // Filter bookings by local search query and filter category
+  const { allBookings, pendingBookings } = useMemo(() => {
+    const trimmed = searchQuery.trim();
+    if (!trimmed) {
+      return { allBookings: rawAllBookings, pendingBookings: rawPendingBookings };
+    }
+    const filteredPending = rawPendingBookings.filter(booking =>
+      matchesBooking(booking, trimmed, searchFilter)
     );
+    const filteredAll = rawAllBookings.filter(booking =>
+      matchesBooking(booking, trimmed, searchFilter)
+    );
+    return { allBookings: filteredAll, pendingBookings: filteredPending };
+  }, [rawAllBookings, rawPendingBookings, searchQuery, searchFilter]);
 
-    useEffect(() => {
-        if (activeTab === 'refunds' && !hasRefunds) {
-            setActiveTab('pending');
+  const handleToggleSelection = (id: string) => {
+    const newSet = new Set(selectedBookingIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedBookingIds(newSet);
+  };
+
+  const handleGroupBookings = async () => {
+    if (selectedBookingIds.size < 2) {
+      toast({ title: "Error", description: "Select at least 2 bookings to group.", variant: "destructive" });
+      return;
+    }
+
+    setIsGrouping(true);
+    try {
+      const result = await createBookingGroup(Array.from(selectedBookingIds));
+      if (result.success) {
+        toast({ title: "Group Created", description: `Successfully grouped ${selectedBookingIds.size} bookings.` });
+        setSelectionMode(false);
+        setSelectedBookingIds(new Set());
+        // Invalidate query to refresh data
+        // router.refresh() might not be enough if using client-side fetching hooks
+        // Assuming useBookings hook handles real-time updates or we need to trigger a refetch
+        // Since this component receives props, the parent page might need to refetch
+        router.refresh();
+      } else {
+        toast({ title: "Error", description: result.error, variant: "destructive" });
+      }
+    } catch (error) {
+      toast({ title: "Error", description: "An unexpected error occurred.", variant: "destructive" });
+    } finally {
+      setIsGrouping(false);
+    }
+  };
+
+  const [page, setPage] = useState(1);
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+
+  const { ref, inView } = useInView({
+    threshold: 0,
+    triggerOnce: false,
+  });
+
+  const visibleDates = useMemo(() => {
+    return allBookingDates.slice(0, page * DATES_PER_PAGE);
+  }, [allBookingDates, page]);
+
+  const hasMore = visibleDates.length < allBookingDates.length;
+
+  const loadMoreDates = () => {
+    if (isLoading || !hasMore || searchQuery) return;
+    setIsLoading(true);
+    // Simulate network latency for a better UX
+    setTimeout(() => {
+      setPage(prevPage => prevPage + 1);
+      setIsLoading(false);
+    }, 500);
+  };
+
+  useEffect(() => {
+    if (inView && !isLoading) {
+      loadMoreDates();
+    }
+  }, [inView, isLoading]);
+
+  // When search query or filter changes, reset pagination
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, searchFilter]);
+
+  // Reset payment filter when search query changes
+  useEffect(() => {
+    if (searchQuery) {
+      setPaymentFilter('all');
+    }
+  }, [searchQuery]);
+
+
+  const hasRefunds = useMemo(
+    () => rawAllBookings.some(isRefundPending),
+    [rawAllBookings]
+  );
+
+  useEffect(() => {
+    if (activeTab === 'refunds' && !hasRefunds) {
+      setActiveTab('pending');
+    }
+  }, [activeTab, hasRefunds]);
+
+  const { pendingBookingsByDate, pendingDates, completedBookingsByDate, completedDates, paymentPendingCount, settlementPendingCount, upcomingBookingsByDate, upcomingDates } = useMemo(() => {
+    const sourceBookings = allBookings;
+    const today = todayKey;
+
+    // --- Pending Bookings Logic (now uses pre-fetched pendingBookings prop) ---
+    const pendingSource = searchQuery ? pendingBookings.filter(b => b.status === 'Requested') : pendingBookings;
+    const pendingBookingsByDate = groupBookingsByDate(pendingSource, 'bookingDate');
+    const pendingDates = Object.keys(pendingBookingsByDate).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
+
+
+    // --- Completed Bookings Logic ---
+    let completedBookingsToDisplay = searchQuery
+      ? sourceBookings.filter(b => b.status !== 'Requested')
+      : sourceBookings.filter(b => {
+        const visibleDateSet = new Set(visibleDates);
+        // Completed bookings exclude Requested
+        // Exclude Booking Failed (Paid) and CNF & Cancelled IF they don't have refundDetails (those go to Refunds tab)
+        if (isRefundPending(b)) return false;
+
+        return b.status !== 'Requested' && visibleDateSet.has(b.bookingDate);
+      });
+
+    // --- Payment Tracking Filter ---
+    // Count pending payments for eligible bookings (created/updated after feature start date)
+    const eligibleForTracking = completedBookingsToDisplay.filter(b => b.status === 'Booked' && isEligibleForPaymentTracking(b));
+    const paymentPendingCount = eligibleForTracking.filter(b => !b.paymentReceived).length;
+    const settlementPendingCount = eligibleForTracking.filter(b => !b.amountSettled).length;
+
+    // Apply payment filter if active
+    if (paymentFilter !== 'all') {
+      completedBookingsToDisplay = completedBookingsToDisplay.filter(b => {
+        // Only "Booked" status with payment tracking eligibility
+        if (b.status !== 'Booked' || !isEligibleForPaymentTracking(b)) {
+          return false; // Hide non-eligible bookings when filter is active
         }
-    }, [activeTab, hasRefunds]);
 
-    const { pendingBookingsByDate, pendingDates, completedBookingsByDate, completedDates, paymentPendingCount, settlementPendingCount, upcomingBookingsByDate, upcomingDates } = useMemo(() => {
-        const sourceBookings = allBookings;
-        const today = todayKey;
-
-        // --- Pending Bookings Logic (now uses pre-fetched pendingBookings prop) ---
-        const pendingSource = searchQuery ? pendingBookings.filter(b => b.status === 'Requested') : pendingBookings;
-        const pendingBookingsByDate = groupBookingsByDate(pendingSource, 'bookingDate');
-        const pendingDates = Object.keys(pendingBookingsByDate).sort((a, b) => new Date(a).getTime() - new Date(b).getTime());
-
-
-        // --- Completed Bookings Logic ---
-        let completedBookingsToDisplay = searchQuery 
-            ? sourceBookings.filter(b => b.status !== 'Requested')
-            : sourceBookings.filter(b => {
-                const visibleDateSet = new Set(visibleDates);
-                // Completed bookings exclude Requested
-                // Exclude Booking Failed (Paid) and CNF & Cancelled IF they don't have refundDetails (those go to Refunds tab)
-                if (isRefundPending(b)) return false;
-                
-                return b.status !== 'Requested' && visibleDateSet.has(b.bookingDate);
-            });
-        
-        // --- Payment Tracking Filter ---
-        // Count pending payments for eligible bookings (created/updated after feature start date)
-        const eligibleForTracking = completedBookingsToDisplay.filter(b => b.status === 'Booked' && isEligibleForPaymentTracking(b));
-        const paymentPendingCount = eligibleForTracking.filter(b => !b.paymentReceived).length;
-        const settlementPendingCount = eligibleForTracking.filter(b => !b.amountSettled).length;
-        
-        // Apply payment filter if active
-        if (paymentFilter !== 'all') {
-            completedBookingsToDisplay = completedBookingsToDisplay.filter(b => {
-                // Only "Booked" status with payment tracking eligibility
-                if (b.status !== 'Booked' || !isEligibleForPaymentTracking(b)) {
-                    return false; // Hide non-eligible bookings when filter is active
-                }
-                
-                if (paymentFilter === 'payment-pending') {
-                    return !b.paymentReceived;
-                }
-                if (paymentFilter === 'settlement-pending') {
-                    return !b.amountSettled;
-                }
-                return true;
-            });
+        if (paymentFilter === 'payment-pending') {
+          return !b.paymentReceived;
         }
-            
-        const completedBookingsByDate = groupBookingsByDate(
-             completedBookingsToDisplay.sort((a, b) => new Date(b.journeyDate).getTime() - new Date(a.journeyDate).getTime()),
-             'bookingDate'
-        );
-        const completedDates = Object.keys(completedBookingsByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
+        if (paymentFilter === 'settlement-pending') {
+          return !b.amountSettled;
+        }
+        return true;
+      });
+    }
 
-        // --- Upcoming Journeys: booked tickets with journey date today or later ---
-        const upcomingBookingsToDisplay = sourceBookings.filter(b => {
-            if (b.status !== 'Booked') return false;
-            return toDateKey(b.journeyDate) >= today;
-        });
+    const completedBookingsByDate = groupBookingsByDate(
+      completedBookingsToDisplay.sort((a, b) => new Date(b.journeyDate).getTime() - new Date(a.journeyDate).getTime()),
+      'bookingDate'
+    );
+    const completedDates = Object.keys(completedBookingsByDate).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
-        const upcomingBookingsByDate = upcomingBookingsToDisplay.reduce((acc, booking) => {
-            const key = toDateKey(booking.journeyDate);
-            if (!acc[key]) {
-                acc[key] = [];
-            }
-            acc[key].push(booking);
-            return acc;
-        }, {} as Record<string, Booking[]>);
+    // --- Upcoming Journeys: booked tickets with journey date today or later ---
+    const upcomingBookingsToDisplay = sourceBookings.filter(b => {
+      if (b.status !== 'Booked') return false;
+      return toDateKey(b.journeyDate) >= today;
+    });
 
-        const upcomingDates = Object.keys(upcomingBookingsByDate).sort((a, b) => a.localeCompare(b));
+    const upcomingBookingsByDate = upcomingBookingsToDisplay.reduce((acc, booking) => {
+      const key = toDateKey(booking.journeyDate);
+      if (!acc[key]) {
+        acc[key] = [];
+      }
+      acc[key].push(booking);
+      return acc;
+    }, {} as Record<string, Booking[]>);
 
-        return { pendingBookingsByDate, pendingDates, completedBookingsByDate, completedDates, paymentPendingCount, settlementPendingCount, upcomingBookingsByDate, upcomingDates };
-    }, [allBookings, pendingBookings, visibleDates, searchQuery, paymentFilter, todayKey]);
+    const upcomingDates = Object.keys(upcomingBookingsByDate).sort((a, b) => a.localeCompare(b));
+
+    return { pendingBookingsByDate, pendingDates, completedBookingsByDate, completedDates, paymentPendingCount, settlementPendingCount, upcomingBookingsByDate, upcomingDates };
+  }, [allBookings, pendingBookings, visibleDates, searchQuery, paymentFilter, todayKey]);
 
 
   // `selectable: false` renders a read-only list (no checkboxes) — used by the Upcoming tab,
@@ -304,23 +363,23 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
     // 1. Extract groups and singles
     const groups: Record<string, Booking[]> = {};
     const singles: Booking[] = [];
-    
+
     bookingsForDate.forEach(b => {
-        if (b.groupId) {
-            if (!groups[b.groupId]) groups[b.groupId] = [];
-            groups[b.groupId].push(b);
-        } else {
-            singles.push(b);
-        }
+      if (b.groupId) {
+        if (!groups[b.groupId]) groups[b.groupId] = [];
+        groups[b.groupId].push(b);
+      } else {
+        singles.push(b);
+      }
     });
 
     // Helper to categorize a group by its bookings' properties
     // Uses the first booking's type to determine category (groups typically share same type)
     const categorizeGroup = (groupBookings: Booking[]) => {
-        const firstBooking = groupBookings[0];
-        const isGeneral = ['General', 'Regular'].includes(String(firstBooking.bookingType));
-        const isSL = SL_CLASSES.includes(firstBooking.classType);
-        return { isGeneral, isSL };
+      const firstBooking = groupBookings[0];
+      const isGeneral = ['General', 'Regular'].includes(String(firstBooking.bookingType));
+      const isSL = SL_CLASSES.includes(firstBooking.classType);
+      return { isGeneral, isSL };
     };
 
     // Categorize groups
@@ -331,53 +390,53 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
     const tatkalSlGroups: [string, Booking[]][] = [];
 
     Object.entries(groups).forEach(([groupId, groupBookings]) => {
-        const { isGeneral, isSL } = categorizeGroup(groupBookings);
-        if (isGeneral) {
-            generalGroups.push([groupId, groupBookings]);
+      const { isGeneral, isSL } = categorizeGroup(groupBookings);
+      if (isGeneral) {
+        generalGroups.push([groupId, groupBookings]);
+      } else {
+        if (isSL) {
+          tatkalSlGroups.push([groupId, groupBookings]);
         } else {
-            if (isSL) {
-                tatkalSlGroups.push([groupId, groupBookings]);
-            } else {
-                tatkalAcGroups.push([groupId, groupBookings]);
-            }
+          tatkalAcGroups.push([groupId, groupBookings]);
         }
+      }
     });
 
     // Separate General (includes legacy 'Regular') and Tatkal bookings from SINGLES
     const generalBookings = singles.filter(b => ['General', 'Regular'].includes(String(b.bookingType)));
     const tatkalBookings = singles.filter(b => b.bookingType === 'Tatkal');
-    
+
     // For Tatkal, separate by AC/SL classes (different booking times)
     const tatkalAcBookings = tatkalBookings.filter(b => !SL_CLASSES.includes(b.classType));
     const tatkalSlBookings = tatkalBookings.filter(b => SL_CLASSES.includes(b.classType));
 
     const listProps = selectable
-        ? {
-            selectionMode,
-            selectedBookingIds,
-            onToggleSelection: handleToggleSelection
-        }
-        : {
-            selectionMode: false,
-            selectedBookingIds: new Set<string>(),
-            onToggleSelection: () => {}
-        };
+      ? {
+        selectionMode,
+        selectedBookingIds,
+        onToggleSelection: handleToggleSelection
+      }
+      : {
+        selectionMode: false,
+        selectedBookingIds: new Set<string>(),
+        onToggleSelection: () => { }
+      };
 
     // Helper to render groups for a category
     const renderGroupCards = (categoryGroups: [string, Booking[]][]) => (
-        categoryGroups.length > 0 && (
-            <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 mb-4">
-                {categoryGroups.map(([groupId, groupBookings]) => (
-                    <BookingGroupCard
-                        key={groupId}
-                        groupId={groupId}
-                        bookings={groupBookings}
-                        allowUngroup={selectable}
-                        {...listProps}
-                    />
-                ))}
-            </div>
-        )
+      categoryGroups.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 mb-4">
+          {categoryGroups.map(([groupId, groupBookings]) => (
+            <BookingGroupCard
+              key={groupId}
+              groupId={groupId}
+              bookings={groupBookings}
+              allowUngroup={selectable}
+              {...listProps}
+            />
+          ))}
+        </div>
+      )
     );
 
     return (
@@ -405,350 +464,372 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
         )}
       </>
     );
-    };
-  
-    const noPendingMessage = searchQuery 
-        ? "No pending bookings found matching your search."
-        : "No bookings are currently in 'Requested' status. Add a new one!";
-    const noCompletedMessage = searchQuery
-        ? "No completed bookings found matching your search."
-        : "No bookings have been marked as 'Booked', 'Missed', 'Failed', 'Cancelled' etc. yet.";
-    const noUpcomingMessage = searchQuery
-        ? "No upcoming bookings found matching your search."
-        : "No booked journeys for today or future dates. Completed bookings with upcoming journey dates will appear here.";
+  };
 
-    const clearSelectionState = () => {
-        setSelectionMode(false);
-        setSelectedBookingIds(new Set());
-    };
+  const noPendingMessage = searchQuery
+    ? "No pending bookings found matching your search."
+    : "No bookings are currently in 'Requested' status. Add a new one!";
+  const noCompletedMessage = searchQuery
+    ? "No completed bookings found matching your search."
+    : "No bookings have been marked as 'Booked', 'Missed', 'Failed', 'Cancelled' etc. yet.";
+  const noUpcomingMessage = searchQuery
+    ? "No upcoming bookings found matching your search."
+    : "No booked journeys for today or future dates. Completed bookings with upcoming journey dates will appear here.";
 
-    const renderGroupingActions = () => {
-        if (selectionMode) {
-            return (
-                <div className="w-full md:w-auto">
-                    <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card/60 p-2 md:justify-end md:border-0 md:bg-transparent md:p-0">
-                        <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
-                            {selectedBookingIds.size} Selected
-                        </span>
-                        <Button variant="outline" size="sm" className="shrink-0" onClick={clearSelectionState}>
-                            Cancel
-                        </Button>
-                        <Button size="sm" className="shrink-0" onClick={handleGroupBookings} disabled={selectedBookingIds.size < 2 || isGrouping}>
-                            {isGrouping ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Layers className="mr-2 h-4 w-4" />}
-                            Group Selected
-                        </Button>
-                    </div>
-                </div>
-            );
-        }
+  const clearSelectionState = () => {
+    setSelectionMode(false);
+    setSelectedBookingIds(new Set());
+  };
 
-        return (
-            <Button variant="outline" size="sm" className="w-fit md:shrink-0" onClick={() => setSelectionMode(true)}>
-                <Layers className="mr-2 h-4 w-4" />
-                Grouping
+  const renderGroupingActions = () => {
+    if (selectionMode) {
+      return (
+        <div className="w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card/60 p-2 md:justify-end md:border-0 md:bg-transparent md:p-0">
+            <span className="inline-flex items-center rounded-full bg-primary/10 px-3 py-1 text-sm font-medium text-primary">
+              {selectedBookingIds.size} Selected
+            </span>
+            <Button variant="outline" size="sm" className="shrink-0" onClick={clearSelectionState}>
+              Cancel
             </Button>
-        );
-    };
+            <Button size="sm" className="shrink-0" onClick={handleGroupBookings} disabled={selectedBookingIds.size < 2 || isGrouping}>
+              {isGrouping ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Layers className="mr-2 h-4 w-4" />}
+              Group Selected
+            </Button>
+          </div>
+        </div>
+      );
+    }
 
     return (
-        <motion.div
-            initial="initial"
-            animate="animate"
-            variants={staggerContainer}
-        >
-            <div className="relative mb-4">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-              <Input
-                type="search"
-                placeholder="Search bookings..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 pr-9"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  aria-label="Clear search"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-
-            <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-              <TabsList className={cn(
-                "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground w-full",
-                hasRefunds ? "md:w-[560px]" : "md:w-[420px]"
-              )}>
-                <TabsTrigger 
-                    value="pending" 
-                    className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-sm px-2 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
-                >
-                    <Clock className="h-4 w-4 shrink-0" />
-                    Pending
-                </TabsTrigger>
-                <TabsTrigger 
-                    value="completed"
-                    className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-sm px-2 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
-                >
-                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    Completed
-                </TabsTrigger>
-                <TabsTrigger 
-                    value="upcoming"
-                    className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-sm px-2 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
-                >
-                    <CalendarDays className="h-4 w-4 shrink-0" />
-                    Upcoming
-                </TabsTrigger>
-                {hasRefunds && (
-                  <TabsTrigger 
-                      value="refunds"
-                      className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-sm px-2 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
-                  >
-                      <Receipt className="h-4 w-4 shrink-0" />
-                      Refunds
-                  </TabsTrigger>
-                )}
-              </TabsList>
-
-              <TabsContent value="pending" className="mt-6">
-                <motion.div variants={staggerItem}>
-                    <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                        <div className="flex items-center gap-3 min-w-0">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10">
-                                <Clock className="h-5 w-5 text-blue-600" />
-                            </div>
-                            <div className="min-w-0">
-                                <h2 className="text-heading-3 font-semibold">Pending Bookings</h2>
-                                <p className="text-sm text-muted-foreground">
-                                    {pendingDates.length} date{pendingDates.length !== 1 ? 's' : ''} with pending requests
-                                </p>
-                            </div>
-                        </div>
-                        {renderGroupingActions()}
-                    </div>
-                </motion.div>
-                {pendingDates.length === 0 ? (
-                  <motion.div variants={staggerItem}>
-                    <Alert className="mt-4 border-dashed">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
-                            {searchQuery ? <Search className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
-                        </div>
-                        <AlertTitle className="mt-2">{searchQuery ? "Search Results" : "No Pending Bookings"}</AlertTitle>
-                        <AlertDescription>{noPendingMessage}</AlertDescription>
-                    </Alert>
-                  </motion.div>
-                ) : (
-                  <Accordion type="multiple" className="w-full space-y-4" defaultValue={pendingDates.length > 0 ? [pendingDates[0]] : []}>
-                    {pendingDates.map((date, index) => (
-                      <motion.div
-                        key={`pending-${date}`}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                      >
-                        <AccordionItem value={date} className="border rounded-2xl px-4 bg-card shadow-elevation-1">
-                            <AccordionTrigger className="py-4 hover:no-underline">
-                                <DateGroupHeading dateString={date} />
-                            </AccordionTrigger>
-                            <AccordionContent className="pb-4">
-                                {renderBookingsForDate(pendingBookingsByDate[date])}
-                            </AccordionContent>
-                        </AccordionItem>
-                      </motion.div>
-                    ))}
-                  </Accordion>
-                )}
-              </TabsContent>
-
-              <TabsContent value="completed" className="mt-6">
-                <motion.div variants={staggerItem}>
-                    <div className="flex flex-col gap-4 mb-6">
-                        {/* Header Row */}
-                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                            <div className="flex items-center gap-3 min-w-0">
-                                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10">
-                                    <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-                                </div>
-                                <div className="min-w-0">
-                                    <h2 className="text-heading-3 font-semibold">Completed Bookings</h2>
-                                    <p className="text-sm text-muted-foreground">
-                                        {completedDates.length} date{completedDates.length !== 1 ? 's' : ''} with completed bookings
-                                    </p>
-                                </div>
-                            </div>
-                            {renderGroupingActions()}
-                        </div>
-
-                        {/* Filter Pills - Desktop: Horizontal, Mobile: Wrap or Single Select */}
-                        <div className="flex flex-wrap items-center gap-1.5">
-                            {/* All Filter */}
-                            <button
-                                onClick={() => setPaymentFilter('all')}
-                                className={cn(
-                                    "h-6 px-2.5 py-1 rounded-full text-[0.6rem] font-medium leading-none transition-all",
-                                    paymentFilter === 'all'
-                                        ? "bg-primary text-primary-foreground shadow-elevation-2 ring-2 ring-primary/20"
-                                        : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
-                                )}
-                            >
-                                All
-                            </button>
-
-                            {/* Payment Pending - Only show if there are any */}
-                            {paymentPendingCount > 0 && (
-                                <button
-                                    onClick={() => setPaymentFilter('payment-pending')}
-                                    className={cn(
-                                        "h-6 px-2.5 py-1 rounded-full text-[0.6rem] font-medium leading-none transition-all flex items-center gap-1",
-                                        paymentFilter === 'payment-pending'
-                                            ? "bg-amber-500 text-white shadow-elevation-2 ring-2 ring-amber-500/20"
-                                            : "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20"
-                                    )}
-                                >
-                                    <span className="flex h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
-                                    Payment Pending
-                                    <span className={cn(
-                                        "rounded-full px-1 py-0 text-[0.55rem] leading-none",
-                                        paymentFilter === 'payment-pending' ? "bg-white/20" : "bg-amber-500/20"
-                                    )}>
-                                        {paymentPendingCount}
-                                    </span>
-                                </button>
-                            )}
-
-                            {/* Settlement Pending - Only show if there are any */}
-                            {settlementPendingCount > 0 && (
-                                <button
-                                    onClick={() => setPaymentFilter('settlement-pending')}
-                                    className={cn(
-                                        "h-6 px-2.5 py-1 rounded-full text-[0.6rem] font-medium leading-none transition-all flex items-center gap-1",
-                                        paymentFilter === 'settlement-pending'
-                                            ? "bg-purple-500 text-white shadow-elevation-2 ring-2 ring-purple-500/20"
-                                            : "bg-purple-500/10 text-purple-600 hover:bg-purple-500/20"
-                                    )}
-                                >
-                                    <span className="flex h-1.5 w-1.5 rounded-full bg-current" />
-                                    Settlement Pending
-                                    <span className={cn(
-                                        "rounded-full px-1 py-0 text-[0.55rem] leading-none",
-                                        paymentFilter === 'settlement-pending' ? "bg-white/20" : "bg-purple-500/20"
-                                    )}>
-                                        {settlementPendingCount}
-                                    </span>
-                                </button>
-                            )}
-
-                            {/* Summary text when filters are active */}
-                            {paymentFilter !== 'all' && (
-                                <button
-                                    onClick={() => setPaymentFilter('all')}
-                                    className="ml-1.5 text-[0.6rem] text-muted-foreground underline hover:text-foreground"
-                                >
-                                    Clear filter
-                                </button>
-                            )}
-                        </div>
-                    </div>
-                </motion.div>
-                {completedDates.length === 0 ? (
-                  <Alert className="mt-4">
-                    {searchQuery ? <Search className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-                    <AlertTitle>{searchQuery ? "Search Results" : paymentFilter !== 'all' ? "No Pending Payments" : "No Completed Bookings"}</AlertTitle>
-                    <AlertDescription>
-                      {searchQuery ? noCompletedMessage : paymentFilter !== 'all' 
-                        ? `No bookings with ${paymentFilter === 'payment-pending' ? 'pending customer payments' : 'pending settlements'} found.`
-                        : noCompletedMessage}
-                    </AlertDescription>
-                  </Alert>
-                ) : (
-                  <Accordion type="multiple" className="w-full space-y-4" defaultValue={completedDates.length > 0 ? [completedDates[0]] : []}>
-                    {completedDates.map(date => (
-                      <AccordionItem value={date} key={`completed-${date}`} className="border-b-0">
-                        <AccordionTrigger className="p-0 hover:no-underline">
-                          <DateGroupHeading dateString={date} />
-                        </AccordionTrigger>
-                        <AccordionContent>
-                          {renderBookingsForDate(completedBookingsByDate[date])}
-                        </AccordionContent>
-                      </AccordionItem>
-                    ))}
-                  </Accordion>
-                )}
-              </TabsContent>
-
-              <TabsContent value="upcoming" className="mt-6">
-                <motion.div variants={staggerItem}>
-                    <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                        <div className="flex items-center gap-3 min-w-0">
-                            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10">
-                                <CalendarDays className="h-5 w-5 text-indigo-600" />
-                            </div>
-                            <div className="min-w-0">
-                                <h2 className="text-heading-3 font-semibold">Upcoming Journeys</h2>
-                                <p className="text-sm text-muted-foreground">
-                                    {upcomingDates.length} date{upcomingDates.length !== 1 ? 's' : ''} with upcoming journeys
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-                </motion.div>
-                {upcomingDates.length === 0 ? (
-                  <motion.div variants={staggerItem}>
-                    <Alert className="mt-4 border-dashed">
-                        <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
-                            {searchQuery ? <Search className="h-5 w-5" /> : <CalendarDays className="h-5 w-5" />}
-                        </div>
-                        <AlertTitle className="mt-2">{searchQuery ? "Search Results" : "No Upcoming Journeys"}</AlertTitle>
-                        <AlertDescription>{noUpcomingMessage}</AlertDescription>
-                    </Alert>
-                  </motion.div>
-                ) : (
-                  <Accordion type="multiple" className="w-full space-y-4" defaultValue={upcomingDates.length > 0 ? [upcomingDates[0]] : []}>
-                    {upcomingDates.map((date, index) => (
-                      <motion.div
-                        key={`upcoming-${date}`}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                      >
-                        <AccordionItem value={date} className="border rounded-2xl px-4 bg-card shadow-elevation-1">
-                            <AccordionTrigger className="py-4 hover:no-underline">
-                                <DateGroupHeading dateString={date} isJourneyDate />
-                            </AccordionTrigger>
-                            <AccordionContent className="pb-4">
-                                {renderBookingsForDate(upcomingBookingsByDate[date], { selectable: false })}
-                            </AccordionContent>
-                        </AccordionItem>
-                      </motion.div>
-                    ))}
-                  </Accordion>
-                )}
-              </TabsContent>
-
-              {hasRefunds && (
-                <TabsContent value="refunds" className="mt-6">
-                  <RefundsManager />
-                </TabsContent>
-              )}
-            </Tabs>
-
-            {activeTab === "completed" && !searchQuery && hasMore && (
-              <div ref={ref} className="flex justify-center items-center p-4 h-10">
-                {isLoading && <Loader2 className="h-8 w-8 animate-spin text-primary" />}
-              </div>
-            )}
-            {activeTab === "completed" && !searchQuery && !hasMore && allBookingDates.length > 0 && (
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-center text-muted-foreground p-4"
-              >
-                You've reached the end of the list.
-              </motion.div>
-            )}
-        </motion.div>
+      <Button variant="outline" size="sm" className="w-fit md:shrink-0" onClick={() => setSelectionMode(true)}>
+        <Layers className="mr-2 h-4 w-4" />
+        Grouping
+      </Button>
     );
+  };
+
+  return (
+    <motion.div
+      initial="initial"
+      animate="animate"
+      variants={staggerContainer}
+    >
+      <div className="relative flex items-center w-full rounded-lg border border-input bg-background shadow-xs mb-4">
+        <div className="shrink-0">
+          <Select
+            value={searchFilter}
+            onValueChange={(val) => setSearchFilter(val as BookingSearchFilter)}
+          >
+            <SelectTrigger
+              className="h-10 w-[125px] sm:w-[195px] border-0 border-r border-input rounded-none rounded-l-lg bg-muted/40 hover:bg-muted/70 text-xs sm:text-sm font-medium focus:ring-0 focus:ring-offset-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none shadow-none px-2.5 sm:px-3 transition-colors"
+              aria-label="Search filter"
+            >
+              <SelectValue placeholder="All" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem hideIndicator value="all">All</SelectItem>
+              <SelectItem hideIndicator value="customer">Customer (Request By)</SelectItem>
+              <SelectItem hideIndicator value="passenger">Passengers</SelectItem>
+              <SelectItem hideIndicator value="others">Others</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="relative flex-1 flex items-center min-w-0">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            type="search"
+            placeholder={getSearchPlaceholder(searchFilter)}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-10 border-0 bg-transparent rounded-none rounded-r-lg pl-9 pr-9 shadow-none focus:outline-none focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none placeholder:text-muted-foreground"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1 transition-colors"
+              aria-label="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className={cn(
+          "inline-flex h-10 items-center justify-center rounded-md bg-muted p-1 text-muted-foreground w-full",
+          hasRefunds ? "md:w-[560px]" : "md:w-[420px]"
+        )}>
+          <TabsTrigger
+            value="pending"
+            className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-sm px-2 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
+          >
+            <Clock className="h-4 w-4 shrink-0" />
+            Pending
+          </TabsTrigger>
+          <TabsTrigger
+            value="completed"
+            className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-sm px-2 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
+          >
+            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            Completed
+          </TabsTrigger>
+          <TabsTrigger
+            value="upcoming"
+            className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-sm px-2 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
+          >
+            <CalendarDays className="h-4 w-4 shrink-0" />
+            Upcoming
+          </TabsTrigger>
+          {hasRefunds && (
+            <TabsTrigger
+              value="refunds"
+              className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-sm px-2 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
+            >
+              <Receipt className="h-4 w-4 shrink-0" />
+              Refunds
+            </TabsTrigger>
+          )}
+        </TabsList>
+
+        <TabsContent value="pending" className="mt-6">
+          <motion.div variants={staggerItem}>
+            <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10">
+                  <Clock className="h-5 w-5 text-blue-600" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-heading-3 font-semibold">Pending Bookings</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {pendingDates.length} date{pendingDates.length !== 1 ? 's' : ''} with pending requests
+                  </p>
+                </div>
+              </div>
+              {renderGroupingActions()}
+            </div>
+          </motion.div>
+          {pendingDates.length === 0 ? (
+            <motion.div variants={staggerItem}>
+              <Alert className="mt-4 border-dashed">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
+                  {searchQuery ? <Search className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
+                </div>
+                <AlertTitle className="mt-2">{searchQuery ? "Search Results" : "No Pending Bookings"}</AlertTitle>
+                <AlertDescription>{noPendingMessage}</AlertDescription>
+              </Alert>
+            </motion.div>
+          ) : (
+            <Accordion type="multiple" className="w-full space-y-4" defaultValue={pendingDates.length > 0 ? [pendingDates[0]] : []}>
+              {pendingDates.map((date, index) => (
+                <motion.div
+                  key={`pending-${date}`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                >
+                  <AccordionItem value={date} className="border rounded-2xl px-4 bg-card shadow-elevation-1">
+                    <AccordionTrigger className="py-4 hover:no-underline">
+                      <DateGroupHeading dateString={date} />
+                    </AccordionTrigger>
+                    <AccordionContent className="pb-4">
+                      {renderBookingsForDate(pendingBookingsByDate[date])}
+                    </AccordionContent>
+                  </AccordionItem>
+                </motion.div>
+              ))}
+            </Accordion>
+          )}
+        </TabsContent>
+
+        <TabsContent value="completed" className="mt-6">
+          <motion.div variants={staggerItem}>
+            <div className="flex flex-col gap-4 mb-6">
+              {/* Header Row */}
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-500/10">
+                    <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                  </div>
+                  <div className="min-w-0">
+                    <h2 className="text-heading-3 font-semibold">Completed Bookings</h2>
+                    <p className="text-sm text-muted-foreground">
+                      {completedDates.length} date{completedDates.length !== 1 ? 's' : ''} with completed bookings
+                    </p>
+                  </div>
+                </div>
+                {renderGroupingActions()}
+              </div>
+
+              {/* Filter Pills - Desktop: Horizontal, Mobile: Wrap or Single Select */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {/* All Filter */}
+                <button
+                  onClick={() => setPaymentFilter('all')}
+                  className={cn(
+                    "h-6 px-2.5 py-1 rounded-full text-[0.6rem] font-medium leading-none transition-all",
+                    paymentFilter === 'all'
+                      ? "bg-primary text-primary-foreground shadow-elevation-2 ring-2 ring-primary/20"
+                      : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                  )}
+                >
+                  All
+                </button>
+
+                {/* Payment Pending - Only show if there are any */}
+                {paymentPendingCount > 0 && (
+                  <button
+                    onClick={() => setPaymentFilter('payment-pending')}
+                    className={cn(
+                      "h-6 px-2.5 py-1 rounded-full text-[0.6rem] font-medium leading-none transition-all flex items-center gap-1",
+                      paymentFilter === 'payment-pending'
+                        ? "bg-amber-500 text-white shadow-elevation-2 ring-2 ring-amber-500/20"
+                        : "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20"
+                    )}
+                  >
+                    <span className="flex h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
+                    Payment Pending
+                    <span className={cn(
+                      "rounded-full px-1 py-0 text-[0.55rem] leading-none",
+                      paymentFilter === 'payment-pending' ? "bg-white/20" : "bg-amber-500/20"
+                    )}>
+                      {paymentPendingCount}
+                    </span>
+                  </button>
+                )}
+
+                {/* Settlement Pending - Only show if there are any */}
+                {settlementPendingCount > 0 && (
+                  <button
+                    onClick={() => setPaymentFilter('settlement-pending')}
+                    className={cn(
+                      "h-6 px-2.5 py-1 rounded-full text-[0.6rem] font-medium leading-none transition-all flex items-center gap-1",
+                      paymentFilter === 'settlement-pending'
+                        ? "bg-purple-500 text-white shadow-elevation-2 ring-2 ring-purple-500/20"
+                        : "bg-purple-500/10 text-purple-600 hover:bg-purple-500/20"
+                    )}
+                  >
+                    <span className="flex h-1.5 w-1.5 rounded-full bg-current" />
+                    Settlement Pending
+                    <span className={cn(
+                      "rounded-full px-1 py-0 text-[0.55rem] leading-none",
+                      paymentFilter === 'settlement-pending' ? "bg-white/20" : "bg-purple-500/20"
+                    )}>
+                      {settlementPendingCount}
+                    </span>
+                  </button>
+                )}
+
+                {/* Summary text when filters are active */}
+                {paymentFilter !== 'all' && (
+                  <button
+                    onClick={() => setPaymentFilter('all')}
+                    className="ml-1.5 text-[0.6rem] text-muted-foreground underline hover:text-foreground"
+                  >
+                    Clear filter
+                  </button>
+                )}
+              </div>
+            </div>
+          </motion.div>
+          {completedDates.length === 0 ? (
+            <Alert className="mt-4">
+              {searchQuery ? <Search className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+              <AlertTitle>{searchQuery ? "Search Results" : paymentFilter !== 'all' ? "No Pending Payments" : "No Completed Bookings"}</AlertTitle>
+              <AlertDescription>
+                {searchQuery ? noCompletedMessage : paymentFilter !== 'all'
+                  ? `No bookings with ${paymentFilter === 'payment-pending' ? 'pending customer payments' : 'pending settlements'} found.`
+                  : noCompletedMessage}
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <Accordion type="multiple" className="w-full space-y-4" defaultValue={completedDates.length > 0 ? [completedDates[0]] : []}>
+              {completedDates.map(date => (
+                <AccordionItem value={date} key={`completed-${date}`} className="border-b-0">
+                  <AccordionTrigger className="p-0 hover:no-underline">
+                    <DateGroupHeading dateString={date} />
+                  </AccordionTrigger>
+                  <AccordionContent>
+                    {renderBookingsForDate(completedBookingsByDate[date])}
+                  </AccordionContent>
+                </AccordionItem>
+              ))}
+            </Accordion>
+          )}
+        </TabsContent>
+
+        <TabsContent value="upcoming" className="mt-6">
+          <motion.div variants={staggerItem}>
+            <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-500/10">
+                  <CalendarDays className="h-5 w-5 text-indigo-600" />
+                </div>
+                <div className="min-w-0">
+                  <h2 className="text-heading-3 font-semibold">Upcoming Journeys</h2>
+                  <p className="text-sm text-muted-foreground">
+                    {upcomingDates.length} date{upcomingDates.length !== 1 ? 's' : ''} with upcoming journeys
+                  </p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+          {upcomingDates.length === 0 ? (
+            <motion.div variants={staggerItem}>
+              <Alert className="mt-4 border-dashed">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-muted">
+                  {searchQuery ? <Search className="h-5 w-5" /> : <CalendarDays className="h-5 w-5" />}
+                </div>
+                <AlertTitle className="mt-2">{searchQuery ? "Search Results" : "No Upcoming Journeys"}</AlertTitle>
+                <AlertDescription>{noUpcomingMessage}</AlertDescription>
+              </Alert>
+            </motion.div>
+          ) : (
+            <Accordion type="multiple" className="w-full space-y-4" defaultValue={upcomingDates.length > 0 ? [upcomingDates[0]] : []}>
+              {upcomingDates.map((date, index) => (
+                <motion.div
+                  key={`upcoming-${date}`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                >
+                  <AccordionItem value={date} className="border rounded-2xl px-4 bg-card shadow-elevation-1">
+                    <AccordionTrigger className="py-4 hover:no-underline">
+                      <DateGroupHeading dateString={date} isJourneyDate />
+                    </AccordionTrigger>
+                    <AccordionContent className="pb-4">
+                      {renderBookingsForDate(upcomingBookingsByDate[date], { selectable: false })}
+                    </AccordionContent>
+                  </AccordionItem>
+                </motion.div>
+              ))}
+            </Accordion>
+          )}
+        </TabsContent>
+
+        {hasRefunds && (
+          <TabsContent value="refunds" className="mt-6">
+            <RefundsManager />
+          </TabsContent>
+        )}
+      </Tabs>
+
+      {activeTab === "completed" && !searchQuery && hasMore && (
+        <div ref={ref} className="flex justify-center items-center p-4 h-10">
+          {isLoading && <Loader2 className="h-8 w-8 animate-spin text-primary" />}
+        </div>
+      )}
+      {activeTab === "completed" && !searchQuery && !hasMore && allBookingDates.length > 0 && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-center text-muted-foreground p-4"
+        >
+          You've reached the end of the list.
+        </motion.div>
+      )}
+    </motion.div>
+  );
 }
