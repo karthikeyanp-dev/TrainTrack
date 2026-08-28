@@ -96,12 +96,12 @@ export function StatusBadge({ status, size = "md", pulse: forcePulse }: StatusBa
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       className={cn(
-        "inline-flex items-center rounded-[2px] border font-medium shadow-sm",
+        "!inline-flex !flex-row items-center whitespace-nowrap flex-nowrap shrink-0 rounded-[2px] border font-medium shadow-sm",
         sizeClasses[size],
         config.className,
       )}
     >
-      <span className="relative flex">
+      <span className="relative flex shrink-0">
         <Icon className={iconSizes[size]} />
         {shouldPulse && (
           <span className="absolute inline-flex h-full w-full animate-ping opacity-20">
@@ -109,7 +109,7 @@ export function StatusBadge({ status, size = "md", pulse: forcePulse }: StatusBa
           </span>
         )}
       </span>
-      <span className="capitalize">{config.label}</span>
+      <span className="capitalize whitespace-nowrap">{config.label}</span>
     </motion.span>
   );
 }

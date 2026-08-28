@@ -662,54 +662,111 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
         bookingCardBg,
         isSelected && "ring-2 ring-primary border-primary"
       )}>
-        <CardHeader className="pb-2">
+        <CardHeader className="p-3.5 sm:p-5 pb-2 sm:pb-2.5">
           <div className="flex gap-3 items-start">
             {selectionMode && (
               <Checkbox
                 checked={isSelected}
                 onCheckedChange={() => onToggleSelection?.(booking.id)}
-                className="mt-3 shrink-0"
+                className="mt-2.5 shrink-0"
               />
             )}
-            <div className="space-y-2 flex-1 min-w-0 relative">
-              {/* Status Badge - Top Right */}
-              <div className="absolute top-0 right-0">
-                <StatusBadge status={booking.status} size="sm" />
+            <div className="space-y-1.5 flex-1 min-w-0 relative">
+              {/* Status Badge - Top Right with interactive status changer */}
+              <div className="absolute top-0 right-0 z-10">
+                {!hideActions ? (
+                  <Select
+                    value={booking.status}
+                    onValueChange={handleStatusSelect}
+                    disabled={statusUpdateMutation.isPending}
+                    name={`status-select-${booking.id}`}
+                  >
+                    <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent shadow-none hover:opacity-85 focus:ring-0 focus:ring-offset-0 cursor-pointer gap-1 rounded-full [&>svg]:opacity-70 [&>svg]:h-3.5 [&>svg]:w-3.5">
+                      <div className="inline-flex items-center">
+                        <StatusBadge status={booking.status} size="sm" />
+                      </div>
+                    </SelectTrigger>
+                    <SelectContent align="end">
+                      {ALL_BOOKING_STATUSES.filter((statusOption) => {
+                        const currentStatus = booking.status;
+
+                        // If Requested - show: Requested, Booked, Booking Failed (Paid), Booking Failed (Unpaid), Missed, User Cancelled
+                        if (currentStatus === "Requested") {
+                          return ["Requested", "Booked", "Booking Failed (Paid)", "Booking Failed (Unpaid)", "Missed", "User Cancelled"].includes(statusOption);
+                        }
+
+                        // If Booked - show: Booked, Requested, CNF & Cancelled
+                        if (currentStatus === "Booked") {
+                          return ["Booked", "Requested", "CNF & Cancelled"].includes(statusOption);
+                        }
+
+                        // If CNF & Cancelled - show: CNF & Cancelled, Requested
+                        if (currentStatus === "CNF & Cancelled") {
+                          return ["CNF & Cancelled", "Requested"].includes(statusOption);
+                        }
+
+                        // If Booking Failed (Unpaid), Missed, User Cancelled - show: current status and Requested
+                        if (["Booking Failed (Unpaid)", "Missed", "User Cancelled"].includes(currentStatus)) {
+                          return [currentStatus, "Requested"].includes(statusOption);
+                        }
+
+                        // If Booking Failed (Paid) - show: current status and Requested (handled in refund flow)
+                        if (currentStatus === "Booking Failed (Paid)") {
+                          return [currentStatus, "Requested"].includes(statusOption);
+                        }
+
+                        // Default fallback
+                        return true;
+                      }).map((statusOption) => (
+                        <SelectItem key={statusOption} value={statusOption}>
+                          <div className="flex items-center gap-2">
+                            {getStatusIcon(statusOption)}
+                            <span>{statusOption}</span>
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                ) : (
+                  <StatusBadge status={booking.status} size="sm" />
+                )}
               </div>
 
               {/* First row: Source-Destination with Arrow */}
-              <div className="flex min-h-7 items-center gap-2.5 pr-20 flex-wrap sm:flex-nowrap">
-                <CardTitle className="text-2xl md:text-2xl font-bold flex-shrink-0 tracking-tight">
+              <div className="flex min-h-7 items-center gap-2 pr-28 flex-wrap sm:flex-nowrap">
+                <CardTitle className="text-xl sm:text-2xl font-bold flex-shrink-0 tracking-tight">
                   <span style={sourceDestStyle}>{booking.source.toUpperCase()}</span>
                 </CardTitle>
-                <ArrowRight className="h-5 w-5 text-muted-foreground flex-shrink-0" />
-                <CardTitle className="text-2xl md:text-2xl font-bold flex-shrink-0 tracking-tight">
+                <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground flex-shrink-0" />
+                <CardTitle className="text-xl sm:text-2xl font-bold flex-shrink-0 tracking-tight">
                   <span style={sourceDestStyle}>{booking.destination.toUpperCase()}</span>
                 </CardTitle>
               </div>
 
               {/* Second row: For userName and Class display */}
-              <div className="flex justify-between items-start gap-2">
-                <CardDescription className="flex-1 min-w-0">
+              <div className="flex justify-between items-center gap-2 pt-0.5">
+                <CardDescription className="flex-1 min-w-0 text-xs sm:text-sm">
                   For <span className="font-bold text-foreground">{booking.userName}</span>
                   {booking.groupId && (
-                    <span className="ml-2 inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80">
+                    <span className="ml-1.5 inline-flex items-center rounded-full border px-1.5 py-0.2 text-[10px] sm:text-xs font-semibold border-transparent bg-secondary text-secondary-foreground">
                       Grouped
                     </span>
                   )}
                 </CardDescription>
-                <div className="flex flex-col items-end flex-shrink-0">
+                <div className="flex items-center gap-1.5 flex-shrink-0">
                   <span
                     className={cn(
-                      "text-3xl font-semibold leading-none",
-                      booking.bookingType === 'Tatkal' ? "text-primary" : "text-amber-700 dark:text-amber-600"
+                      "text-base sm:text-lg font-bold px-2 py-0.5 rounded-md leading-none border",
+                      booking.bookingType === 'Tatkal'
+                        ? "text-primary border-primary/30 bg-primary/10"
+                        : "text-amber-700 dark:text-amber-400 border-amber-500/30 bg-amber-500/10"
                     )}
                     title={`${booking.bookingType} - ${booking.classType}`}
                   >
                     {displayClass}
                   </span>
                   {booking.classType.includes("(") && (
-                    <span className="text-xs text-muted-foreground mt-1">
+                    <span className="text-[10px] text-muted-foreground">
                       {booking.classType.match(/\((.*?)\)/)?.[1]}
                     </span>
                   )}
@@ -718,127 +775,117 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             </div>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4 text-sm flex-grow">
-          <div className="my-2 rounded-xl border border-slate-300/80 dark:border-slate-700/90 bg-white/60 dark:bg-slate-900/50 p-3.5 space-y-3 shadow-xs">
-            {/* Journey Date */}
-            <div className="flex items-start gap-3 min-w-0">
-              <div className="p-2 rounded-xl bg-cyan-500/10 border border-cyan-500/20 text-cyan-600 dark:text-cyan-400 shrink-0">
-                <CalendarDays className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                  JOURNEY
+        <CardContent className="px-3.5 sm:px-5 py-2 space-y-3 text-sm flex-grow">
+          <div className="my-1 rounded-xl border border-slate-300/80 dark:border-slate-700/90 bg-white/60 dark:bg-slate-900/50 px-2.5 py-3 sm:px-3 sm:py-3.5 space-y-2 shadow-xs">
+            {/* Journey & Book By Dates Strip - Left aligned */}
+            <div className="grid grid-cols-1 divide-y divide-slate-200/60 dark:divide-slate-800/60 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800/60 overflow-hidden text-xs py-2">
+              {/* Journey Date */}
+              <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
+                <div className="p-1 rounded-md bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 shrink-0">
+                  <CalendarDays className="h-3.5 w-3.5" />
                 </div>
-                <div className="text-sm font-semibold truncate">
+                <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">JOURNEY</span>
+                <div className="text-xs sm:text-sm font-semibold text-foreground truncate">
                   {renderFormattedDate(clientFormattedJourneyDate)}
                 </div>
               </div>
-            </div>
 
-            {/* Book By Date */}
-            <div className="flex items-start gap-3 min-w-0">
-              <div className="p-2 rounded-xl bg-pink-500/10 border border-pink-500/20 text-pink-600 dark:text-pink-400 shrink-0">
-                <CalendarDays className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                  BOOK BY
+              {/* Book By Date */}
+              <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
+                <div className="p-1 rounded-md bg-pink-500/10 text-pink-600 dark:text-pink-400 shrink-0">
+                  <Clock className="h-3.5 w-3.5" />
                 </div>
-                <div className="text-sm font-semibold truncate">
+                <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">BOOK BY</span>
+                <div className="text-xs sm:text-sm font-semibold text-foreground truncate">
                   {renderFormattedDate(clientFormattedBookingDate)}
                 </div>
               </div>
             </div>
 
             {/* Passengers */}
-            <div className="flex items-start gap-3 min-w-0">
-              <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-400 shrink-0">
-                <Users className="h-4 w-4" />
-              </div>
-              <div className="min-w-0 flex-1 space-y-1.5">
-                <div className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                  PASSENGERS
+            <div className="rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800/60 px-3 py-2 text-xs">
+              <div className="flex items-start gap-1.5 min-w-0">
+                <div className="p-1 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5">
+                  <Users className="h-3.5 w-3.5" />
                 </div>
-                <div className="space-y-1 text-sm font-semibold">
-                  {[...booking.passengers].sort((a, b) => a.name.localeCompare(b.name)).map((passenger, index) => {
-                    const isChild = passenger.age >= 5 && passenger.age <= 11;
-                    return (
-                      <div key={index} className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-muted-foreground font-normal">{index + 1}.</span>
-                        <span className="text-foreground">{passenger.name}</span>
-                        <span className="text-muted-foreground/40 text-xs select-none">•</span>
-                        <span className="text-amber-500 dark:text-amber-400">{passenger.age}</span>
-                        <span className="text-muted-foreground/40 text-xs select-none">•</span>
-                        <span className="text-cyan-600 dark:text-cyan-400">{passenger.gender.toUpperCase()}</span>
-                        {isChild && (
-                          passenger.berthRequired ? (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
-                              <CheckCircle2 className="h-2.5 w-2.5" />
-                              Berth
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-0.5 text-[10px] bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
-                              <XCircle className="h-2.5 w-2.5" />
-                              No Berth
-                            </span>
-                          )
-                        )}
-                      </div>
-                    );
-                  })}
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
+                    PASSENGERS ({booking.passengers.length})
+                  </div>
+                  <div className="space-y-0.5 text-xs sm:text-sm font-semibold">
+                    {[...booking.passengers].sort((a, b) => a.name.localeCompare(b.name)).map((passenger, index) => {
+                      const isChild = passenger.age >= 5 && passenger.age <= 11;
+                      return (
+                        <div key={index} className="flex items-center gap-1.5 flex-wrap">
+                          <span className="text-muted-foreground font-normal">{index + 1}.</span>
+                          <span className="text-foreground">{passenger.name}</span>
+                          <span className="text-muted-foreground/40 text-xs select-none">•</span>
+                          <span className="text-amber-500 dark:text-amber-400">{passenger.age}</span>
+                          <span className="text-muted-foreground/40 text-xs select-none">•</span>
+                          <span className="text-cyan-600 dark:text-cyan-400">{passenger.gender.toUpperCase()}</span>
+                          {isChild && (
+                            passenger.berthRequired ? (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
+                                <CheckCircle2 className="h-2.5 w-2.5" />
+                                Berth
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] bg-red-100 dark:red-900/40 text-red-700 dark:text-red-300 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
+                                <XCircle className="h-2.5 w-2.5" />
+                                No Berth
+                              </span>
+                            )
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
 
-            {/* Train Preference (if present) */}
-            {booking.trainPreference && (
-              <div className="flex items-start gap-3 min-w-0">
-                <div className="p-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-600 dark:text-emerald-400 shrink-0">
-                  <Train className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                    TRAIN PREFERENCE
+            {/* Train, Upgrade & Remarks Strip */}
+            {(booking.trainPreference || booking.upgradePreferred || booking.remarks) && (
+              <div className="grid grid-cols-1 divide-y divide-slate-200/60 dark:divide-slate-800/60 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800/60 overflow-hidden text-xs py-2">
+                {/* Train (Preference removed) */}
+                {booking.trainPreference && (
+                  <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
+                    <div className="p-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+                      <Train className="h-3.5 w-3.5" />
+                    </div>
+                    <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">TRAIN</span>
+                    <div className="text-xs sm:text-sm font-semibold text-foreground truncate">
+                      {booking.trainPreference}
+                    </div>
                   </div>
-                  <div className="text-sm font-semibold text-foreground truncate">
-                    {booking.trainPreference}
-                  </div>
-                </div>
-              </div>
-            )}
+                )}
 
-            {/* Upgrade Preference (if present) */}
-            {booking.upgradePreferred && (
-              <div className="flex items-start gap-3 min-w-0">
-                <div className="p-2 rounded-xl bg-purple-500/10 border border-purple-500/20 text-purple-600 dark:text-purple-400 shrink-0">
-                  <Sparkles className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                    UPGRADE PREFERENCE
-                  </div>
-                  <div className="text-sm font-semibold text-foreground truncate">
-                    <div className="flex items-center gap-1.5">
-                      <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+                {/* Upgrade (Preference removed) */}
+                {booking.upgradePreferred && (
+                  <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
+                    <div className="p-1 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 shrink-0">
+                      <Sparkles className="h-3.5 w-3.5" />
+                    </div>
+                    <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">UPGRADE</span>
+                    <div className="text-xs sm:text-sm font-semibold text-foreground truncate flex items-center gap-1">
+                      <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
                       <span>Yes</span>
                     </div>
                   </div>
-                </div>
-              </div>
-            )}
+                )}
 
-            {/* Remarks (if present) */}
-            {booking.remarks && (
-              <div className="flex items-start gap-3 min-w-0">
-                <div className="p-2 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-600 dark:text-amber-400 shrink-0">
-                  <MessageSquare className="h-4 w-4" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                    REMARKS
+                {/* Remarks */}
+                {booking.remarks && (
+                  <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
+                    <div className="p-1 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
+                      <MessageSquare className="h-3.5 w-3.5" />
+                    </div>
+                    <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">REMARKS</span>
+                    <div className="text-xs sm:text-sm text-foreground truncate">
+                      {booking.remarks}
+                    </div>
                   </div>
-                  <div className="text-sm text-foreground">{booking.remarks}</div>
-                </div>
+                )}
               </div>
             )}
           </div>
@@ -1037,16 +1084,16 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
           </div>
         )}
 
-        <CardFooter className="flex flex-col items-stretch gap-3 pt-4 border-t">
-          {/* Created and Last Updated side by side */}
-          <div className="flex gap-2">
-            <div className="flex-1 text-xs text-muted-foreground">
-              <div className="mb-1" style={labelHighlightStyle}>Created</div>
-              <div>{clientFormattedCreatedAt || "..."}</div>
+        <CardFooter className="px-3.5 sm:px-5 pt-3 pb-3.5 flex flex-col items-stretch gap-2.5 border-t">
+          {/* Created and Last Updated side by side in a single compact row */}
+          <div className="flex items-center justify-between text-[11px] text-muted-foreground px-0.5">
+            <div className="truncate">
+              <span style={labelHighlightStyle}>Created: </span>
+              <span>{clientFormattedCreatedAt || "..."}</span>
             </div>
-            <div className="flex-1 text-xs text-muted-foreground text-right">
-              <div className="mb-1" style={labelHighlightStyle}>Last Updated</div>
-              <div>{clientFormattedUpdatedAt || "..."}</div>
+            <div className="text-right truncate ml-2">
+              <span style={labelHighlightStyle}>Updated: </span>
+              <span>{clientFormattedUpdatedAt || "..."}</span>
             </div>
           </div>
 
@@ -1054,7 +1101,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             <>
               {/* Action buttons with icons only for mobile compatibility */}
               {!isRefundMode ? (
-                <div className="flex gap-1">
+                <div className="flex gap-1.5">
                   <Button
                     variant="outline"
                     size="sm"
@@ -1108,7 +1155,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                   </Button>
                 </div>
               ) : (
-                <div className="flex gap-1">
+                <div className="flex gap-1.5">
                   <Button
                     variant="default"
                     size="sm"
@@ -1131,58 +1178,8 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
               )}
 
 
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor={`status-select-${booking.id}`} className="text-xs" style={labelHighlightStyle}>Update Booking Status:</Label>
-                <Select
-                  value={booking.status}
-                  onValueChange={handleStatusSelect}
-                  disabled={statusUpdateMutation.isPending}
-                  name={`status-select-${booking.id}`}
-                  aria-labelledby={`status-select-label-${booking.id}`}
-                >
-                  <SelectTrigger id={`status-select-${booking.id}`} className="w-full">
-                    <SelectValue placeholder="Update status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ALL_BOOKING_STATUSES.filter((statusOption) => {
-                      const currentStatus = booking.status;
-
-                      // If Requested - show: Requested, Booked, Booking Failed (Paid), Booking Failed (Unpaid), Missed, User Cancelled
-                      if (currentStatus === "Requested") {
-                        return ["Requested", "Booked", "Booking Failed (Paid)", "Booking Failed (Unpaid)", "Missed", "User Cancelled"].includes(statusOption);
-                      }
-
-                      // If Booked - show: Booked, Requested, CNF & Cancelled
-                      if (currentStatus === "Booked") {
-                        return ["Booked", "Requested", "CNF & Cancelled"].includes(statusOption);
-                      }
-
-                      // If CNF & Cancelled - show: CNF & Cancelled, Requested
-                      if (currentStatus === "CNF & Cancelled") {
-                        return ["CNF & Cancelled", "Requested"].includes(statusOption);
-                      }
-
-                      // If Booking Failed (Unpaid), Missed, User Cancelled - show: current status and Requested
-                      if (["Booking Failed (Unpaid)", "Missed", "User Cancelled"].includes(currentStatus)) {
-                        return [currentStatus, "Requested"].includes(statusOption);
-                      }
-
-                      // If Booking Failed (Paid) - show: current status and Requested (handled in refund flow)
-                      if (currentStatus === "Booking Failed (Paid)") {
-                        return [currentStatus, "Requested"].includes(statusOption);
-                      }
-
-                      // Default fallback
-                      return true;
-                    }).map((statusOption) => (
-                      <SelectItem key={statusOption} value={statusOption}>
-                        {statusOption}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
+              {/* Payment Tracking (commented out for later enabling) */}
+              {/*
               {booking.status === "Booked" && bookingRecord && (
                 <TooltipProvider delayDuration={150}>
                   <div className="rounded-md border border-border/60 bg-muted/30 p-3">
@@ -1284,6 +1281,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                   </div>
                 </TooltipProvider>
               )}
+              */}
             </>
           )}
 
