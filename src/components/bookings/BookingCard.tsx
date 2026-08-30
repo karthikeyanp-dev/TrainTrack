@@ -767,7 +767,12 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                         // Default fallback
                         return true;
                       }).map((statusOption) => (
-                        <SelectItem key={statusOption} value={statusOption}>
+                        <SelectItem
+                          key={statusOption}
+                          value={statusOption}
+                          hideIndicator
+                          className="data-[state=checked]:bg-primary/15 data-[state=checked]:focus:bg-primary/25"
+                        >
                           <div className="flex items-center gap-2">
                             {getStatusIcon(statusOption)}
                             <span>{statusOption}</span>
@@ -826,7 +831,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
         </CardHeader>
         <CardContent className="px-3.5 sm:px-5 py-2 space-y-3 text-sm flex-grow min-w-0">
           <div className="my-1 rounded-xl border border-slate-300/80 dark:border-slate-700/90 bg-white/60 dark:bg-slate-900/50 px-2.5 py-3 sm:px-3 sm:py-3.5 space-y-2 shadow-xs">
-            {/* Journey & Book By Dates Strip - Left aligned */}
+            {/* Journey, Book By, Train, Upgrade & Remarks Strip - Left aligned */}
             <div className="grid grid-cols-1 divide-y divide-slate-200/60 dark:divide-slate-800/60 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800/60 overflow-hidden text-xs py-2">
               {/* Journey Date */}
               <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
@@ -849,6 +854,46 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                   {renderFormattedDate(clientFormattedBookingDate)}
                 </div>
               </div>
+
+              {/* Train (Preference removed) */}
+              {booking.trainPreference && (
+                <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
+                  <div className="p-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+                    <Train className="h-3.5 w-3.5" />
+                  </div>
+                  <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">TRAIN</span>
+                  <div className="text-xs sm:text-sm font-semibold text-foreground truncate min-w-0">
+                    {booking.trainPreference}
+                  </div>
+                </div>
+              )}
+
+              {/* Upgrade (Preference removed) */}
+              {booking.upgradePreferred && (
+                <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
+                  <div className="p-1 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 shrink-0">
+                    <Sparkles className="h-3.5 w-3.5" />
+                  </div>
+                  <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">UPGRADE</span>
+                  <div className="text-xs sm:text-sm font-semibold text-foreground truncate min-w-0 flex items-center gap-1">
+                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                    <span>Yes</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Remarks */}
+              {booking.remarks && (
+                <div className="flex flex-wrap items-start gap-x-1.5 gap-y-1 px-3 py-1 min-w-0">
+                  <div className="p-1 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                  </div>
+                  <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0 leading-5">REMARKS</span>
+                  <div className="text-xs sm:text-sm text-foreground min-w-[9rem] flex-1 break-words whitespace-pre-wrap">
+                    {booking.remarks}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Passengers */}
@@ -892,51 +937,6 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                 </div>
               </div>
             </div>
-
-            {/* Train, Upgrade & Remarks Strip */}
-            {(booking.trainPreference || booking.upgradePreferred || booking.remarks) && (
-              <div className="grid grid-cols-1 divide-y divide-slate-200/60 dark:divide-slate-800/60 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800/60 overflow-hidden text-xs py-2">
-                {/* Train (Preference removed) */}
-                {booking.trainPreference && (
-                  <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
-                    <div className="p-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
-                      <Train className="h-3.5 w-3.5" />
-                    </div>
-                    <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">TRAIN</span>
-                    <div className="text-xs sm:text-sm font-semibold text-foreground truncate min-w-0">
-                      {booking.trainPreference}
-                    </div>
-                  </div>
-                )}
-
-                {/* Upgrade (Preference removed) */}
-                {booking.upgradePreferred && (
-                  <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
-                    <div className="p-1 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 shrink-0">
-                      <Sparkles className="h-3.5 w-3.5" />
-                    </div>
-                    <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">UPGRADE</span>
-                    <div className="text-xs sm:text-sm font-semibold text-foreground truncate min-w-0 flex items-center gap-1">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
-                      <span>Yes</span>
-                    </div>
-                  </div>
-                )}
-
-                {/* Remarks */}
-                {booking.remarks && (
-                  <div className="flex flex-wrap items-start gap-x-1.5 gap-y-1 px-3 py-1 min-w-0">
-                    <div className="p-1 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
-                      <MessageSquare className="h-3.5 w-3.5" />
-                    </div>
-                    <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0 leading-5">REMARKS</span>
-                    <div className="text-xs sm:text-sm text-foreground min-w-[9rem] flex-1 break-words whitespace-pre-wrap">
-                      {booking.remarks}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           {booking.statusReason && (booking.status === "Missed" || booking.status === "Booking Failed (Unpaid)" || booking.status === "Booking Failed (Paid)" || booking.status === "CNF & Cancelled" || booking.status === "User Cancelled") && (

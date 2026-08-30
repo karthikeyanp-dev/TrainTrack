@@ -746,15 +746,22 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
             </Alert>
           ) : (
             <Accordion type="multiple" className="w-full space-y-4" defaultValue={completedDates.length > 0 ? [completedDates[0]] : []}>
-              {completedDates.map(date => (
-                <AccordionItem value={date} key={`completed-${date}`} className="border-b-0">
-                  <AccordionTrigger className="p-0 hover:no-underline">
-                    <DateGroupHeading dateString={date} />
-                  </AccordionTrigger>
-                  <AccordionContent>
-                    {renderBookingsForDate(completedBookingsByDate[date])}
-                  </AccordionContent>
-                </AccordionItem>
+              {completedDates.map((date, index) => (
+                <motion.div
+                  key={`completed-${date}`}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: index * 0.05 }}
+                >
+                  <AccordionItem value={date} className="border rounded-2xl px-4 bg-card shadow-elevation-1">
+                    <AccordionTrigger className="py-4 hover:no-underline">
+                      <DateGroupHeading dateString={date} />
+                    </AccordionTrigger>
+                    <AccordionContent className="pb-4">
+                      {renderBookingsForDate(completedBookingsByDate[date])}
+                    </AccordionContent>
+                  </AccordionItem>
+                </motion.div>
               ))}
             </Accordion>
           )}

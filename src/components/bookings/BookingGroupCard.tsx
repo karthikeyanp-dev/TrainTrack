@@ -382,29 +382,28 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
       <CardContent className="p-4 border-t bg-muted/5 grid grid-cols-1 gap-4">
         
         {/* Shared Prepared Accounts Section */}
-        <div className="flex flex-col h-full bg-background rounded-lg border shadow-sm overflow-hidden">
+        <div className="flex flex-col h-full">
           <Accordion type="single" collapsible className="w-full">
-            <AccordionItem value="group-ids" className="border-none">
-              <div className="p-3 bg-muted/10 flex items-center justify-between gap-2">
-                <AccordionTrigger className="py-0 hover:no-underline">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <CreditCard className="h-4 w-4 text-primary" />
-                    <span>IDs for Booking</span>
-                  </div>
-                </AccordionTrigger>
-
+            <AccordionItem value="group-ids" className="rounded-xl border border-slate-300/80 dark:border-slate-700/90 bg-white/60 dark:bg-slate-900/50 px-3.5 shadow-xs overflow-hidden">
+              <AccordionTrigger className="py-2.5 text-sm hover:no-underline">
+                <div className="flex items-center gap-2">
+                  <CreditCard className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                  <span className="font-semibold text-foreground">ID(s) for Booking</span>
+                  {hasSharedPreparedAccounts && (
+                    <span className="bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 text-xs px-2 py-0.5 rounded-full font-semibold">
+                      {firstBookingWithAccounts.preparedAccounts?.length}
+                    </span>
+                  )}
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pt-1 pb-2.5">
                 <div
-                  className="flex items-center gap-2"
+                  className="flex items-center justify-end gap-2 pb-2"
                   onClick={(e) => e.stopPropagation()}
                   onKeyDown={(e) => e.stopPropagation()}
                 >
-                  {hasSharedPreparedAccounts && (
-                    <Badge variant="secondary" className="hidden sm:inline-flex h-6">
-                      {firstBookingWithAccounts.preparedAccounts?.length} Linked
-                    </Badge>
-                  )}
-                  <BookingRequirementsSheet 
-                    booking={{ ...firstBookingWithAccounts, id: groupId }} 
+                  <BookingRequirementsSheet
+                    booking={{ ...firstBookingWithAccounts, id: groupId }}
                     iconComponent={CreditCard}
                     isGroupMode={true}
                     groupBookings={bookings}
@@ -412,10 +411,8 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                     className="flex-none w-auto aspect-auto px-3"
                   />
                 </div>
-              </div>
-              <AccordionContent className="px-3 pb-3">
                 {hasSharedPreparedAccounts ? (
-                  <div className="space-y-2 pt-3">
+                  <div className="space-y-2">
                     {firstBookingWithAccounts.preparedAccounts?.map((account, index) => (
                       <div
                         key={index}
@@ -466,7 +463,7 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                     ))}
                   </div>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center p-4 text-center border-2 border-dashed rounded-md bg-muted/5 mt-3">
+                  <div className="h-full flex flex-col items-center justify-center p-4 text-center border-2 border-dashed rounded-md bg-muted/5">
                     <CreditCard className="h-8 w-8 text-muted-foreground/30 mb-2" />
                     <p className="text-sm text-muted-foreground">No accounts added yet</p>
                     <p className="text-xs text-muted-foreground/70 mt-1">Add accounts to process this group booking</p>
@@ -478,52 +475,47 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
         </div>
 
         {/* Shared Booked Details Section */}
-        <div className="flex flex-col h-full min-w-0 bg-background rounded-lg border shadow-sm overflow-hidden">
+        <div className="flex flex-col h-full min-w-0">
           <Accordion type="single" collapsible className="w-full">
-            <AccordionItem value="group-booked-details" className="border-none">
-              <div className="p-3 bg-muted/10 flex items-center justify-between gap-2">
-                <AccordionTrigger className="py-0 hover:no-underline">
-                  <div className="flex items-center gap-2 text-sm font-medium">
-                    <CheckCircle2 className="h-4 w-4 text-primary" />
-                    <span>Booked Details</span>
-                  </div>
-                </AccordionTrigger>
-
+            <AccordionItem value="group-booked-details" className="rounded-xl border border-emerald-500/30 dark:border-emerald-500/20 bg-emerald-500/[0.04] dark:bg-emerald-950/20 px-3.5 shadow-xs overflow-hidden">
+              <AccordionTrigger className="py-2.5 text-sm hover:no-underline">
                 <div className="flex items-center gap-2">
-                  {hasGroupBookedDetails && (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                        onClick={() => setShowEditRecordForm(true)}
-                        title="Edit Booked Details"
-                      >
-                        <Edit3 className="h-3 w-3" />
-                      </Button>
-                      <span className="h-5 w-5 rounded-full bg-green-600 flex items-center justify-center">
-                        <Check className="h-3 w-3 text-white" />
-                      </span>
-                    </>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                  <span className="font-semibold text-foreground">Booked Details</span>
+                  {groupBookingDetails && (
+                    <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 ml-auto mr-1">
+                      ₹{groupBookingDetails.totalAmount.toFixed(2)}
+                    </span>
                   )}
                 </div>
-              </div>
-              <AccordionContent className="px-3 pb-3">
+              </AccordionTrigger>
+              <AccordionContent className="pt-1 pb-2.5">
                 {isLoadingGroupBookingDetails ? (
                   <div className="h-full flex items-center justify-center p-6 text-sm text-muted-foreground">
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     Loading…
                   </div>
-                ) : hasGroupBookedDetails ? ( 
-                  <div className="space-y-3 pt-3">
+                ) : hasGroupBookedDetails ? (
+                  <div className="space-y-3">
                     <div className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">
                       <span className="text-xs font-medium text-green-700 dark:text-green-400 flex items-center gap-1.5">
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         Status: Booked
                       </span>
-                      <Badge variant="outline" className="bg-background text-xs">
-                        {bookings.length} Bookings
-                      </Badge>
+                      <div className="flex items-center gap-1.5">
+                        <Badge variant="outline" className="bg-background text-xs">
+                          {bookings.length} Bookings
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                          onClick={() => setShowEditRecordForm(true)}
+                          title="Edit Booked Details"
+                        >
+                          <Edit3 className="h-3 w-3" />
+                        </Button>
+                      </div>
                     </div>
                     
                     <div className="grid grid-cols-2 gap-2 text-xs">
@@ -568,7 +560,7 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                     </div>
                   </div>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center p-4 text-center border-2 border-dashed rounded-md bg-muted/5 mt-3">
+                  <div className="h-full flex flex-col items-center justify-center p-4 text-center border-2 border-dashed rounded-md bg-muted/5">
                     <CheckCircle2 className="h-8 w-8 text-muted-foreground/30 mb-2" />
                     <p className="text-sm text-muted-foreground">Not booked yet</p>
                     <p className="text-xs text-muted-foreground/70 mt-1">Add details once tickets are confirmed</p>
@@ -781,7 +773,12 @@ function GroupStatusUpdate({ bookings, groupId }: GroupStatusUpdateProps) {
               // For Mixed status, show all options
               return true;
             }).map((statusOption) => (
-              <SelectItem key={statusOption} value={statusOption}>
+              <SelectItem
+                key={statusOption}
+                value={statusOption}
+                hideIndicator
+                className="data-[state=checked]:bg-primary/15 data-[state=checked]:focus:bg-primary/25"
+              >
                 {statusOption}
               </SelectItem>
             ))}
