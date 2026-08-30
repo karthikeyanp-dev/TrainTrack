@@ -700,18 +700,18 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
 
   return (
     <motion.div
-      className="h-full"
+      className="h-full min-w-0"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -2 }}
       transition={{ duration: 0.2 }}
     >
       <Card className={cn(
-        "w-full h-full shadow-md hover:shadow-lg transition-shadow duration-200 flex flex-col relative",
+        "w-full h-full min-w-0 overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-200 flex flex-col relative",
         bookingCardBg,
         isSelected && "ring-2 ring-primary border-primary"
       )}>
-        <CardHeader className="p-3.5 sm:p-5 pb-2 sm:pb-2.5">
+        <CardHeader className="p-3.5 sm:p-5 pb-2 sm:pb-2.5 min-w-0">
           <div className="flex gap-3 items-start">
             {selectionMode && (
               <Checkbox
@@ -824,7 +824,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             </div>
           </div>
         </CardHeader>
-        <CardContent className="px-3.5 sm:px-5 py-2 space-y-3 text-sm flex-grow">
+        <CardContent className="px-3.5 sm:px-5 py-2 space-y-3 text-sm flex-grow min-w-0">
           <div className="my-1 rounded-xl border border-slate-300/80 dark:border-slate-700/90 bg-white/60 dark:bg-slate-900/50 px-2.5 py-3 sm:px-3 sm:py-3.5 space-y-2 shadow-xs">
             {/* Journey & Book By Dates Strip - Left aligned */}
             <div className="grid grid-cols-1 divide-y divide-slate-200/60 dark:divide-slate-800/60 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800/60 overflow-hidden text-xs py-2">
@@ -834,7 +834,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                   <CalendarDays className="h-3.5 w-3.5" />
                 </div>
                 <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">JOURNEY</span>
-                <div className="text-xs sm:text-sm font-semibold text-foreground truncate">
+                <div className="text-xs sm:text-sm font-semibold text-foreground truncate min-w-0">
                   {renderFormattedDate(clientFormattedJourneyDate)}
                 </div>
               </div>
@@ -845,7 +845,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                   <Clock className="h-3.5 w-3.5" />
                 </div>
                 <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">BOOK BY</span>
-                <div className="text-xs sm:text-sm font-semibold text-foreground truncate">
+                <div className="text-xs sm:text-sm font-semibold text-foreground truncate min-w-0">
                   {renderFormattedDate(clientFormattedBookingDate)}
                 </div>
               </div>
@@ -903,7 +903,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                       <Train className="h-3.5 w-3.5" />
                     </div>
                     <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">TRAIN</span>
-                    <div className="text-xs sm:text-sm font-semibold text-foreground truncate">
+                    <div className="text-xs sm:text-sm font-semibold text-foreground truncate min-w-0">
                       {booking.trainPreference}
                     </div>
                   </div>
@@ -916,7 +916,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                       <Sparkles className="h-3.5 w-3.5" />
                     </div>
                     <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">UPGRADE</span>
-                    <div className="text-xs sm:text-sm font-semibold text-foreground truncate flex items-center gap-1">
+                    <div className="text-xs sm:text-sm font-semibold text-foreground truncate min-w-0 flex items-center gap-1">
                       <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
                       <span>Yes</span>
                     </div>
@@ -925,12 +925,12 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
 
                 {/* Remarks */}
                 {booking.remarks && (
-                  <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
-                    <div className="p-1 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0">
+                  <div className="flex flex-wrap items-start gap-x-1.5 gap-y-1 px-3 py-1 min-w-0">
+                    <div className="p-1 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
                       <MessageSquare className="h-3.5 w-3.5" />
                     </div>
-                    <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">REMARKS</span>
-                    <div className="text-xs sm:text-sm text-foreground truncate">
+                    <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0 leading-5">REMARKS</span>
+                    <div className="text-xs sm:text-sm text-foreground min-w-[9rem] flex-1 break-words whitespace-pre-wrap">
                       {booking.remarks}
                     </div>
                   </div>
@@ -1084,20 +1084,20 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                     </Button>
 
                     <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
-                      <div>
+                      <div className="min-w-0">
                         <span className="text-muted-foreground text-[10px] font-semibold block uppercase tracking-wider">Booked By</span>
                         <div className="font-semibold text-sm text-foreground mt-0.5 truncate">{bookingRecord.bookedBy}</div>
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <span className="text-muted-foreground text-[10px] font-semibold block uppercase tracking-wider">Amount</span>
                         <div className="font-mono font-bold text-sm text-emerald-600 dark:text-emerald-400 mt-0.5">₹{bookingRecord.amountCharged}</div>
                       </div>
 
-                      <div className="pt-2 border-t border-border/40">
+                      <div className="min-w-0 pt-2 border-t border-border/40">
                         <span className="text-muted-foreground text-[10px] font-semibold block uppercase tracking-wider">Account Used</span>
                         <div className="font-mono font-medium text-xs text-foreground mt-0.5 truncate select-all">{bookingRecord.bookedAccountUsername}</div>
                       </div>
-                      <div className="pt-2 border-t border-border/40">
+                      <div className="min-w-0 pt-2 border-t border-border/40">
                         <span className="text-muted-foreground text-[10px] font-semibold block uppercase tracking-wider">Payment Method</span>
                         <div className="mt-0.5">
                           <span className="inline-flex items-center font-medium text-foreground px-1.5 py-0.5 rounded bg-muted/60 dark:bg-slate-800 text-[11px] border border-border/40">
@@ -1133,15 +1133,19 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
           </div>
         )}
 
-        <CardFooter className="px-3.5 sm:px-5 pt-3 pb-3.5 flex flex-col items-stretch gap-2.5 border-t">
-          {/* Created and Last Updated side by side in a single compact row */}
-          <div className="flex items-center justify-between text-[11px] text-muted-foreground px-0.5">
-            <div className="truncate">
-              <span style={labelHighlightStyle}>Created: </span>
+        <CardFooter className="px-3.5 sm:px-5 pt-3 pb-3.5 flex flex-col items-stretch gap-2.5 border-t min-w-0">
+          {/* Created (left) and Updated (right): labels on one row, values on the next */}
+          <div className="grid grid-cols-2 gap-x-2 text-[11px] text-muted-foreground px-0.5 min-w-0">
+            <div className="min-w-0 break-words">
+              <span style={labelHighlightStyle}>Created:</span>
+            </div>
+            <div className="min-w-0 break-words text-right">
+              <span style={labelHighlightStyle}>Updated:</span>
+            </div>
+            <div className="min-w-0 break-words">
               <span>{clientFormattedCreatedAt || "..."}</span>
             </div>
-            <div className="text-right truncate ml-2">
-              <span style={labelHighlightStyle}>Updated: </span>
+            <div className="min-w-0 break-words text-right">
               <span>{clientFormattedUpdatedAt || "..."}</span>
             </div>
           </div>

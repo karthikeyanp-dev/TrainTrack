@@ -425,7 +425,7 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
     // Helper to render groups for a category
     const renderGroupCards = (categoryGroups: [string, Booking[]][]) => (
       categoryGroups.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 mb-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 mb-4">
           {categoryGroups.map(([groupId, groupBookings]) => (
             <BookingGroupCard
               key={groupId}
@@ -564,21 +564,21 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
         )}>
           <TabsTrigger
             value="pending"
-            className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-sm px-2 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
+            className="inline-flex items-center justify-center gap-1 sm:gap-2 rounded-sm px-1 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
           >
             <Clock className="h-4 w-4 shrink-0" />
             Pending
           </TabsTrigger>
           <TabsTrigger
             value="completed"
-            className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-sm px-2 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
+            className="inline-flex items-center justify-center gap-1 sm:gap-2 rounded-sm px-1 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
           >
             <CheckCircle2 className="h-4 w-4 shrink-0" />
             Completed
           </TabsTrigger>
           <TabsTrigger
             value="upcoming"
-            className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-sm px-2 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
+            className="inline-flex items-center justify-center gap-1 sm:gap-2 rounded-sm px-1 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
           >
             <CalendarDays className="h-4 w-4 shrink-0" />
             Upcoming
@@ -586,7 +586,7 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
           {hasRefunds && (
             <TabsTrigger
               value="refunds"
-              className="inline-flex items-center justify-center gap-1.5 sm:gap-2 rounded-sm px-2 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
+              className="inline-flex items-center justify-center gap-1 sm:gap-2 rounded-sm px-1 sm:px-3 py-1.5 text-sm font-medium data-[state=active]:bg-card data-[state=active]:text-foreground data-[state=active]:shadow-sm flex-1"
             >
               <Receipt className="h-4 w-4 shrink-0" />
               Refunds

@@ -3,7 +3,7 @@ import { Booking } from "@/types/booking";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Layers, Link2Off, CheckCircle2, CreditCard, Loader2, Share2, Check, Edit3 } from "lucide-react";
+import { Layers, Link2Off, CheckCircle2, CreditCard, Loader2, Share2, Check, X, Edit3 } from "lucide-react";
 import { BookingCard } from "./BookingCard";
 import { BookingRequirementsSheet } from "./BookingRequirementsSheet";
 import { ungroupBookings, updateBookingRequirements, saveBookingRecord, getBookingRecordByBookingId } from "@/lib/firestoreClient";
@@ -314,7 +314,7 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
 
 
   return (
-    <Card className="w-full border-2 overflow-hidden bg-slate-100/80 dark:bg-slate-800/40" style={{ borderColor: 'rgb(186 190 197 / 40%)' }}>
+    <Card className="w-full min-w-0 border-2 overflow-hidden bg-slate-100/80 dark:bg-slate-800/40" style={{ borderColor: 'rgb(186 190 197 / 40%)' }}>
       {/* Header Section */}
       <div className="bg-muted/30 p-4 flex flex-col gap-4">
         <div className="flex justify-between items-start">
@@ -419,33 +419,46 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                     {firstBookingWithAccounts.preparedAccounts?.map((account, index) => (
                       <div
                         key={index}
-                        className="bg-muted/10 border rounded-md p-2 text-xs space-y-1.5"
+                        className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-800/80 p-2.5 text-xs space-y-2 shadow-xs"
                       >
-                        <div className="flex justify-between items-center">
-                          <span className="font-medium text-foreground/80">Account #{index + 1}</span>
-                          <div className="flex gap-1.5">
-                            {account.isMasterAdded && (
-                              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-green-100 text-green-700 hover:bg-green-100 dark:bg-green-900/30 dark:text-green-400">
-                                Master
-                              </Badge>
-                            )}
-                            {account.isWalletLoaded && (
-                              <Badge variant="secondary" className="h-5 px-1.5 text-[10px] bg-blue-100 text-blue-700 hover:bg-blue-100 dark:bg-blue-900/30 dark:text-blue-400">
-                                Wallet
-                              </Badge>
-                            )}
+                        <div className="flex justify-between items-center gap-2">
+                          <span className="font-semibold text-foreground/90 text-xs">
+                            Account #{index + 1}
+                          </span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className={cn(
+                              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium",
+                              account.isMasterAdded
+                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20"
+                                : "bg-muted text-muted-foreground border border-border/40"
+                            )}>
+                              {account.isMasterAdded ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                              Master
+                            </span>
+                            <span className={cn(
+                              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium",
+                              account.isWalletLoaded
+                                ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20"
+                                : "bg-muted text-muted-foreground border border-border/40"
+                            )}>
+                              {account.isWalletLoaded ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                              Wallet{account.walletAmount !== undefined ? ` (₹${account.walletAmount.toFixed(2)})` : ''}
+                            </span>
                           </div>
                         </div>
-                        <div className="grid grid-cols-1 gap-1 text-muted-foreground">
-                          <div className="flex justify-between">
-                            <span>User:</span> <span className="font-mono text-foreground">{account.username}</span>
+                        <div className="space-y-1.5 pt-1.5 border-t border-border/40 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground text-[11px] w-12 shrink-0">User:</span>
+                            <span className="font-mono font-medium text-foreground select-all">{account.username}</span>
                           </div>
-                          <div className="flex justify-between">
-                            <span>Pass:</span> <span className="font-mono text-foreground">{account.password}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-muted-foreground text-[11px] w-12 shrink-0">Pass:</span>
+                            <span className="font-mono font-medium text-foreground bg-muted/60 dark:bg-slate-900/60 px-1.5 py-0.5 rounded select-all">{account.password}</span>
                           </div>
                           {account.handlingBy && (
-                            <div className="flex justify-between border-t pt-1 mt-0.5">
-                              <span>Handler:</span> <span className="text-foreground">{account.handlingBy}</span>
+                            <div className="flex items-center gap-2 pt-0.5">
+                              <span className="text-muted-foreground text-[11px] w-12 shrink-0">Handler:</span>
+                              <span className="font-medium text-foreground">{account.handlingBy}</span>
                             </div>
                           )}
                         </div>
@@ -465,7 +478,7 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
         </div>
 
         {/* Shared Booked Details Section */}
-        <div className="flex flex-col h-full bg-background rounded-lg border shadow-sm overflow-hidden">
+        <div className="flex flex-col h-full min-w-0 bg-background rounded-lg border shadow-sm overflow-hidden">
           <Accordion type="single" collapsible className="w-full">
             <AccordionItem value="group-booked-details" className="border-none">
               <div className="p-3 bg-muted/10 flex items-center justify-between gap-2">
@@ -514,21 +527,23 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                     </div>
                     
                     <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="space-y-1">
+                      <div className="min-w-0 space-y-1">
                         <span className="text-muted-foreground block">Booked By</span>
-                        <span className="font-medium">{groupBookingDetails!.bookedBy}</span>
+                        <span className="font-medium truncate block" title={groupBookingDetails!.bookedBy}>
+                          {groupBookingDetails!.bookedBy}
+                        </span>
                       </div>
-                      <div className="space-y-1">
+                      <div className="min-w-0 space-y-1">
                         <span className="text-muted-foreground block">Total Amount</span>
                         <span className="font-medium">₹{groupBookingDetails!.totalAmount.toFixed(2)}</span>
                       </div>
-                      <div className="space-y-1">
+                      <div className="min-w-0 space-y-1">
                         <span className="text-muted-foreground block">Account Used</span>
-                        <span className="font-medium truncate" title={groupBookingDetails!.bookedAccountUsername}>
+                        <span className="font-medium truncate block" title={groupBookingDetails!.bookedAccountUsername}>
                           {groupBookingDetails!.bookedAccountUsername}
                         </span>
                       </div>
-                      <div className="space-y-1">
+                      <div className="min-w-0 space-y-1">
                         <span className="text-muted-foreground block">Payment Method</span>
                         <span className="font-medium">{groupBookingDetails!.methodUsed}</span>
                       </div>

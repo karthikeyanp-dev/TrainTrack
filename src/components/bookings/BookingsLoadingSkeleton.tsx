@@ -58,7 +58,7 @@ export function BookingsLoadingSkeleton() {
           transition={{ delay: 0.1 }}
         >
           <Skeleton className="h-6 w-1/4" />
-          <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
             <CardSkeleton index={0} />
           </div>
         </motion.div>
@@ -70,7 +70,7 @@ export function BookingsLoadingSkeleton() {
           transition={{ delay: 0.2 }}
         >
           <Skeleton className="h-6 w-1/4" />
-          <div className="grid gap-4 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-1 lg:grid-cols-2 xl:grid-cols-3">
             <CardSkeleton index={1} />
             <CardSkeleton index={2} />
           </div>
