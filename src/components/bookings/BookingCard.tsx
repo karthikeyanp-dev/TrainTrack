@@ -835,7 +835,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             <div className="grid grid-cols-1 divide-y divide-slate-200/60 dark:divide-slate-800/60 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800/60 overflow-hidden text-xs py-2">
               {/* Journey Date */}
               <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
-                <div className="p-1 rounded-md bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 shrink-0">
+                <div className="p-1 rounded-md bg-amber-500/10 text-amber-500/80 dark:text-amber-400/80 shrink-0">
                   <CalendarDays className="h-3.5 w-3.5" />
                 </div>
                 <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">JOURNEY</span>
@@ -846,7 +846,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
 
               {/* Book By Date */}
               <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
-                <div className="p-1 rounded-md bg-pink-500/10 text-pink-600 dark:text-pink-400 shrink-0">
+                <div className="p-1 rounded-md bg-amber-500/10 text-amber-500/80 dark:text-amber-400/80 shrink-0">
                   <Clock className="h-3.5 w-3.5" />
                 </div>
                 <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">BOOK BY</span>
@@ -858,7 +858,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
               {/* Train (Preference removed) */}
               {booking.trainPreference && (
                 <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
-                  <div className="p-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 shrink-0">
+                  <div className="p-1 rounded-md bg-amber-500/10 text-amber-500/80 dark:text-amber-400/80 shrink-0">
                     <Train className="h-3.5 w-3.5" />
                   </div>
                   <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">TRAIN</span>
@@ -871,7 +871,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
               {/* Upgrade (Preference removed) */}
               {booking.upgradePreferred && (
                 <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
-                  <div className="p-1 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 shrink-0">
+                  <div className="p-1 rounded-md bg-amber-500/10 text-amber-500/80 dark:text-amber-400/80 shrink-0">
                     <Sparkles className="h-3.5 w-3.5" />
                   </div>
                   <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">UPGRADE</span>
@@ -884,12 +884,12 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
 
               {/* Remarks */}
               {booking.remarks && (
-                <div className="flex flex-wrap items-start gap-x-1.5 gap-y-1 px-3 py-1 min-w-0">
-                  <div className="p-1 rounded-md bg-amber-500/10 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5">
+                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-3 py-1 min-w-0">
+                  <div className="p-1 rounded-md bg-amber-500/10 text-amber-500/80 dark:text-amber-400/80 shrink-0">
                     <MessageSquare className="h-3.5 w-3.5" />
                   </div>
                   <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0 leading-5">REMARKS</span>
-                  <div className="text-xs sm:text-sm text-foreground min-w-[9rem] flex-1 break-words whitespace-pre-wrap">
+                  <div className="text-xs sm:text-sm font-semibold text-foreground min-w-[9rem] flex-1 break-words whitespace-pre-wrap">
                     {booking.remarks}
                   </div>
                 </div>
@@ -898,24 +898,24 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
 
             {/* Passengers */}
             <div className="rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800/60 px-3 py-2 text-xs">
-              <div className="flex items-start gap-1.5 min-w-0">
-                <div className="p-1 rounded-md bg-purple-500/10 text-purple-600 dark:text-purple-400 shrink-0 mt-0.5">
+              <div className="flex items-center gap-1.5 min-w-0">
+                <div className="p-1 rounded-md bg-amber-500/10 text-amber-500/80 dark:text-amber-400/80 shrink-0">
                   <Users className="h-3.5 w-3.5" />
                 </div>
-                <div className="min-w-0 flex-1 space-y-0.5">
-                  <div className="text-[10px] font-bold tracking-wider text-muted-foreground uppercase">
-                    PASSENGERS ({booking.passengers.length})
-                  </div>
-                  <div className="space-y-0.5 text-xs sm:text-sm font-semibold">
+                <div className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
+                  PASSENGERS ({booking.passengers.length})
+                </div>
+              </div>
+              <div className="space-y-0.5 text-xs sm:text-sm font-semibold pl-7 pt-1">
                     {[...booking.passengers].sort((a, b) => a.name.localeCompare(b.name)).map((passenger, index) => {
                       const isChild = passenger.age >= 5 && passenger.age <= 11;
                       return (
                         <div key={index} className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-muted-foreground font-normal">{index + 1}.</span>
                           <span className="text-foreground">{passenger.name}</span>
-                          <span className="text-muted-foreground/40 text-xs select-none">•</span>
+                          <span className="text-muted-foreground/40 select-none">•</span>
                           <span className="text-amber-500 dark:text-amber-400">{passenger.age}</span>
-                          <span className="text-muted-foreground/40 text-xs select-none">•</span>
+                          <span className="text-muted-foreground/40 select-none">•</span>
                           <span className="text-cyan-600 dark:text-cyan-400">{passenger.gender.toUpperCase()}</span>
                           {isChild && (
                             passenger.berthRequired ? (
@@ -933,8 +933,6 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                         </div>
                       );
                     })}
-                  </div>
-                </div>
               </div>
             </div>
           </div>
