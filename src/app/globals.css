@@ -227,3 +227,263 @@
     @apply bg-background text-foreground;
   }
 }
+
+:root {
+  --sk-grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='0.16'/%3E%3C/svg%3E");
+
+  --sk-card-bg: #d9cfba;
+  --sk-card-border: #a5967b;
+  --sk-card-hi: rgb(255 255 255 / 0.65);
+  --sk-card-lo: rgb(84 66 40 / 0.35);
+  --sk-text: #40342a;
+  --sk-label: #8a5a33;
+  --sk-well-bg: #c6bba2;
+  --sk-well-hi: rgb(255 255 255 / 0.7);
+  --sk-well-lo: rgb(66 52 30 / 0.45);
+  --sk-panel-bg: #efe8d8;
+  --sk-panel-border: #b4a88d;
+  --sk-panel-text: #43382a;
+  --sk-plate-bg: linear-gradient(180deg, #7fa198, #567f77 60%, #4a716a);
+  --sk-plate-border: #3c5f58;
+  --sk-chip-bg: linear-gradient(180deg, #6b5a41, #4e4030);
+  --sk-chip-text: #f3e9d2;
+  --sk-strip-journey: #cfc26e;
+  --sk-strip-bookby: #dca74e;
+  --sk-strip-train: #f6f1e3;
+  --sk-strip-upgrade: #a3bd8d;
+  --sk-strip-remarks: #93babd;
+  --sk-strip-text: #45392b;
+  --sk-strip-hi: rgb(255 255 255 / 0.55);
+  --sk-strip-lo: rgb(60 48 28 / 0.5);
+  --sk-steel: linear-gradient(180deg, #fbf8f0 0%, #d6cdb8 45%, #bfb49c 55%, #efe7d4 100%);
+  --sk-steel-border: #948a72;
+  --sk-copper: linear-gradient(180deg, #e8b285 0%, #b97c4e 45%, #96603a 55%, #d99f6f 100%);
+  --sk-copper-border: #6f4526;
+  --sk-brass: linear-gradient(180deg, #f0d79c 0%, #cfa659 45%, #b08a3e 55%, #e6c684 100%);
+  --sk-brass-border: #7d5f28;
+  --sk-metal-text: #3c2f1e;
+  --sk-gold-a: #f7e6b6;
+  --sk-gold-b: #d9ae5c;
+  --sk-gold-c: #9c742c;
+}
+
+.dark {
+  --sk-card-bg: #252b31;
+  --sk-card-border: #10151a;
+  --sk-card-hi: rgb(255 255 255 / 0.12);
+  --sk-card-lo: rgb(0 0 0 / 0.65);
+  --sk-text: #e9e5da;
+  --sk-label: #a05c33;
+  --sk-well-bg: #9aa0a6;
+  --sk-well-hi: rgb(255 255 255 / 0.25);
+  --sk-well-lo: rgb(0 0 0 / 0.5);
+  --sk-panel-bg: #c2c6ca;
+  --sk-panel-border: #82888e;
+  --sk-panel-text: #2f2c26;
+  --sk-plate-bg: linear-gradient(180deg, #4b8781, #2e6b64 60%, #275c56);
+  --sk-plate-border: #1d4a45;
+  --sk-chip-bg: linear-gradient(180deg, #3a4149, #23292f);
+  --sk-chip-text: #efece2;
+  --sk-strip-journey: #c9c06a;
+  --sk-strip-bookby: #d9a13f;
+  --sk-strip-train: #efece2;
+  --sk-strip-upgrade: #83a878;
+  --sk-strip-remarks: #5f9ba1;
+  --sk-strip-text: #33302a;
+  --sk-strip-hi: rgb(255 255 255 / 0.45);
+  --sk-strip-lo: rgb(0 0 0 / 0.55);
+  --sk-steel: linear-gradient(180deg, #f4f4f3 0%, #b9bec3 45%, #9aa0a6 55%, #e2e4e5 100%);
+  --sk-steel-border: #6b7178;
+  --sk-copper: linear-gradient(180deg, #e8b285 0%, #b97c4e 45%, #96603a 55%, #d99f6f 100%);
+  --sk-copper-border: #6f4526;
+  --sk-brass: linear-gradient(180deg, #f0d79c 0%, #cfa659 45%, #b08a3e 55%, #e6c684 100%);
+  --sk-brass-border: #7d5f28;
+  --sk-metal-text: #2f2a22;
+  --sk-gold-a: #f6e3ae;
+  --sk-gold-b: #d3a755;
+  --sk-gold-c: #8f6a26;
+}
+
+@layer components {
+  .sk-card {
+    position: relative;
+    border-radius: 1.4rem;
+    border: 1px solid var(--sk-card-border);
+    background-color: var(--sk-card-bg);
+    background-image: var(--sk-grain), linear-gradient(180deg, rgb(255 255 255 / 0.06), rgb(0 0 0 / 0.12));
+    background-blend-mode: soft-light, normal;
+    color: var(--sk-text);
+    box-shadow:
+      0 14px 28px -12px rgb(0 0 0 / 0.55),
+      0 3px 8px rgb(0 0 0 / 0.28),
+      inset 0 1px 0 var(--sk-card-hi),
+      inset 0 -3px 8px var(--sk-card-lo);
+  }
+
+  .sk-well {
+    border-radius: 1rem;
+    background-color: var(--sk-well-bg);
+    background-image: var(--sk-grain);
+    background-blend-mode: soft-light;
+    border: 1px solid rgb(0 0 0 / 0.25);
+    box-shadow:
+      inset 0 2px 6px var(--sk-well-lo),
+      inset 0 -1px 0 var(--sk-well-hi);
+  }
+
+  .sk-panel {
+    border-radius: 0.8rem;
+    background-color: var(--sk-panel-bg);
+    background-image: var(--sk-grain);
+    background-blend-mode: soft-light;
+    border: 1px solid var(--sk-panel-border);
+    color: var(--sk-panel-text);
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.35),
+      inset 0 1px 0 rgb(255 255 255 / 0.5),
+      inset 0 -1px 0 rgb(0 0 0 / 0.15);
+  }
+
+  .sk-plate {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 0.7rem;
+    background-image: var(--sk-grain), var(--sk-plate-bg);
+    background-blend-mode: soft-light, normal;
+    border: 1px solid var(--sk-plate-border);
+    padding: 0.35rem 0.8rem;
+    box-shadow:
+      0 2px 4px rgb(0 0 0 / 0.4),
+      inset 0 1px 0 rgb(255 255 255 / 0.25),
+      inset 0 -2px 4px rgb(0 0 0 / 0.35);
+  }
+
+  .sk-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: 0.6rem;
+    background-image: var(--sk-grain), var(--sk-chip-bg);
+    background-blend-mode: soft-light, normal;
+    border: 1px solid rgb(0 0 0 / 0.4);
+    color: var(--sk-chip-text);
+    padding: 0.25rem 0.65rem;
+    box-shadow:
+      0 1px 3px rgb(0 0 0 / 0.4),
+      inset 0 1px 0 rgb(255 255 255 / 0.15),
+      inset 0 -2px 3px rgb(0 0 0 / 0.4);
+  }
+
+  .sk-label {
+    color: var(--sk-label);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-shadow: 0 1px 0 rgb(255 255 255 / 0.25);
+  }
+
+  .sk-strip {
+    border-radius: 0.45rem;
+    background-color: var(--sk-strip, var(--sk-strip-train));
+    background-image: var(--sk-grain);
+    background-blend-mode: soft-light;
+    border: 1px solid rgb(0 0 0 / 0.3);
+    color: var(--sk-strip-text);
+    text-shadow: 0 1px 0 rgb(255 255 255 / 0.3);
+    box-shadow:
+      inset 0 2px 4px var(--sk-strip-lo),
+      inset 0 -1px 0 var(--sk-strip-hi);
+  }
+  .sk-strip-journey { --sk-strip: var(--sk-strip-journey); }
+  .sk-strip-bookby { --sk-strip: var(--sk-strip-bookby); }
+  .sk-strip-train { --sk-strip: var(--sk-strip-train); }
+  .sk-strip-upgrade { --sk-strip: var(--sk-strip-upgrade); }
+  .sk-strip-remarks { --sk-strip: var(--sk-strip-remarks); }
+
+  .sk-metal-steel { --sk-metal: var(--sk-steel); --sk-metal-border: var(--sk-steel-border); }
+  .sk-metal-copper { --sk-metal: var(--sk-copper); --sk-metal-border: var(--sk-copper-border); }
+  .sk-metal-brass { --sk-metal: var(--sk-brass); --sk-metal-border: var(--sk-brass-border); }
+
+  .sk-coin {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: 9999px;
+    border: 1px solid var(--sk-metal-border, var(--sk-steel-border));
+    background-image: var(--sk-grain), var(--sk-metal, var(--sk-steel));
+    background-blend-mode: soft-light, normal;
+    color: var(--sk-metal-text);
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.4),
+      inset 0 1px 0 rgb(255 255 255 / 0.6),
+      inset 0 -2px 3px rgb(0 0 0 / 0.3);
+  }
+
+  .sk-btn {
+    border: 1px solid var(--sk-metal-border, var(--sk-steel-border));
+    background-image:
+      var(--sk-grain),
+      repeating-linear-gradient(90deg, rgb(255 255 255 / 0.09) 0 1px, rgb(0 0 0 / 0) 1px 3px),
+      var(--sk-metal, var(--sk-steel));
+    background-blend-mode: soft-light, normal, normal;
+    color: var(--sk-metal-text);
+    box-shadow:
+      0 2px 4px rgb(0 0 0 / 0.45),
+      inset 0 1px 0 rgb(255 255 255 / 0.55),
+      inset 0 -2px 4px rgb(0 0 0 / 0.35);
+  }
+  .sk-btn:active {
+    box-shadow:
+      0 1px 1px rgb(0 0 0 / 0.4),
+      inset 0 2px 4px rgb(0 0 0 / 0.35);
+  }
+
+  .sk-plaque {
+    border-radius: 0.5rem;
+    border: 1px solid var(--sk-metal-border, var(--sk-steel-border));
+    background-image:
+      var(--sk-grain),
+      repeating-linear-gradient(90deg, rgb(255 255 255 / 0.09) 0 1px, rgb(0 0 0 / 0) 1px 3px),
+      var(--sk-metal, var(--sk-steel));
+    background-blend-mode: soft-light, normal, normal;
+    color: #f7ead8;
+    text-shadow: 0 -1px 0 rgb(0 0 0 / 0.45);
+    padding: 0.25rem 0.6rem;
+    box-shadow:
+      0 1px 3px rgb(0 0 0 / 0.45),
+      inset 0 1px 0 rgb(255 255 255 / 0.35),
+      inset 0 -2px 3px rgb(0 0 0 / 0.4);
+  }
+
+  .sk-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    border-radius: 0.55rem;
+    border: 1px solid var(--sk-badge-border, #333);
+    background-image: var(--sk-grain), linear-gradient(180deg, var(--sk-badge-hi, #888), var(--sk-badge-lo, #444));
+    background-blend-mode: soft-light, normal;
+    color: #f5f2ea;
+    font-weight: 600;
+    text-shadow: 0 -1px 0 rgb(0 0 0 / 0.4);
+    box-shadow:
+      0 1px 2px rgb(0 0 0 / 0.5),
+      inset 0 1px 0 rgb(255 255 255 / 0.35),
+      inset 0 -2px 3px rgb(0 0 0 / 0.4);
+  }
+  .sk-badge-blue { --sk-badge-hi: #6ea2e0; --sk-badge-lo: #2b5fa8; --sk-badge-border: #1d4884; }
+  .sk-badge-green { --sk-badge-hi: #58b98a; --sk-badge-lo: #1f7d51; --sk-badge-border: #155c3c; }
+  .sk-badge-amber { --sk-badge-hi: #e8b452; --sk-badge-lo: #b07a1c; --sk-badge-border: #8a5d12; }
+  .sk-badge-rose { --sk-badge-hi: #e0707c; --sk-badge-lo: #a82836; --sk-badge-border: #7c1b27; }
+  .sk-badge-orange { --sk-badge-hi: #eb9a4d; --sk-badge-lo: #bc6318; --sk-badge-border: #8f4a0f; }
+  .sk-badge-purple { --sk-badge-hi: #a678d8; --sk-badge-lo: #6d3fa4; --sk-badge-border: #52307c; }
+
+  .sk-gold-text {
+    background-image: linear-gradient(180deg, var(--sk-gold-a), var(--sk-gold-b) 55%, var(--sk-gold-c));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    filter: drop-shadow(0 1px 0 rgb(0 0 0 / 0.5));
+  }
+}

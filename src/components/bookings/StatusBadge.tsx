@@ -16,7 +16,18 @@ interface StatusBadgeProps {
   status: BookingStatus;
   size?: "sm" | "md" | "lg";
   pulse?: boolean;
+  variant?: "flat" | "skeuo";
 }
+
+const skeuoStatusClass: Record<string, string> = {
+  Requested: "sk-badge-blue",
+  Booked: "sk-badge-green",
+  Missed: "sk-badge-amber",
+  "Booking Failed (Unpaid)": "sk-badge-rose",
+  "Booking Failed (Paid)": "sk-badge-rose",
+  "User Cancelled": "sk-badge-orange",
+  "CNF & Cancelled": "sk-badge-purple",
+};
 
 const statusConfig: Record<BookingStatus, {
   icon: React.ElementType;
@@ -80,7 +91,7 @@ const iconSizes = {
   lg: "h-5 w-5",
 };
 
-export function StatusBadge({ status, size = "md", pulse: forcePulse }: StatusBadgeProps) {
+export function StatusBadge({ status, size = "md", pulse: forcePulse, variant = "flat" }: StatusBadgeProps) {
   const config = statusConfig[status] || {
     icon: Info,
     label: status,
@@ -96,9 +107,11 @@ export function StatusBadge({ status, size = "md", pulse: forcePulse }: StatusBa
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       className={cn(
-        "!inline-flex !flex-row items-center whitespace-nowrap flex-nowrap shrink-0 rounded-[2px] border font-medium shadow-sm",
+        "!inline-flex !flex-row items-center whitespace-nowrap flex-nowrap shrink-0",
+        variant === "skeuo"
+          ? cn("sk-badge", skeuoStatusClass[status] || "sk-badge-blue")
+          : cn("rounded-[2px] border font-medium shadow-sm", config.className),
         sizeClasses[size],
-        config.className,
       )}
     >
       <span className="relative flex shrink-0">

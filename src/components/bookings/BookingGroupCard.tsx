@@ -1,8 +1,7 @@
 import { useState, useEffect } from "react";
 import { Booking } from "@/types/booking";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { Layers, Link2Off, CheckCircle2, CreditCard, Loader2, Share2, Check, X, Edit3 } from "lucide-react";
 import { BookingCard } from "./BookingCard";
 import { BookingRequirementsSheet } from "./BookingRequirementsSheet";
@@ -314,28 +313,27 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
 
 
   return (
-    <Card className="w-full min-w-0 border-2 overflow-hidden bg-slate-100/80 dark:bg-slate-800/40" style={{ borderColor: 'rgb(186 190 197 / 40%)' }}>
-      {/* Header Section */}
-      <div className="bg-muted/30 p-4 flex flex-col gap-4">
+    <div className="sk-card w-full min-w-0 overflow-hidden">
+      <div className="p-4 flex flex-col gap-4">
         <div className="flex justify-between items-start">
           <div className="flex gap-3 items-center">
-             <div className="p-2 rounded-full bg-white">
-                <Layers className="h-6 w-6 text-primary" />
-             </div>
+             <span className="sk-coin sk-metal-steel h-10 w-10">
+                <Layers className="h-5 w-5" />
+             </span>
              <div>
-                <CardTitle className="text-lg">Group Booking</CardTitle>
-                <CardDescription>
+                <div className="sk-gold-text text-lg font-extrabold tracking-wide">Group Booking</div>
+                <div className="text-xs opacity-80">
                   {bookings.length} Bookings • {totalPassengers} Passengers
-                </CardDescription>
+                </div>
              </div>
           </div>
           <div className="flex gap-2">
             {!selectionMode && (
               <Button
-                variant="ghost"
+                variant="skeuo-steel"
                 size="sm"
                 onClick={handleShare}
-                className="h-8 w-8 px-0 justify-center bg-white hover:bg-white/90 text-primary hover:text-primary"
+                className="h-8 w-8 px-0 justify-center"
                 title="Share"
               >
                 <Share2 className="h-5 w-5" />
@@ -343,28 +341,27 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
             )}
             {!selectionMode && allowUngroup && (
                 <Button
-                  variant="ghost"
+                  variant="skeuo-copper"
                   size="sm"
                   onClick={() => setShowUngroupDialog(true)}
-                  className="h-8 w-8 px-0 justify-center bg-white hover:bg-white/90 text-[hsl(0_50%_53%)] hover:text-[hsl(0_50%_53%)]"
+                  className="h-8 w-8 px-0 justify-center text-[#5a1f14]"
                   title="Ungroup"
               >
-                  <Link2Off className="h-5 w-5 text-[hsl(0_50%_53%)]" />
+                  <Link2Off className="h-5 w-5" />
               </Button>
             )}
           </div>
         </div>
-        
-        {/* Route & Class Summary */}
-        <div className="flex flex-wrap gap-2 text-sm text-muted-foreground">
-             <Badge variant="outline">{uniqueSources.join(", ")} → {uniqueDestinations.join(", ")}</Badge>
-             {classes.map(c => <Badge key={c} variant="secondary">{c}</Badge>)}
+
+        <div className="flex flex-wrap gap-2 text-sm">
+             <span className="sk-chip text-xs">{uniqueSources.join(", ")} → {uniqueDestinations.join(", ")}</span>
+             {classes.map(c => <span key={c} className="sk-coin sk-metal-steel h-6 px-2.5 text-xs font-bold">{c}</span>)}
         </div>
       </div>
 
       {/* Individual Bookings List */}
-      <CardContent className="p-4 bg-muted/10 space-y-4 border-t">
-        <h4 className="font-medium text-sm text-muted-foreground mb-2">Individual Bookings</h4>
+      <CardContent className="p-3 sm:p-4 space-y-4 border-t border-black/25">
+        <h4 className="sk-label font-medium text-sm uppercase mb-2">Individual Bookings</h4>
         {bookings.map(booking => (
           <BookingCard 
             key={booking.id} 
@@ -379,18 +376,18 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
       </CardContent>
 
       {/* Shared Actions Section */}
-      <CardContent className="p-4 border-t bg-muted/5 grid grid-cols-1 gap-4">
+      <CardContent className="p-3 sm:p-4 border-t border-black/25 grid grid-cols-1 gap-4">
         
         {/* Shared Prepared Accounts Section */}
         <div className="flex flex-col h-full">
           <Accordion type="single" collapsible className="w-full">
-            <AccordionItem value="group-ids" className="rounded-xl border border-slate-300/80 dark:border-slate-700/90 bg-white/60 dark:bg-slate-900/50 px-3.5 shadow-xs overflow-hidden">
+            <AccordionItem value="group-ids" className="sk-well px-3.5 overflow-hidden">
               <AccordionTrigger className="py-2.5 text-sm hover:no-underline">
                 <div className="flex items-center gap-2">
-                  <CreditCard className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                  <span className="font-semibold text-foreground">ID(s) for Booking</span>
+                  <CreditCard className="h-4 w-4 text-purple-700" />
+                  <span className="font-semibold">ID(s) for Booking</span>
                   {hasSharedPreparedAccounts && (
-                    <span className="bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 text-xs px-2 py-0.5 rounded-full font-semibold">
+                    <span className="bg-purple-500/20 text-purple-900 border border-purple-700/30 text-xs px-2 py-0.5 rounded-full font-semibold">
                       {firstBookingWithAccounts.preparedAccounts?.length}
                     </span>
                   )}
@@ -409,6 +406,7 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                     groupBookings={bookings}
                     onSaveGroup={handleSaveGroupRequirements}
                     className="flex-none w-auto aspect-auto px-3"
+                    buttonVariant="skeuo-steel"
                   />
                 </div>
                 {hasSharedPreparedAccounts ? (
@@ -416,18 +414,18 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                     {firstBookingWithAccounts.preparedAccounts?.map((account, index) => (
                       <div
                         key={index}
-                        className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-800/80 p-2.5 text-xs space-y-2 shadow-xs"
+                        className="sk-panel p-2.5 text-xs space-y-2"
                       >
                         <div className="flex justify-between items-center gap-2">
-                          <span className="font-semibold text-foreground/90 text-xs">
+                          <span className="font-semibold opacity-90 text-xs">
                             Account #{index + 1}
                           </span>
                           <div className="flex items-center gap-1.5 shrink-0">
                             <span className={cn(
                               "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium",
                               account.isMasterAdded
-                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20"
-                                : "bg-muted text-muted-foreground border border-border/40"
+                                ? "bg-emerald-200/70 text-emerald-900 border border-emerald-700/30"
+                                : "bg-black/10 text-black/60 border border-black/20"
                             )}>
                               {account.isMasterAdded ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
                               Master
@@ -435,27 +433,27 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                             <span className={cn(
                               "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium",
                               account.isWalletLoaded
-                                ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20"
-                                : "bg-muted text-muted-foreground border border-border/40"
+                                ? "bg-blue-200/70 text-blue-900 border border-blue-700/30"
+                                : "bg-black/10 text-black/60 border border-black/20"
                             )}>
                               {account.isWalletLoaded ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
                               Wallet{account.walletAmount !== undefined ? ` (₹${account.walletAmount.toFixed(2)})` : ''}
                             </span>
                           </div>
                         </div>
-                        <div className="space-y-1.5 pt-1.5 border-t border-border/40 text-xs">
+                        <div className="space-y-1.5 pt-1.5 border-t border-black/10 text-xs">
                           <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground text-[11px] w-12 shrink-0">User:</span>
-                            <span className="font-mono font-medium text-foreground select-all">{account.username}</span>
+                            <span className="opacity-60 text-[11px] w-12 shrink-0">User:</span>
+                            <span className="font-mono font-medium select-all">{account.username}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground text-[11px] w-12 shrink-0">Pass:</span>
-                            <span className="font-mono font-medium text-foreground bg-muted/60 dark:bg-slate-900/60 px-1.5 py-0.5 rounded select-all">{account.password}</span>
+                            <span className="opacity-60 text-[11px] w-12 shrink-0">Pass:</span>
+                            <span className="font-mono font-medium bg-black/10 px-1.5 py-0.5 rounded select-all">{account.password}</span>
                           </div>
                           {account.handlingBy && (
                             <div className="flex items-center gap-2 pt-0.5">
-                              <span className="text-muted-foreground text-[11px] w-12 shrink-0">Handler:</span>
-                              <span className="font-medium text-foreground">{account.handlingBy}</span>
+                              <span className="opacity-60 text-[11px] w-12 shrink-0">Handler:</span>
+                              <span className="font-medium">{account.handlingBy}</span>
                             </div>
                           )}
                         </div>
@@ -463,10 +461,10 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                     ))}
                   </div>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center p-4 text-center border-2 border-dashed rounded-md bg-muted/5">
-                    <CreditCard className="h-8 w-8 text-muted-foreground/30 mb-2" />
-                    <p className="text-sm text-muted-foreground">No accounts added yet</p>
-                    <p className="text-xs text-muted-foreground/70 mt-1">Add accounts to process this group booking</p>
+                  <div className="h-full flex flex-col items-center justify-center p-4 text-center border-2 border-dashed border-black/20 rounded-md bg-black/5">
+                    <CreditCard className="h-8 w-8 opacity-30 mb-2" />
+                    <p className="text-sm opacity-70">No accounts added yet</p>
+                    <p className="text-xs opacity-50 mt-1">Add accounts to process this group booking</p>
                   </div>
                 )}
               </AccordionContent>
@@ -477,13 +475,13 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
         {/* Shared Booked Details Section */}
         <div className="flex flex-col h-full min-w-0">
           <Accordion type="single" collapsible className="w-full">
-            <AccordionItem value="group-booked-details" className="rounded-xl border border-emerald-500/30 dark:border-emerald-500/20 bg-emerald-500/[0.04] dark:bg-emerald-950/20 px-3.5 shadow-xs overflow-hidden">
+            <AccordionItem value="group-booked-details" className="sk-well px-3.5 overflow-hidden">
               <AccordionTrigger className="py-2.5 text-sm hover:no-underline">
                 <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  <span className="font-semibold text-foreground">Booked Details</span>
+                  <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+                  <span className="font-semibold">Booked Details</span>
                   {groupBookingDetails && (
-                    <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 ml-auto mr-1">
+                    <span className="text-xs font-mono font-bold text-emerald-700 ml-auto mr-1">
                       ₹{groupBookingDetails.totalAmount.toFixed(2)}
                     </span>
                   )}
@@ -491,25 +489,25 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
               </AccordionTrigger>
               <AccordionContent className="pt-1 pb-2.5">
                 {isLoadingGroupBookingDetails ? (
-                  <div className="h-full flex items-center justify-center p-6 text-sm text-muted-foreground">
+                  <div className="h-full flex items-center justify-center p-6 text-sm opacity-70">
                     <Loader2 className="h-4 w-4 animate-spin mr-2" />
                     Loading…
                   </div>
                 ) : hasGroupBookedDetails ? (
                   <div className="space-y-3">
-                    <div className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">
-                      <span className="text-xs font-medium text-green-700 dark:text-green-400 flex items-center gap-1.5">
+                    <div className="sk-panel flex items-center justify-between p-2">
+                      <span className="text-xs font-medium text-emerald-800 flex items-center gap-1.5">
                         <CheckCircle2 className="h-3.5 w-3.5" />
                         Status: Booked
                       </span>
                       <div className="flex items-center gap-1.5">
-                        <Badge variant="outline" className="bg-background text-xs">
+                        <span className="sk-chip text-xs">
                           {bookings.length} Bookings
-                        </Badge>
+                        </span>
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                          className="h-6 w-6 opacity-60 hover:opacity-100"
                           onClick={() => setShowEditRecordForm(true)}
                           title="Edit Booked Details"
                         >
@@ -517,36 +515,36 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                         </Button>
                       </div>
                     </div>
-                    
+
                     <div className="grid grid-cols-2 gap-2 text-xs">
                       <div className="min-w-0 space-y-1">
-                        <span className="text-muted-foreground block">Booked By</span>
+                        <span className="opacity-60 block">Booked By</span>
                         <span className="font-medium truncate block" title={groupBookingDetails!.bookedBy}>
                           {groupBookingDetails!.bookedBy}
                         </span>
                       </div>
                       <div className="min-w-0 space-y-1">
-                        <span className="text-muted-foreground block">Total Amount</span>
+                        <span className="opacity-60 block">Total Amount</span>
                         <span className="font-medium">₹{groupBookingDetails!.totalAmount.toFixed(2)}</span>
                       </div>
                       <div className="min-w-0 space-y-1">
-                        <span className="text-muted-foreground block">Account Used</span>
+                        <span className="opacity-60 block">Account Used</span>
                         <span className="font-medium truncate block" title={groupBookingDetails!.bookedAccountUsername}>
                           {groupBookingDetails!.bookedAccountUsername}
                         </span>
                       </div>
                       <div className="min-w-0 space-y-1">
-                        <span className="text-muted-foreground block">Payment Method</span>
+                        <span className="opacity-60 block">Payment Method</span>
                         <span className="font-medium">{groupBookingDetails!.methodUsed}</span>
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <div className="text-xs font-medium text-foreground/80">Split per booking</div>
+                      <div className="text-xs font-medium opacity-80">Split per booking</div>
                       <div className="space-y-2">
                         {groupBookingDetails!.splitByBooking.map(x => (
-                          <div key={x.bookingId} className="flex items-center justify-between rounded-md border bg-muted/10 px-3 py-2 text-xs">
-                            <span className="text-muted-foreground">
+                          <div key={x.bookingId} className="sk-panel flex items-center justify-between px-3 py-2 text-xs">
+                            <span className="opacity-60">
                               {x.passengers} pax • {x.bookingFor}
                             </span>
                             <span className="font-medium">₹{x.amountCharged.toFixed(2)}</span>
@@ -555,15 +553,15 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                       </div>
                     </div>
 
-                    <div className="text-xs text-center text-muted-foreground border-t pt-2">
+                    <div className="text-xs text-center opacity-60 border-t border-black/10 pt-2">
                       Details are applied to all bookings in this group.
                     </div>
                   </div>
                 ) : (
-                  <div className="h-full flex flex-col items-center justify-center p-4 text-center border-2 border-dashed rounded-md bg-muted/5">
-                    <CheckCircle2 className="h-8 w-8 text-muted-foreground/30 mb-2" />
-                    <p className="text-sm text-muted-foreground">Not booked yet</p>
-                    <p className="text-xs text-muted-foreground/70 mt-1">Add details once tickets are confirmed</p>
+                  <div className="h-full flex flex-col items-center justify-center p-4 text-center border-2 border-dashed border-black/20 rounded-md bg-black/5">
+                    <CheckCircle2 className="h-8 w-8 opacity-30 mb-2" />
+                    <p className="text-sm opacity-70">Not booked yet</p>
+                    <p className="text-xs opacity-50 mt-1">Add details once tickets are confirmed</p>
                   </div>
                 )}
               </AccordionContent>
@@ -573,7 +571,7 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
       </CardContent>
 
       {/* Group Status Update Section */}
-      <CardContent className="p-4 border-t bg-muted/5">
+      <CardContent className="p-3 sm:p-4 border-t border-black/25">
         <GroupStatusUpdate bookings={bookings} groupId={groupId} />
       </CardContent>
 
@@ -618,7 +616,7 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
           />
         </DialogContent>
       </Dialog>
-    </Card>
+    </div>
   );
 }
 

@@ -70,6 +70,7 @@ interface BookingRequirementsSheetProps {
   groupBookings?: Booking[];
   onSaveGroup?: (preparedAccounts: PreparedAccount[]) => Promise<{ success: boolean; error?: string }>;
   className?: string;
+  buttonVariant?: "outline" | "skeuo" | "skeuo-steel" | "skeuo-copper" | "skeuo-brass";
 }
 
 export function BookingRequirementsSheet({ 
@@ -78,7 +79,8 @@ export function BookingRequirementsSheet({
   isGroupMode = false, 
   groupBookings = [],
   onSaveGroup,
-  className
+  className,
+  buttonVariant = "outline"
 }: BookingRequirementsSheetProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [availableAccounts, setAvailableAccounts] = useState<IrctcAccount[]>([]);
@@ -223,7 +225,7 @@ export function BookingRequirementsSheet({
     <Sheet open={isOpen} onOpenChange={handleOpenChange} modal={false}>
       <SheetTrigger asChild>
         <Button
-          variant="outline"
+          variant={buttonVariant}
           size="sm"
           className={cn("flex-1 aspect-square p-2 relative", className)}
           title="Booking Requirements"

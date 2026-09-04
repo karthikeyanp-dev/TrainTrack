@@ -3,7 +3,7 @@
 
 import type { Booking, BookingStatus } from "@/types/booking";
 import { ALL_BOOKING_STATUSES } from "@/types/booking";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "./StatusBadge";
@@ -78,8 +78,6 @@ function getStatusIcon(status: BookingStatus) {
 }
 
 export function BookingCard({ booking, isRefundMode = false, selectionMode = false, isSelected = false, onToggleSelection, hideActions = false, hideSharedDetails = false }: BookingCardProps) {
-  const labelHighlightStyle = { color: '#AB945E', fontWeight: 700 };
-  const sourceDestStyle = { color: '#dfa92a', fontWeight: 700 };
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const router = useRouter();
@@ -151,17 +149,17 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
 
   const renderFormattedDate = (dateVal: string | null | undefined) => {
     if (!dateVal || dateVal === "..." || dateVal === "N/A" || dateVal === "Invalid Date" || dateVal === "Error Date") {
-      return <span className="text-muted-foreground">{dateVal || "..."}</span>;
+      return <span className="opacity-60">{dateVal || "..."}</span>;
     }
     const match = dateVal.match(/^(.*?)(\s*\([A-Za-z]{3}\))$/);
     if (match) {
       return (
-        <span className="font-semibold text-foreground">
-          {match[1]} <span className="text-amber-500 dark:text-amber-400 font-bold">{match[2].trim()}</span>
+        <span className="font-bold">
+          {match[1]} <span className="font-extrabold opacity-75">{match[2].trim()}</span>
         </span>
       );
     }
-    return <span className="font-semibold text-foreground">{dateVal}</span>;
+    return <span className="font-bold">{dateVal}</span>;
   };
 
   useEffect(() => {
@@ -640,7 +638,6 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
     return 'text-foreground';
   };
 
-  // Color styling for booking type (G in amber, T in blue/purple for AC, T in green for SL)
   const getTypeColorClass = (bookingType: string, classType: string): string => {
     const isGeneral = ['General', 'Regular'].includes(String(bookingType));
     if (isGeneral) {
@@ -656,47 +653,10 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
     return 'text-primary dark:text-indigo-400';
   };
 
-  // Container border and background for the class badge
-  const getBadgeContainerClasses = (bookingType: string, classType: string): string => {
-    const isGeneral = ['General', 'Regular'].includes(String(bookingType));
-    if (isGeneral) {
-      return 'border-amber-500/30 bg-amber-500/10 dark:bg-amber-950/20';
-    }
-
-    const isSL = ['SL', 'UR', '2S'].includes(classType);
-    if (isSL) {
-      return 'border-emerald-500/30 bg-emerald-500/10 dark:bg-emerald-950/20';
-    }
-
-    return 'border-primary/30 bg-primary/10 dark:bg-primary/20';
-  };
-
-  // Determine card background tint based on booking category
-  const getBookingCardBackgroundClasses = (bookingType: string, classType: string): string => {
-    const isGeneral = ['General', 'Regular'].includes(String(bookingType));
-    const isSL = ['SL', 'UR', '2S'].includes(classType);
-
-    if (isGeneral) {
-      return "border-2 bg-amber-50/80 border-amber-300 dark:bg-amber-950/30 dark:border-amber-700/50";
-    }
-
-    if (isSL) {
-      return "border-2 bg-green-50/80 border-green-300 dark:bg-green-950/30 dark:border-green-700/50";
-    }
-
-    // Tatkal AC
-    return "border-2 bg-blue-50/80 border-blue-300 dark:bg-blue-950/30 dark:border-blue-700/50";
-  };
-
   const compactClass = getCompactClassDisplay(booking.classType);
   const typeChar = ['General', 'Regular'].includes(String(booking.bookingType)) ? 'G' : 'T';
-  const displayClass = `${typeChar}-${compactClass}`;
   const typeColorClass = getTypeColorClass(booking.bookingType, booking.classType);
   const classColorClass = getClassColorClass(booking.classType);
-  const badgeContainerClasses = getBadgeContainerClasses(booking.bookingType, booking.classType);
-
-  // Background tint based on booking type and class for quick visual identification
-  const bookingCardBg = getBookingCardBackgroundClasses(booking.bookingType, booking.classType);
 
   return (
     <motion.div
@@ -706,10 +666,9 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
       whileHover={{ y: -2 }}
       transition={{ duration: 0.2 }}
     >
-      <Card className={cn(
-        "w-full h-full min-w-0 overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-200 flex flex-col relative",
-        bookingCardBg,
-        isSelected && "ring-2 ring-primary border-primary"
+      <div className={cn(
+        "sk-card w-full h-full min-w-0 overflow-hidden flex flex-col relative",
+        isSelected && "ring-2 ring-primary"
       )}>
         <CardHeader className="p-3.5 sm:p-5 pb-2 sm:pb-2.5 min-w-0">
           <div className="flex gap-3 items-start">
@@ -720,8 +679,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                 className="mt-2.5 shrink-0"
               />
             )}
-            <div className="space-y-1.5 flex-1 min-w-0 relative">
-              {/* Status Badge - Top Right with interactive status changer */}
+            <div className="space-y-2 flex-1 min-w-0 relative">
               <div className="absolute top-0 right-0 z-10">
                 {!hideActions ? (
                   <Select
@@ -730,9 +688,9 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                     disabled={statusUpdateMutation.isPending}
                     name={`status-select-${booking.id}`}
                   >
-                    <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent shadow-none hover:opacity-85 focus:ring-0 focus:ring-offset-0 cursor-pointer gap-1 rounded-full [&>svg]:opacity-70 [&>svg]:h-3.5 [&>svg]:w-3.5">
+                    <SelectTrigger className="w-auto h-auto p-0 border-0 bg-transparent shadow-none hover:opacity-85 focus:ring-0 focus:ring-offset-0 cursor-pointer gap-1 rounded-full text-[color:var(--sk-text)] [&>svg]:opacity-70 [&>svg]:h-3.5 [&>svg]:w-3.5">
                       <div className="inline-flex items-center">
-                        <StatusBadge status={booking.status} size="sm" />
+                        <StatusBadge status={booking.status} size="sm" variant="skeuo" />
                       </div>
                     </SelectTrigger>
                     <SelectContent align="end">
@@ -782,45 +740,44 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                     </SelectContent>
                   </Select>
                 ) : (
-                  <StatusBadge status={booking.status} size="sm" />
+                  <StatusBadge status={booking.status} size="sm" variant="skeuo" />
                 )}
               </div>
 
-              {/* First row: Source-Destination with Arrow */}
               <div className="flex min-h-7 items-center gap-2 pr-28 flex-wrap sm:flex-nowrap">
-                <CardTitle className="text-xl sm:text-2xl font-bold flex-shrink-0 tracking-tight">
-                  <span style={sourceDestStyle}>{booking.source.toUpperCase()}</span>
-                </CardTitle>
-                <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground flex-shrink-0" />
-                <CardTitle className="text-xl sm:text-2xl font-bold flex-shrink-0 tracking-tight">
-                  <span style={sourceDestStyle}>{booking.destination.toUpperCase()}</span>
-                </CardTitle>
+                <div className="sk-plate">
+                  <span className="sk-gold-text text-xl sm:text-2xl font-extrabold tracking-wide">{booking.source.toUpperCase()}</span>
+                  <ArrowRight className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" style={{ color: "var(--sk-gold-b)" }} />
+                  <span className="sk-gold-text text-xl sm:text-2xl font-extrabold tracking-wide">{booking.destination.toUpperCase()}</span>
+                </div>
               </div>
 
-              {/* Second row: For userName and Class display */}
               <div className="flex justify-between items-center gap-2 pt-0.5">
-                <CardDescription className="flex-1 min-w-0 text-xs sm:text-sm">
-                  For <span className="font-bold text-foreground">{booking.userName}</span>
+                <div className="sk-chip flex-1 min-w-0 text-xs sm:text-sm">
+                  <span className="opacity-80">For</span>
+                  <span className="font-bold truncate">{booking.userName}</span>
                   {booking.groupId && (
-                    <span className="ml-1.5 inline-flex items-center rounded-full border px-1.5 py-0.2 text-[10px] sm:text-xs font-semibold border-transparent bg-secondary text-secondary-foreground">
+                    <span className="ml-1 inline-flex items-center rounded-full border border-white/20 bg-white/10 px-1.5 py-0.2 text-[10px] sm:text-xs font-semibold">
                       Grouped
                     </span>
                   )}
-                </CardDescription>
+                </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <span
-                    className={cn(
-                      "text-base sm:text-lg font-bold px-2 py-0.5 rounded-md leading-none border inline-flex items-center select-none",
-                      badgeContainerClasses
-                    )}
+                    className="sk-coin sk-metal-brass h-7 w-7 text-base sm:text-lg font-extrabold select-none"
                     title={`${booking.bookingType} - ${booking.classType}`}
                   >
                     <span className={typeColorClass}>{typeChar}</span>
-                    <span className="text-muted-foreground/60 mx-0.5 font-medium">-</span>
+                  </span>
+                  <span className="opacity-60 font-bold select-none">-</span>
+                  <span
+                    className="sk-coin sk-metal-steel h-7 w-7 text-base sm:text-lg font-extrabold select-none"
+                    title={`${booking.bookingType} - ${booking.classType}`}
+                  >
                     <span className={classColorClass}>{compactClass}</span>
                   </span>
                   {booking.classType.includes("(") && (
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-[10px] opacity-70">
                       {booking.classType.match(/\((.*?)\)/)?.[1]}
                     </span>
                   )}
@@ -830,101 +787,82 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
           </div>
         </CardHeader>
         <CardContent className="px-3.5 sm:px-5 py-2 space-y-3 text-sm flex-grow min-w-0">
-          <div className="my-1 rounded-xl border border-slate-300/80 dark:border-slate-700/90 bg-white/60 dark:bg-slate-900/50 px-2.5 py-3 sm:px-3 sm:py-3.5 space-y-2 shadow-xs">
-            {/* Journey, Book By, Train, Upgrade & Remarks Strip - Left aligned */}
-            <div className="grid grid-cols-1 divide-y divide-slate-200/60 dark:divide-slate-800/60 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800/60 overflow-hidden text-xs py-2">
-              {/* Journey Date */}
-              <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
-                <div className="p-1 rounded-md bg-amber-500/10 text-amber-500/80 dark:text-amber-400/80 shrink-0">
-                  <CalendarDays className="h-3.5 w-3.5" />
-                </div>
-                <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">JOURNEY</span>
-                <div className="text-xs sm:text-sm font-semibold text-foreground truncate min-w-0">
+          <div className="sk-well my-1 p-2.5 sm:p-3 space-y-2.5">
+            <div className="sk-panel divide-y divide-black/10 overflow-hidden py-1.5 text-xs">
+              <div className="flex items-center gap-2 px-2.5 py-1.5 min-w-0">
+                <span className="sk-coin sk-metal-copper h-6 w-6"><CalendarDays className="h-3.5 w-3.5" /></span>
+                <span className="sk-label text-[11px] uppercase w-[72px] shrink-0">Journey</span>
+                <div className="sk-strip sk-strip-journey flex-1 min-w-0 px-2.5 py-1 text-xs sm:text-sm font-semibold truncate">
                   {renderFormattedDate(clientFormattedJourneyDate)}
                 </div>
               </div>
 
-              {/* Book By Date */}
-              <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
-                <div className="p-1 rounded-md bg-amber-500/10 text-amber-500/80 dark:text-amber-400/80 shrink-0">
-                  <Clock className="h-3.5 w-3.5" />
-                </div>
-                <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">BOOK BY</span>
-                <div className="text-xs sm:text-sm font-semibold text-foreground truncate min-w-0">
+              <div className="flex items-center gap-2 px-2.5 py-1.5 min-w-0">
+                <span className="sk-coin sk-metal-copper h-6 w-6"><Clock className="h-3.5 w-3.5" /></span>
+                <span className="sk-label text-[11px] uppercase w-[72px] shrink-0">Book By</span>
+                <div className="sk-strip sk-strip-bookby flex-1 min-w-0 px-2.5 py-1 text-xs sm:text-sm font-semibold truncate">
                   {renderFormattedDate(clientFormattedBookingDate)}
                 </div>
               </div>
 
-              {/* Train (Preference removed) */}
               {booking.trainPreference && (
-                <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
-                  <div className="p-1 rounded-md bg-amber-500/10 text-amber-500/80 dark:text-amber-400/80 shrink-0">
-                    <Train className="h-3.5 w-3.5" />
-                  </div>
-                  <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">TRAIN</span>
-                  <div className="text-xs sm:text-sm font-semibold text-foreground truncate min-w-0">
+                <div className="flex items-center gap-2 px-2.5 py-1.5 min-w-0">
+                  <span className="sk-coin sk-metal-copper h-6 w-6"><Train className="h-3.5 w-3.5" /></span>
+                  <span className="sk-label text-[11px] uppercase w-[72px] shrink-0">Train</span>
+                  <div className="sk-strip sk-strip-train flex-1 min-w-0 px-2.5 py-1 text-xs sm:text-sm font-semibold truncate">
                     {booking.trainPreference}
                   </div>
                 </div>
               )}
 
-              {/* Upgrade (Preference removed) */}
               {booking.upgradePreferred && (
-                <div className="flex items-center gap-1.5 px-3 py-1 min-w-0">
-                  <div className="p-1 rounded-md bg-amber-500/10 text-amber-500/80 dark:text-amber-400/80 shrink-0">
-                    <Sparkles className="h-3.5 w-3.5" />
-                  </div>
-                  <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0">UPGRADE</span>
-                  <div className="text-xs sm:text-sm font-semibold text-foreground truncate min-w-0 flex items-center gap-1">
-                    <CheckCircle2 className="h-3.5 w-3.5 text-green-500 shrink-0" />
+                <div className="flex items-center gap-2 px-2.5 py-1.5 min-w-0">
+                  <span className="sk-coin sk-metal-copper h-6 w-6"><Sparkles className="h-3.5 w-3.5" /></span>
+                  <span className="sk-label text-[11px] uppercase w-[72px] shrink-0">Upgrade</span>
+                  <div className="sk-strip sk-strip-upgrade flex-1 min-w-0 px-2.5 py-1 text-xs sm:text-sm font-semibold truncate flex items-center gap-1">
+                    <Check className="h-3.5 w-3.5 shrink-0" />
                     <span>Yes</span>
                   </div>
                 </div>
               )}
 
-              {/* Remarks */}
               {booking.remarks && (
-                <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 px-3 py-1 min-w-0">
-                  <div className="p-1 rounded-md bg-amber-500/10 text-amber-500/80 dark:text-amber-400/80 shrink-0">
-                    <MessageSquare className="h-3.5 w-3.5" />
-                  </div>
-                  <span className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase w-[68px] shrink-0 leading-5">REMARKS</span>
-                  <div className="text-xs sm:text-sm font-semibold text-foreground min-w-[9rem] flex-1 break-words whitespace-pre-wrap">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-2.5 py-1.5 min-w-0">
+                  <span className="sk-coin sk-metal-copper h-6 w-6"><MessageSquare className="h-3.5 w-3.5" /></span>
+                  <span className="sk-label text-[11px] uppercase w-[72px] shrink-0 leading-5">Remarks</span>
+                  <div className="sk-strip sk-strip-remarks min-w-[9rem] flex-1 px-2.5 py-1 text-xs sm:text-sm font-semibold break-words whitespace-pre-wrap">
                     {booking.remarks}
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Passengers */}
-            <div className="rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800/60 px-3 py-2 text-xs">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <div className="p-1 rounded-md bg-amber-500/10 text-amber-500/80 dark:text-amber-400/80 shrink-0">
-                  <Users className="h-3.5 w-3.5" />
-                </div>
-                <div className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                  PASSENGERS ({booking.passengers.length})
-                </div>
+            <div className="sk-panel px-3 py-2 text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="sk-coin sk-metal-steel h-6 w-6"><Users className="h-3.5 w-3.5" /></span>
+                <span className="sk-label text-[11px] uppercase">
+                  Passengers ({booking.passengers.length})
+                </span>
               </div>
-              <div className="space-y-0.5 text-xs sm:text-sm font-semibold pl-7 pt-1">
+              <div className="space-y-0.5 text-xs sm:text-sm font-semibold pl-8 pt-1">
                     {[...booking.passengers].sort((a, b) => a.name.localeCompare(b.name)).map((passenger, index) => {
                       const isChild = passenger.age >= 5 && passenger.age <= 11;
                       return (
                         <div key={index} className="flex items-center gap-1.5 flex-wrap">
-                          <span className="text-muted-foreground font-normal">{index + 1}.</span>
-                          <span className="text-foreground">{passenger.name}</span>
-                          <span className="text-muted-foreground/40 select-none">•</span>
-                          <span className="text-amber-500 dark:text-amber-400">{passenger.age}</span>
-                          <span className="text-muted-foreground/40 select-none">•</span>
-                          <span className="text-cyan-600 dark:text-cyan-400">{passenger.gender.toUpperCase()}</span>
+                          <span className="opacity-60 font-normal">{index + 1}.</span>
+                          <span className="font-bold">{passenger.name}</span>
+                          <span className="opacity-40 select-none">•</span>
+                          <span className="text-amber-700">{passenger.age}</span>
+                          <span className="opacity-40 select-none">•</span>
+                          <span className="text-cyan-700">{passenger.gender.toUpperCase()}</span>
                           {isChild && (
                             passenger.berthRequired ? (
-                              <span className="inline-flex items-center gap-0.5 text-[10px] bg-blue-100 dark:bg-blue-900/40 text-blue-700 dark:text-blue-300 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
+                              <span className="inline-flex items-center gap-0.5 text-[10px] bg-blue-200/80 text-blue-900 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
                                 <CheckCircle2 className="h-2.5 w-2.5" />
                                 Berth
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-0.5 text-[10px] bg-red-100 dark:red-900/40 text-red-700 dark:text-red-300 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
+                              <span className="inline-flex items-center gap-0.5 text-[10px] bg-red-200/80 text-red-900 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
                                 <XCircle className="h-2.5 w-2.5" />
                                 No Berth
                               </span>
@@ -938,13 +876,13 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
           </div>
 
           {booking.statusReason && (booking.status === "Missed" || booking.status === "Booking Failed (Unpaid)" || booking.status === "Booking Failed (Paid)" || booking.status === "CNF & Cancelled" || booking.status === "User Cancelled") && (
-            <div className="flex items-start gap-2 bg-muted/50 rounded-md p-2">
-              <AlertTriangle className="h-4 w-4 text-yellow-600 dark:text-yellow-500 mt-0.5" />
+            <div className="sk-panel flex items-start gap-2 p-2.5">
+              <AlertTriangle className="h-4 w-4 text-amber-700 mt-0.5" />
               <span className="flex-1">
-                <span className="font-semibold text-yellow-700 dark:text-yellow-500">Status Reason:</span>
-                <span className="block mt-0.5 text-muted-foreground">{booking.statusReason}</span>
+                <span className="font-semibold text-amber-800">Status Reason:</span>
+                <span className="block mt-0.5 opacity-80">{booking.statusReason}</span>
                 {booking.statusHandler && (
-                  <span className="block mt-0.5 text-muted-foreground">
+                  <span className="block mt-0.5 opacity-80">
                     Handler: {booking.statusHandler}
                   </span>
                 )}
@@ -953,14 +891,14 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
           )}
 
           {booking.refundDetails && (
-            <div className="flex items-start gap-2 bg-green-50 dark:bg-green-900/20 rounded-md p-2 border border-green-200 dark:border-green-900 relative">
-              <Receipt className="h-4 w-4 text-green-600 dark:text-green-500 mt-0.5" />
+            <div className="sk-panel flex items-start gap-2 p-2.5 relative">
+              <Receipt className="h-4 w-4 text-emerald-700 mt-0.5" />
               <span className="flex-1">
-                <span className="font-semibold text-green-700 dark:text-green-500">Refund Received:</span>
+                <span className="font-semibold text-emerald-800">Refund Received:</span>
                 <span className="block mt-0.5 text-sm">
                   ₹{booking.refundDetails.amount} on {formatDate(booking.refundDetails.date)}
                 </span>
-                <span className="block text-xs text-muted-foreground">
+                <span className="block text-xs opacity-70">
                   via {booking.refundDetails.method}
                 </span>
               </span>
@@ -990,12 +928,12 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
           {/* Prepared Accounts Accordion */}
           {!hideSharedDetails && booking.preparedAccounts && booking.preparedAccounts.length > 0 && (
             <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="accounts" className="rounded-xl border border-slate-300/80 dark:border-slate-700/90 bg-white/60 dark:bg-slate-900/50 px-3.5 shadow-xs overflow-hidden">
+              <AccordionItem value="accounts" className="sk-well px-3.5 overflow-hidden">
                 <AccordionTrigger className="py-2.5 text-sm hover:no-underline">
                   <div className="flex items-center gap-2">
-                    <CreditCard className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                    <span className="font-semibold text-foreground">ID(s) for Booking</span>
-                    <span className="bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 text-xs px-2 py-0.5 rounded-full font-semibold">
+                    <CreditCard className="h-4 w-4 text-purple-700" />
+                    <span className="font-semibold">ID(s) for Booking</span>
+                    <span className="bg-purple-500/20 text-purple-900 border border-purple-700/30 text-xs px-2 py-0.5 rounded-full font-semibold">
                       {booking.preparedAccounts.length}
                     </span>
                   </div>
@@ -1005,18 +943,18 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                     {booking.preparedAccounts.map((account, index) => (
                       <div
                         key={index}
-                        className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-800/80 p-2.5 text-xs space-y-2 shadow-xs"
+                        className="sk-panel p-2.5 text-xs space-y-2"
                       >
                         <div className="flex justify-between items-center gap-2">
-                          <span className="font-semibold text-foreground/90 text-xs">
+                          <span className="font-semibold opacity-90 text-xs">
                             Account #{index + 1}
                           </span>
                           <div className="flex items-center gap-1.5 shrink-0">
                             <span className={cn(
                               "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium",
                               account.isMasterAdded
-                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20"
-                                : "bg-muted text-muted-foreground border border-border/40"
+                                ? "bg-emerald-200/70 text-emerald-900 border border-emerald-700/30"
+                                : "bg-black/10 text-black/60 border border-black/20"
                             )}>
                               {account.isMasterAdded ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
                               Master
@@ -1024,27 +962,27 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                             <span className={cn(
                               "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium",
                               account.isWalletLoaded
-                                ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20"
-                                : "bg-muted text-muted-foreground border border-border/40"
+                                ? "bg-blue-200/70 text-blue-900 border border-blue-700/30"
+                                : "bg-black/10 text-black/60 border border-black/20"
                             )}>
                               {account.isWalletLoaded ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
                               Wallet{account.walletAmount !== undefined ? ` (₹${account.walletAmount.toFixed(2)})` : ''}
                             </span>
                           </div>
                         </div>
-                        <div className="space-y-1.5 pt-1.5 border-t border-border/40 text-xs">
+                        <div className="space-y-1.5 pt-1.5 border-t border-black/10 text-xs">
                           <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground text-[11px] w-12 shrink-0">User:</span>
-                            <span className="font-mono font-medium text-foreground select-all">{account.username}</span>
+                            <span className="opacity-60 text-[11px] w-12 shrink-0">User:</span>
+                            <span className="font-mono font-medium select-all">{account.username}</span>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground text-[11px] w-12 shrink-0">Pass:</span>
-                            <span className="font-mono font-medium text-foreground bg-muted/60 dark:bg-slate-900/60 px-1.5 py-0.5 rounded select-all">{account.password}</span>
+                            <span className="opacity-60 text-[11px] w-12 shrink-0">Pass:</span>
+                            <span className="font-mono font-medium bg-black/10 px-1.5 py-0.5 rounded select-all">{account.password}</span>
                           </div>
                           {account.handlingBy && (
                             <div className="flex items-center gap-2 pt-0.5">
-                              <span className="text-muted-foreground text-[11px] w-12 shrink-0">Handler:</span>
-                              <span className="font-medium text-foreground">{account.handlingBy}</span>
+                              <span className="opacity-60 text-[11px] w-12 shrink-0">Handler:</span>
+                              <span className="font-medium">{account.handlingBy}</span>
                             </div>
                           )}
                         </div>
@@ -1059,18 +997,18 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
           {/* Booking Details Accordion */}
           {!hideSharedDetails && bookingRecord && (
             <Accordion type="single" collapsible className="w-full">
-              <AccordionItem value="booking-details" className="rounded-xl border border-emerald-500/30 dark:border-emerald-500/20 bg-emerald-500/[0.04] dark:bg-emerald-950/20 px-3.5 shadow-xs overflow-hidden">
+              <AccordionItem value="booking-details" className="sk-well px-3.5 overflow-hidden">
                 <AccordionTrigger className="py-2.5 text-sm hover:no-underline">
                   <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                    <span className="font-semibold text-foreground">Booked Details</span>
-                    <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 ml-auto mr-1">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-700" />
+                    <span className="font-semibold">Booked Details</span>
+                    <span className="text-xs font-mono font-bold text-emerald-700 ml-auto mr-1">
                       ₹{bookingRecord.amountCharged}
                     </span>
                   </div>
                 </AccordionTrigger>
                 <AccordionContent className="pt-1 pb-2.5">
-                  <div className="rounded-lg border border-emerald-500/20 bg-white/90 dark:bg-slate-900/80 p-3 pr-8 text-xs relative shadow-xs">
+                  <div className="sk-panel p-3 pr-8 text-xs relative">
                     <Button
                       variant="ghost"
                       size="icon"
@@ -1083,31 +1021,31 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
 
                     <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
                       <div className="min-w-0">
-                        <span className="text-muted-foreground text-[10px] font-semibold block uppercase tracking-wider">Booked By</span>
-                        <div className="font-semibold text-sm text-foreground mt-0.5 truncate">{bookingRecord.bookedBy}</div>
+                        <span className="opacity-60 text-[10px] font-semibold block uppercase tracking-wider">Booked By</span>
+                        <div className="font-semibold text-sm mt-0.5 truncate">{bookingRecord.bookedBy}</div>
                       </div>
                       <div className="min-w-0">
-                        <span className="text-muted-foreground text-[10px] font-semibold block uppercase tracking-wider">Amount</span>
-                        <div className="font-mono font-bold text-sm text-emerald-600 dark:text-emerald-400 mt-0.5">₹{bookingRecord.amountCharged}</div>
+                        <span className="opacity-60 text-[10px] font-semibold block uppercase tracking-wider">Amount</span>
+                        <div className="font-mono font-bold text-sm text-emerald-700 mt-0.5">₹{bookingRecord.amountCharged}</div>
                       </div>
 
-                      <div className="min-w-0 pt-2 border-t border-border/40">
-                        <span className="text-muted-foreground text-[10px] font-semibold block uppercase tracking-wider">Account Used</span>
-                        <div className="font-mono font-medium text-xs text-foreground mt-0.5 truncate select-all">{bookingRecord.bookedAccountUsername}</div>
+                      <div className="min-w-0 pt-2 border-t border-black/10">
+                        <span className="opacity-60 text-[10px] font-semibold block uppercase tracking-wider">Account Used</span>
+                        <div className="font-mono font-medium text-xs mt-0.5 truncate select-all">{bookingRecord.bookedAccountUsername}</div>
                       </div>
-                      <div className="min-w-0 pt-2 border-t border-border/40">
-                        <span className="text-muted-foreground text-[10px] font-semibold block uppercase tracking-wider">Payment Method</span>
+                      <div className="min-w-0 pt-2 border-t border-black/10">
+                        <span className="opacity-60 text-[10px] font-semibold block uppercase tracking-wider">Payment Method</span>
                         <div className="mt-0.5">
-                          <span className="inline-flex items-center font-medium text-foreground px-1.5 py-0.5 rounded bg-muted/60 dark:bg-slate-800 text-[11px] border border-border/40">
+                          <span className="inline-flex items-center font-medium px-1.5 py-0.5 rounded bg-black/10 text-[11px] border border-black/20">
                             {bookingRecord.methodUsed}
                           </span>
                         </div>
                       </div>
 
                       {bookingRecord.trainName && (
-                        <div className="col-span-2 pt-1 border-t border-border/40">
-                          <span className="text-muted-foreground text-[10px] font-semibold block uppercase tracking-wider">Train</span>
-                          <div className="font-medium text-xs text-foreground mt-0.5">{bookingRecord.trainName}</div>
+                        <div className="col-span-2 pt-1 border-t border-black/10">
+                          <span className="opacity-60 text-[10px] font-semibold block uppercase tracking-wider">Train</span>
+                          <div className="font-medium text-xs mt-0.5">{bookingRecord.trainName}</div>
                         </div>
                       )}
                     </div>
@@ -1131,19 +1069,14 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
           </div>
         )}
 
-        <CardFooter className="px-3.5 sm:px-5 pt-3 pb-3.5 flex flex-col items-stretch gap-2.5 border-t min-w-0">
-          {/* Created (left) and Updated (right): labels on one row, values on the next */}
-          <div className="grid grid-cols-2 gap-x-2 text-[11px] text-muted-foreground px-0.5 min-w-0">
-            <div className="min-w-0 break-words">
-              <span style={labelHighlightStyle}>Created:</span>
-            </div>
-            <div className="min-w-0 break-words text-right">
-              <span style={labelHighlightStyle}>Updated:</span>
-            </div>
-            <div className="min-w-0 break-words">
+        <CardFooter className="px-3.5 sm:px-5 pt-3 pb-3.5 flex flex-col items-stretch gap-2.5 border-t border-black/25 min-w-0">
+          <div className="flex justify-between gap-2 px-0.5 min-w-0 text-[11px]">
+            <div className="sk-plaque sk-metal-copper min-w-0 break-words">
+              <span className="font-bold">Created:</span>{" "}
               <span>{clientFormattedCreatedAt || "..."}</span>
             </div>
-            <div className="min-w-0 break-words text-right">
+            <div className="sk-plaque sk-metal-copper min-w-0 break-words text-right">
+              <span className="font-bold">Updated:</span>{" "}
               <span>{clientFormattedUpdatedAt || "..."}</span>
             </div>
           </div>
@@ -1154,7 +1087,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
               {!isRefundMode ? (
                 <div className="flex gap-1.5">
                   <Button
-                    variant="outline"
+                    variant="skeuo-steel"
                     size="sm"
                     onClick={handleCopy}
                     className="flex-1 aspect-square p-2"
@@ -1163,7 +1096,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                     <Copy className="h-4 w-4" />
                   </Button>
                   <Button
-                    variant="outline"
+                    variant="skeuo-copper"
                     size="sm"
                     onClick={handleEdit}
                     className="flex-1 aspect-square p-2"
@@ -1172,7 +1105,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                     <Edit3 className="h-4 w-4" />
                   </Button>
                   <Button
-                    variant="outline"
+                    variant="skeuo-steel"
                     size="sm"
                     onClick={handleShare}
                     className="flex-1 aspect-square p-2"
@@ -1181,25 +1114,24 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                     <Share2 className="h-4 w-4" />
                   </Button>
 
-                  {/* Show Refund Button if applicable */}
                   {((booking.status === "Booking Failed (Paid)" || booking.status === "CNF & Cancelled") && !booking.refundDetails) && (
                     <Button
-                      variant="outline"
+                      variant="skeuo-steel"
                       size="sm"
                       onClick={handleRefundClick}
-                      className="flex-1 aspect-square p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                      className="flex-1 aspect-square p-2 text-[#1d4884]"
                       title="Process Refund"
                     >
                       <Receipt className="h-4 w-4" />
                     </Button>
                   )}
 
-                  <BookingRequirementsSheet booking={booking} iconComponent={CreditCard} />
+                  <BookingRequirementsSheet booking={booking} iconComponent={CreditCard} buttonVariant="skeuo-steel" />
                   <Button
-                    variant="outline"
+                    variant="skeuo-copper"
                     size="sm"
                     onClick={() => setShowDeleteDialog(true)}
-                    className="flex-1 aspect-square p-2 text-destructive hover:text-destructive"
+                    className="flex-1 aspect-square p-2 text-[#5a1f14]"
                     title="Delete"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -1208,7 +1140,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
               ) : (
                 <div className="flex gap-1.5">
                   <Button
-                    variant="default"
+                    variant="skeuo-brass"
                     size="sm"
                     onClick={booking.refundDetails ? handleEditRefund : handleRefundClick}
                     className="flex-1"
@@ -1217,10 +1149,10 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                     {booking.refundDetails ? "Update Refund" : "Process Refund"}
                   </Button>
                   <Button
-                    variant="outline"
+                    variant="skeuo-copper"
                     size="sm"
                     onClick={() => setShowDeleteDialog(true)}
-                    className="aspect-square p-2 text-destructive hover:text-destructive"
+                    className="aspect-square p-2 text-[#5a1f14]"
                     title="Delete"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -1505,7 +1437,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
           </AlertDialog>
 
         </CardFooter>
-      </Card>
+      </div>
     </motion.div>
   );
 }

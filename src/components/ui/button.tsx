@@ -20,6 +20,10 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
         success: "bg-success text-success-foreground shadow-elevation-2 hover:bg-success/90 hover:shadow-elevation-3 hover:-translate-y-0.5",
         accent: "bg-accent text-accent-foreground shadow-elevation-2 hover:bg-accent/90 hover:shadow-elevation-3 hover:-translate-y-0.5",
+        skeuo: "sk-btn",
+        "skeuo-steel": "sk-btn sk-metal-steel",
+        "skeuo-copper": "sk-btn sk-metal-copper",
+        "skeuo-brass": "sk-btn sk-metal-brass",
       },
       size: {
         default: "h-11 px-5 py-2.5",
