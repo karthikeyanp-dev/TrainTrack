@@ -912,7 +912,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                       return (
                         <div key={index} className="flex items-center gap-1.5 flex-wrap">
                           <span className="text-muted-foreground font-normal">{index + 1}.</span>
-                          <span className="text-foreground">{passenger.name}</span>
+                          <span className="text-foreground select-all">{passenger.name}</span>
                           <span className="text-muted-foreground/40 select-none">•</span>
                           <span className="text-amber-500 dark:text-amber-400">{passenger.age}</span>
                           <span className="text-muted-foreground/40 select-none">•</span>
