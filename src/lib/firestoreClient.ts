@@ -873,8 +873,38 @@ export async function saveGroupBookingRecords(data: {
 
   try {
     const recordsCollection = collection(db, "bookingRecords");
-    
-    // Check if a record already exists for this group (by groupId or any of the bookingIds)
+
+    // Clear any stray individual records belonging to member bookings. A booking
+    // can pick up its own record before it was grouped (or via the individual
+    // booking card inside a group), and that record would otherwise survive
+    // alongside the group record written below — double counting the amount in
+    // handler payment totals and inflating account/handler booking counts.
+    //
+    // These go through deleteBookingRecord() so each one's wallet refund and
+    // lastBookedDate revert are applied, and they run *before* the account is
+    // read below so the group charge sees the refunded balance. Sequential, not
+    // parallel: deleteBookingRecord does a read-modify-write on the account, so
+    // concurrent deletes against the same account would lose refunds.
+    const strayRecordLookups = await Promise.all(
+      data.bookingIds.map(async (memberBookingId) => {
+        const memberQuery = query(recordsCollection, where("bookingId", "==", memberBookingId));
+        const memberSnapshot = await getDocs(memberQuery);
+        // Records carrying a groupId are group records, not strays.
+        return memberSnapshot.docs.filter(memberDoc => !memberDoc.data().groupId);
+      })
+    );
+
+    for (const strayDoc of strayRecordLookups.flat()) {
+      const strayResult = await deleteBookingRecord(strayDoc.id);
+      if (!strayResult.success) {
+        return {
+          success: false,
+          error: `Failed to clear an existing individual booked-details record: ${strayResult.error}`,
+        };
+      }
+    }
+
+    // Check if a record already exists for this group
     const groupQuery = query(recordsCollection, where("groupId", "==", data.groupId));
     const groupSnapshot = await getDocs(groupQuery);
     

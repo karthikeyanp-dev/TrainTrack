@@ -322,6 +322,11 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
                 description: `Failed to delete booking record: ${deleteResult.error}`,
                 variant: "destructive",
               });
+            } else {
+              // Handler payment totals and account stats are derived from
+              // booking records, so their caches go stale on delete too.
+              queryClient.invalidateQueries({ queryKey: ["handlers"] });
+              queryClient.invalidateQueries({ queryKey: ["accounts"] });
             }
           }
 

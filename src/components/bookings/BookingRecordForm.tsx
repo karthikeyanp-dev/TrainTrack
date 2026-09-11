@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +51,15 @@ export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = fa
   const [isDeleting, setIsDeleting] = useState(false);
   const [existingRecord, setExistingRecord] = useState<BookingRecord | null>(null);
   const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  // Booked details feed the derived handler payment totals and account stats,
+  // so any save/delete has to drop those caches too — not just ["bookings"].
+  const invalidateRecordDerivedQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ["bookings"] });
+    queryClient.invalidateQueries({ queryKey: ["handlers"] });
+    queryClient.invalidateQueries({ queryKey: ["accounts"] });
+  };
 
   const [form, setForm] = useState<FormState>({
     bookedBy: "",
@@ -129,6 +139,7 @@ export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = fa
         methodUsed: "",
         trainName: "",
       });
+      invalidateRecordDerivedQueries();
       loadData(); // Reload to refresh wallet balances
     } else {
       toast({
@@ -198,6 +209,7 @@ export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = fa
       });
 
       if (groupResult.success) {
+        invalidateRecordDerivedQueries();
         toast({
           title: "Record Saved for Group",
           description: `Booked details have been saved for all ${groupBookings.length} bookings.`,
@@ -226,6 +238,7 @@ export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = fa
       });
 
       if (result.success && result.record) {
+        invalidateRecordDerivedQueries();
         toast({
           title: existingRecord ? "Record Updated" : "Record Saved",
           description: "Booked details have been saved successfully.",

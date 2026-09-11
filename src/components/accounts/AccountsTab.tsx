@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import type { IrctcAccount } from "@/types/account";
 import { getAccounts, addAccount, deleteAccount, updateAccount, getAccountStats, type AccountStats } from "@/lib/accountsClient";
 import type { Handler } from "@/types/handler";
-import { getHandlers, addHandler, updateHandler, deleteHandler, getHandlerStatsForHandlers, type HandlerStats } from "@/lib/handlersClient";
+import { getHandlers, addHandler, updateHandler, deleteHandler, getHandlerStatsForHandlers, recordHandlerSettlement, getHandlerPaidOutOfPocket, getHandlerOutstanding, HANDLER_PAYMENT_TRACKING_START_DATE, type HandlerStats } from "@/lib/handlersClient";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -1108,6 +1108,9 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [handlerToDelete, setHandlerToDelete] = useState<string | null>(null);
   const [handlerToEdit, setHandlerToEdit] = useState<Handler | null>(null);
+  const [handlerToSettle, setHandlerToSettle] = useState<Handler | null>(null);
+  const [settlementAmount, setSettlementAmount] = useState<string>("");
+  const [isSettling, setIsSettling] = useState(false);
   const { toast } = useToast();
 
   const [name, setName] = useState("");
@@ -1257,6 +1260,57 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
     setIsSubmitting(false);
   };
 
+  const findHandlerStats = (handler: Handler) =>
+    handlerStats.find(s => s.handlerId === handler.id || s.name === handler.name);
+
+  const handleSettleClick = (handler: Handler) => {
+    const stats = findHandlerStats(handler);
+    const outstanding = getHandlerOutstanding(stats?.paymentTotals, handler.settledAmount);
+    setHandlerToSettle(handler);
+    // Pre-fill with the full outstanding amount — the common case is settling in full
+    setSettlementAmount(outstanding > 0 ? outstanding.toFixed(2) : "");
+  };
+
+  const handleSettleSubmit = async () => {
+    if (!handlerToSettle) return;
+
+    const amount = Number(settlementAmount);
+    if (isNaN(amount) || amount === 0) {
+      toast({
+        title: "Invalid Amount",
+        description: "Please enter a valid non-zero amount.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsSettling(true);
+    const result = await recordHandlerSettlement(
+      handlerToSettle.id,
+      amount,
+      handlerToSettle.settledAmount || 0
+    );
+
+    if (result.success) {
+      setHandlers(prev => prev.map(h => h.id === handlerToSettle.id
+        ? { ...h, settledAmount: result.settledAmount, lastSettledDate: result.lastSettledDate }
+        : h));
+      toast({
+        title: "Settlement Recorded",
+        description: `${amount > 0 ? "Settled" : "Reversed"} ₹${Math.abs(amount).toFixed(2)} for ${handlerToSettle.name}.`,
+      });
+      setHandlerToSettle(null);
+      setSettlementAmount("");
+    } else {
+      toast({
+        title: "Settlement Failed",
+        description: result.error || "Failed to record settlement.",
+        variant: "destructive",
+      });
+    }
+    setIsSettling(false);
+  };
+
   const filteredHandlers = useMemo(() => {
     if (!searchQuery.trim()) return handlers;
     const q = searchQuery.toLowerCase();
@@ -1317,7 +1371,8 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {filteredHandlers.map(handler => {
-          const stats = handlerStats.find(s => s.handlerId === handler.id || s.name === handler.name);
+          const stats = findHandlerStats(handler);
+          const outstanding = getHandlerOutstanding(stats?.paymentTotals, handler.settledAmount);
           return (
             <Card key={handler.id}>
               <CardHeader className="pb-3">
@@ -1351,6 +1406,55 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
                 <div>
                   <span style={labelHighlightStyle}>Bookings (since Jan 1, 2026): </span>
                   {stats?.bookingCount ?? 0}
+                </div>
+                <div className="rounded-md border bg-muted/40 p-2 space-y-1.5">
+                  <div className="text-xs text-muted-foreground">
+                    Paid since {HANDLER_PAYMENT_TRACKING_START_DATE.toLocaleDateString()}
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span style={labelHighlightStyle}>UPI</span>
+                    <span>₹{(stats?.paymentTotals.upi ?? 0).toFixed(2)}</span>
+                  </div>
+                  {(stats?.paymentTotals.others ?? 0) > 0 && (
+                    <div className="flex items-center justify-between">
+                      <span style={labelHighlightStyle}>Others</span>
+                      <span>₹{(stats?.paymentTotals.others ?? 0).toFixed(2)}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center justify-between">
+                    <span style={labelHighlightStyle}>Wallet</span>
+                    <span>₹{(stats?.paymentTotals.wallet ?? 0).toFixed(2)}</span>
+                  </div>
+                  <div className="border-t pt-1.5 space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <span style={labelHighlightStyle}>Settled</span>
+                      <span>₹{(handler.settledAmount ?? 0).toFixed(2)}</span>
+                    </div>
+                    <div className="flex items-center justify-between gap-2">
+                      <span style={labelHighlightStyle}>
+                        {outstanding < 0 ? "Overpaid" : "Outstanding"}
+                      </span>
+                      <div className="flex items-center gap-1">
+                        <span className={`font-semibold ${outstanding !== 0 ? 'text-destructive' : ''}`}>
+                          ₹{Math.abs(outstanding).toFixed(2)}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-primary hover:text-primary px-2 text-xs"
+                          onClick={() => handleSettleClick(handler)}
+                          title="Record a settlement"
+                        >
+                          <Plus className="h-3 w-3 mr-1" /> Settle
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  {handler.lastSettledDate && (
+                    <div className="text-xs text-muted-foreground">
+                      Last settled: {new Date(`${handler.lastSettledDate}T00:00:00`).toLocaleDateString()}
+                    </div>
+                  )}
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Last Updated: {stats?.lastAssignedDate
@@ -1423,6 +1527,71 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
               </Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!handlerToSettle} onOpenChange={(open) => !open && setHandlerToSettle(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Settle Payment</DialogTitle>
+            <DialogDescription>
+              Record money repaid to {handlerToSettle?.name} for bookings they paid out of pocket.
+              Use a negative amount (e.g. -500) to reverse a settlement recorded by mistake.
+            </DialogDescription>
+          </DialogHeader>
+          {handlerToSettle && (() => {
+            const settleStats = findHandlerStats(handlerToSettle);
+            const paid = getHandlerPaidOutOfPocket(settleStats?.paymentTotals);
+            const alreadySettled = handlerToSettle.settledAmount || 0;
+            const outstanding = paid - alreadySettled;
+            const entered = Number(settlementAmount) || 0;
+            const remaining = outstanding - entered;
+
+            return (
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right">Paid (UPI/Others)</Label>
+                  <div className="col-span-3">₹{paid.toFixed(2)}</div>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right">Already Settled</Label>
+                  <div className="col-span-3">₹{alreadySettled.toFixed(2)}</div>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right">Outstanding</Label>
+                  <div className="col-span-3">₹{outstanding.toFixed(2)}</div>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label htmlFor="settlement-amount" className="text-right">Settle Now</Label>
+                  <Input
+                    id="settlement-amount"
+                    type="number"
+                    value={settlementAmount}
+                    onChange={(e) => setSettlementAmount(e.target.value)}
+                    className="col-span-3"
+                    placeholder="e.g. 500 or -500"
+                    step="0.01"
+                  />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right font-bold">Remaining</Label>
+                  <div className={`col-span-3 font-bold ${remaining < 0 ? 'text-destructive' : ''}`}>
+                    ₹{remaining.toFixed(2)}
+                    {remaining < 0 && (
+                      <span className="ml-2 text-xs font-normal">(overpaid)</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setHandlerToSettle(null)}>Cancel</Button>
+            <Button onClick={handleSettleSubmit} disabled={isSettling}>
+              {isSettling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Record Settlement
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
