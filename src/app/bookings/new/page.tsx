@@ -37,9 +37,9 @@ function NewBookingPageContent() {
             passengers: bookingToCopy.passengers.map(p => ({ ...p })),
             classType: bookingToCopy.classType,
             bookingType: bookingToCopy.bookingType,
-            trainPreference: bookingToCopy.trainPreference || "",
+            trainPreference: "", // Cleared: clients usually have a different train preference
             upgradePreferred: bookingToCopy.upgradePreferred || false,
-            remarks: bookingToCopy.remarks || "",
+            remarks: "", // Cleared: remarks rarely carry over between clients
           });
         } else {
           setCopyError(`Could not find booking with ID "${copyFromId}" to copy. Please fill out the form manually.`);
