@@ -1346,6 +1346,70 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
 
        // Delete the group booking record
        await deleteDoc(doc(firestore, "bookingRecords", groupRecordDoc.id));
+     } else {
+       // No group record exists. This happens when booked details were saved
+       // against a single individual booking (e.g. booked via the booking card
+       // inside a group, or booked before the bookings were grouped). In that
+       // case only one booking ends up with booked details. Share those details
+       // across ALL bookings in the group, splitting the total amount
+       // proportionally by passenger count.
+       const recordLookups = await Promise.all(
+         bookingsData.map(async (booking: any) => {
+           const recQuery = query(recordsCollection, where("bookingId", "==", booking.id));
+           const recSnapshot = await getDocs(recQuery);
+           const recDoc = recSnapshot.docs.find(d => !d.data().groupId);
+           return recDoc ? { bookingId: booking.id, record: recDoc } : null;
+         })
+       );
+
+       const existingRecords = recordLookups.filter(Boolean) as { bookingId: string; record: any }[];
+
+       if (existingRecords.length > 0) {
+         const sourceRecord = existingRecords[0].record.data();
+         const totalAmount = existingRecords.reduce((sum, x) => sum + (x.record.data().amountCharged || 0), 0);
+
+         // Calculate total passengers across all bookings
+         const totalPassengers = bookingsData.reduce((sum, booking: any) =>
+           sum + (booking.passengers?.length || 0), 0
+         );
+
+         if (totalAmount > 0 && totalPassengers > 0) {
+           const amountPerPassenger = totalAmount / totalPassengers;
+
+           const sharePromises = bookingsData.map(async (booking: any) => {
+             const passengerCount = booking.passengers?.length || 0;
+             const proportionalAmount = Number((amountPerPassenger * passengerCount).toFixed(2));
+
+             const sharedRecordData: Record<string, any> = {
+               bookingId: booking.id,
+               amountCharged: proportionalAmount,
+               updatedAt: serverTimestamp(),
+             };
+
+             if (sourceRecord.bookedBy) sharedRecordData.bookedBy = sourceRecord.bookedBy;
+             if (sourceRecord.bookedAccountUsername) sharedRecordData.bookedAccountUsername = sourceRecord.bookedAccountUsername;
+             if (sourceRecord.methodUsed) sharedRecordData.methodUsed = sourceRecord.methodUsed;
+             if (sourceRecord.bookingTransactionId) sharedRecordData.bookingTransactionId = sourceRecord.bookingTransactionId;
+             if (sourceRecord.trainName) sharedRecordData.trainName = sourceRecord.trainName;
+             if (sourceRecord.bookingDate) sharedRecordData.bookingDate = sourceRecord.bookingDate;
+
+             const existing = existingRecords.find(x => x.bookingId === booking.id);
+
+             if (existing) {
+               // Booking already has a record — update it in place
+               await updateDoc(doc(firestore, "bookingRecords", existing.record.id), sharedRecordData);
+             } else {
+               // Preserve the original createdAt so date-bucketed stats stay stable
+               await addDoc(recordsCollection, {
+                 ...sharedRecordData,
+                 createdAt: sourceRecord.createdAt || serverTimestamp(),
+               });
+             }
+           });
+
+           await Promise.all(sharePromises);
+         }
+       }
      }
 
      // Find shared preparedAccounts from the first booking in the group that has them
