@@ -166,6 +166,16 @@ export function BookingRecordForm({ bookingId, onClose, onSave, hideWrapper = fa
       return;
     }
 
+    if (amountNum > 100000) {
+      toast({
+        title: "Unusually High Amount",
+        description: "Amount cannot exceed ₹1,00,000. If you pasted a UPI Reference (UTR) or PNR number, please enter the actual ticket cost.",
+        variant: "destructive",
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
     if (!form.bookedBy.trim()) {
       toast({
         title: "Missing Field",

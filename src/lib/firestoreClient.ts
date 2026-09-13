@@ -1308,6 +1308,7 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
        const trainName = groupRecordData.trainName;
        const bookingTransactionId = groupRecordData.bookingTransactionId; // Preserve transaction ID
       const groupRecordCreatedAt = groupRecordData.createdAt;
+       const bookingDate = groupRecordData.bookingDate;
 
        // Calculate total passengers across all bookings
        const totalPassengers = bookingsData.reduce((sum, booking: any) => 
@@ -1332,9 +1333,13 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
            updatedAt: serverTimestamp(),
          } as Record<string, any>;
 
-         if (trainName) {
-           baseRecordData.trainName = trainName;
-         }
+          if (trainName) {
+            baseRecordData.trainName = trainName;
+          }
+
+          if (bookingDate) {
+            baseRecordData.bookingDate = bookingDate;
+          }
 
          // Check if individual record already exists for this booking (without groupId)
          const allRecordsQuery = query(

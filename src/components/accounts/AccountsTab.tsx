@@ -7,14 +7,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, Edit3, Eye, EyeOff, Plus, X, CreditCard, UserCircle, Wallet, Calendar, TrendingUp, Users, Briefcase, Search, CheckCircle2, ChevronDown, ShieldCheck, ShieldAlert, ArrowUpDown } from "lucide-react";
+import { Loader2, Trash2, Edit3, Eye, EyeOff, Plus, X, CreditCard, UserCircle, Wallet, Calendar, TrendingUp, Users, Briefcase, Search, CheckCircle2, ChevronDown, ShieldCheck, ShieldAlert, ArrowUpDown, RotateCcw, History } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { IrctcAccount } from "@/types/account";
 import { getAccounts, addAccount, deleteAccount, updateAccount, getAccountStats, type AccountStats } from "@/lib/accountsClient";
-import type { Handler } from "@/types/handler";
-import { getHandlers, addHandler, updateHandler, deleteHandler, getHandlerStatsForHandlers, recordHandlerSettlement, getHandlerPaidOutOfPocket, getHandlerOutstanding, HANDLER_PAYMENT_TRACKING_START_DATE, type HandlerStats } from "@/lib/handlersClient";
+import type { Handler, HandlerPaymentRecord, HandlerPaymentType } from "@/types/handler";
+import { getHandlers, addHandler, updateHandler, deleteHandler, getHandlerStatsForHandlers, recordHandlerPayment, deleteHandlerPayment, getHandlerPaidOutOfPocket, getHandlerOutstanding, setHandlerPendingAmount, resetAllHandlersBalance, renameHandlerAndMigrateRecords, type HandlerStats } from "@/lib/handlersClient";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -1108,13 +1109,27 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [handlerToDelete, setHandlerToDelete] = useState<string | null>(null);
   const [handlerToEdit, setHandlerToEdit] = useState<Handler | null>(null);
-  const [handlerToSettle, setHandlerToSettle] = useState<Handler | null>(null);
-  const [settlementAmount, setSettlementAmount] = useState<string>("");
-  const [isSettling, setIsSettling] = useState(false);
+  const [showResetAllDialog, setShowResetAllDialog] = useState(false);
+  const [isResettingAll, setIsResettingAll] = useState(false);
+
+  // Add Payment Modal states
+  const [handlerForPayment, setHandlerForPayment] = useState<Handler | null>(null);
+  const [paymentType, setPaymentType] = useState<HandlerPaymentType>("settlement");
+  const [paymentAmount, setPaymentAmount] = useState<string>("");
+  const [paymentNotes, setPaymentNotes] = useState<string>("");
+  const [paymentDate, setPaymentDate] = useState<string>("");
+  const [isRecordingPayment, setIsRecordingPayment] = useState(false);
+
+  // Payment History Modal states
+  const [handlerForHistory, setHandlerForHistory] = useState<Handler | null>(null);
+  const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
+
   const { toast } = useToast();
 
   const [name, setName] = useState("");
+  const [initialPending, setInitialPending] = useState("");
   const [editName, setEditName] = useState("");
+  const [editPendingAmount, setEditPendingAmount] = useState("");
 
   useEffect(() => {
     loadHandlers();
@@ -1161,8 +1176,30 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
       return;
     }
 
+    const initialPendingNum = Number(initialPending || 0);
+    if (isNaN(initialPendingNum) || initialPendingNum < 0) {
+      toast({
+        title: "Invalid Input",
+        description: "Initial Pending Amount must be a valid non-negative number",
+        variant: "destructive",
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (initialPendingNum > 100000) {
+      toast({
+        title: "Unusually High Amount",
+        description: "Initial Pending Amount cannot exceed ₹1,00,000. If you pasted a UPI Reference (UTR) or PNR number, please enter the actual amount.",
+        variant: "destructive",
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
     const result = await addHandler({
       name: name.trim(),
+      initialPendingAmount: initialPendingNum,
     });
 
     if (result.success && result.handler) {
@@ -1172,6 +1209,7 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
       });
 
       setName("");
+      setInitialPending("");
       setShowAddForm(false);
       // Refresh stats and re-sort to include any newly recorded bookings mapping to this handler name
       loadHandlers();
@@ -1217,6 +1255,7 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
   const handleEditClick = (handler: Handler) => {
     setHandlerToEdit(handler);
     setEditName(handler.name);
+    setEditPendingAmount((handler.initialPendingAmount ?? 0).toString());
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
@@ -1234,81 +1273,204 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
       return;
     }
 
-    const result = await updateHandler(handlerToEdit.id, {
-      name: editName.trim(),
-    });
-
-    if (result.success) {
-      const updatedHandler = { ...handlerToEdit, name: editName.trim() };
+    const editPendingNum = Number(editPendingAmount || 0);
+    if (isNaN(editPendingNum) || editPendingNum < 0) {
       toast({
-        title: "Handler Updated",
-        description: `Handler ${updatedHandler.name} has been updated.`,
-      });
-
-      setHandlerToEdit(null);
-      // Refresh stats and re-sort in case the handler name changed
-      loadHandlers();
-    } else {
-      const errorMessage = result.error || "Failed to update handler";
-      toast({
-        title: "Error Updating Handler",
-        description: errorMessage,
+        title: "Invalid Input",
+        description: "Pending Amount must be a valid non-negative number",
         variant: "destructive",
       });
+      setIsSubmitting(false);
+      return;
+    }
+
+    if (editPendingNum > 100000) {
+      toast({
+        title: "Unusually High Amount",
+        description: "Pending Amount cannot exceed ₹1,00,000. If you pasted a UPI Reference (UTR) or PNR number, please enter the actual amount.",
+        variant: "destructive",
+      });
+      setIsSubmitting(false);
+      return;
+    }
+
+    const nameChanged = editName.trim() !== handlerToEdit.name;
+    const pendingChanged = editPendingNum !== (handlerToEdit.initialPendingAmount ?? 0);
+
+    const hasHistory = (handlerToEdit.payments && handlerToEdit.payments.length > 0) ||
+      (handlerToEdit.settledAmount ?? 0) > 0 ||
+      (handlerToEdit.naAmount ?? 0) > 0;
+
+    if (pendingChanged && hasHistory) {
+      const confirmed = window.confirm(
+        `Updating opening pending amount for ${handlerToEdit.name} will clear their payment and deduction history, restarting tracking from now with ₹${editPendingNum.toFixed(2)}.\n\nAre you sure you want to proceed?`
+      );
+      if (!confirmed) {
+        setIsSubmitting(false);
+        return;
+      }
+    }
+
+    let success = true;
+
+    if (nameChanged) {
+      const result = await renameHandlerAndMigrateRecords(
+        handlerToEdit.id,
+        handlerToEdit.name,
+        editName.trim()
+      );
+      if (!result.success) {
+        success = false;
+        toast({
+          title: "Error Updating Name",
+          description: result.error || "Failed to update handler name",
+          variant: "destructive",
+        });
+      } else if (result.updatedRecordsCount && result.updatedRecordsCount > 0) {
+        toast({
+          title: "Bookings Migrated",
+          description: `Updated ${result.updatedRecordsCount} booking record(s) to ${editName.trim()}.`,
+        });
+      }
+    }
+
+    if (pendingChanged) {
+      const result = await setHandlerPendingAmount(handlerToEdit.id, editPendingNum);
+      if (!result.success) {
+        success = false;
+        toast({
+          title: "Error Updating Pending Amount",
+          description: result.error || "Failed to update pending amount",
+          variant: "destructive",
+        });
+      }
+    }
+
+    if (success) {
+      toast({
+        title: "Handler Updated",
+        description: `Handler ${editName.trim()} has been updated.`,
+      });
+      setHandlerToEdit(null);
+      loadHandlers();
     }
 
     setIsSubmitting(false);
   };
 
+  const handleResetAllConfirm = async () => {
+    setIsResettingAll(true);
+    const result = await resetAllHandlersBalance();
+
+    if (result.success) {
+      toast({
+        title: "All Balances Reset",
+        description: "All handler balances have been reset to ₹0.00. Tracking starts from now.",
+      });
+      await loadHandlers();
+    } else {
+      toast({
+        title: "Reset Failed",
+        description: result.error || "Failed to reset handlers.",
+        variant: "destructive",
+      });
+    }
+
+    setIsResettingAll(false);
+    setShowResetAllDialog(false);
+  };
+
   const findHandlerStats = (handler: Handler) =>
     handlerStats.find(s => s.handlerId === handler.id || s.name === handler.name);
 
-  const handleSettleClick = (handler: Handler) => {
+  const handleOpenAddPayment = (handler: Handler, defaultType: HandlerPaymentType = "settlement") => {
     const stats = findHandlerStats(handler);
-    const outstanding = getHandlerOutstanding(stats?.paymentTotals, handler.settledAmount);
-    setHandlerToSettle(handler);
-    // Pre-fill with the full outstanding amount — the common case is settling in full
-    setSettlementAmount(outstanding > 0 ? outstanding.toFixed(2) : "");
+    const outstanding = getHandlerOutstanding(stats?.paymentTotals, handler.settledAmount, handler.initialPendingAmount, handler.naAmount);
+    setHandlerForPayment(handler);
+    setPaymentType(defaultType);
+    setPaymentAmount(outstanding > 0 ? outstanding.toFixed(2) : "");
+    setPaymentNotes("");
+    setPaymentDate(new Date().toISOString().split("T")[0]);
   };
 
-  const handleSettleSubmit = async () => {
-    if (!handlerToSettle) return;
+  const handleRecordPaymentSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!handlerForPayment) return;
 
-    const amount = Number(settlementAmount);
-    if (isNaN(amount) || amount === 0) {
+    const amount = Number(paymentAmount);
+    if (isNaN(amount) || amount <= 0) {
       toast({
         title: "Invalid Amount",
-        description: "Please enter a valid non-zero amount.",
+        description: "Please enter a valid positive amount.",
         variant: "destructive",
       });
       return;
     }
 
-    setIsSettling(true);
-    const result = await recordHandlerSettlement(
-      handlerToSettle.id,
-      amount,
-      handlerToSettle.settledAmount || 0
-    );
-
-    if (result.success) {
-      setHandlers(prev => prev.map(h => h.id === handlerToSettle.id
-        ? { ...h, settledAmount: result.settledAmount, lastSettledDate: result.lastSettledDate }
-        : h));
+    if (amount > 100000) {
       toast({
-        title: "Settlement Recorded",
-        description: `${amount > 0 ? "Settled" : "Reversed"} ₹${Math.abs(amount).toFixed(2)} for ${handlerToSettle.name}.`,
+        title: "Unusually High Amount",
+        description: "Amount cannot exceed ₹1,00,000. If you pasted a UPI Reference (UTR) or PNR number, please enter the actual payment amount.",
+        variant: "destructive",
       });
-      setHandlerToSettle(null);
-      setSettlementAmount("");
+      return;
+    }
+
+    setIsRecordingPayment(true);
+    const result = await recordHandlerPayment(handlerForPayment.id, {
+      type: paymentType,
+      amount,
+      notes: paymentNotes,
+      date: paymentDate,
+    });
+
+    if (result.success && result.payment) {
+      toast({
+        title: paymentType === "settlement" ? "Settlement Recorded" : "NA Payment Recorded",
+        description: `${paymentType === "settlement" ? "Settled" : "Deducted NA"} ₹${Math.abs(amount).toFixed(2)} for ${handlerForPayment.name}.`,
+      });
+      setHandlerForPayment(null);
+      setPaymentAmount("");
+      setPaymentNotes("");
+      await loadHandlers();
     } else {
       toast({
-        title: "Settlement Failed",
-        description: result.error || "Failed to record settlement.",
+        title: "Payment Recording Failed",
+        description: result.error || "Failed to record payment.",
         variant: "destructive",
       });
     }
-    setIsSettling(false);
+    setIsRecordingPayment(false);
+  };
+
+  const handleDeletePayment = async (paymentId: string) => {
+    if (!handlerForHistory) return;
+    setDeletingPaymentId(paymentId);
+    const result = await deleteHandlerPayment(handlerForHistory.id, paymentId);
+
+    if (result.success) {
+      toast({
+        title: "Payment Deleted",
+        description: "Payment transaction has been removed.",
+      });
+      const updatedPayments = (handlerForHistory.payments || []).filter(p => p.id !== paymentId);
+      const updatedHandler = {
+        ...handlerForHistory,
+        settledAmount: result.settledAmount,
+        naAmount: result.naAmount,
+        payments: updatedPayments,
+      };
+      setHandlerForHistory(updatedHandler);
+      setHandlers(prev => prev.map(h => h.id === handlerForHistory.id ? updatedHandler : h));
+      await loadHandlers();
+    } else {
+      toast({
+        title: "Delete Failed",
+        description: result.error || "Failed to delete payment.",
+        variant: "destructive",
+      });
+    }
+    setDeletingPaymentId(null);
   };
 
   const filteredHandlers = useMemo(() => {
@@ -1331,11 +1493,23 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
         <div className="text-sm text-muted-foreground">
           Total Handlers: <span className="font-medium text-foreground">{handlers.length}</span>
         </div>
-        {!showAddForm && (
-          <Button onClick={() => setShowAddForm(true)}>
-            <Plus className="mr-2 h-4 w-4" /> Add Handler
-          </Button>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {handlers.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowResetAllDialog(true)}
+              className="text-muted-foreground hover:text-foreground"
+            >
+              <RotateCcw className="mr-1.5 h-3.5 w-3.5" /> Reset All to ₹0
+            </Button>
+          )}
+          {!showAddForm && (
+            <Button onClick={() => setShowAddForm(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Add Handler
+            </Button>
+          )}
+        </div>
       </div>
 
       {showAddForm && (
@@ -1360,6 +1534,22 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
                 />
               </div>
 
+              <div className="space-y-2">
+                <Label htmlFor="initial-pending">Starting Pending Amount (₹)</Label>
+                <Input
+                  id="initial-pending"
+                  type="number"
+                  step="0.01"
+                  value={initialPending}
+                  onChange={(e) => setInitialPending(e.target.value)}
+                  placeholder="0.00 (Optional opening balance)"
+                  disabled={isSubmitting}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave empty or 0 if no initial balance is owed.
+                </p>
+              </div>
+
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {isSubmitting ? "Adding..." : "Add Handler"}
@@ -1372,7 +1562,7 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
         {filteredHandlers.map(handler => {
           const stats = findHandlerStats(handler);
-          const outstanding = getHandlerOutstanding(stats?.paymentTotals, handler.settledAmount);
+          const outstanding = getHandlerOutstanding(stats?.paymentTotals, handler.settledAmount, handler.initialPendingAmount, handler.naAmount);
           return (
             <Card key={handler.id}>
               <CardHeader className="pb-3">
@@ -1407,54 +1597,95 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
                   <span style={labelHighlightStyle}>Bookings (since Jan 1, 2026): </span>
                   {stats?.bookingCount ?? 0}
                 </div>
-                <div className="rounded-md border bg-muted/40 p-2 space-y-1.5">
-                  <div className="text-xs text-muted-foreground">
-                    Paid since {HANDLER_PAYMENT_TRACKING_START_DATE.toLocaleDateString()}
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span style={labelHighlightStyle}>UPI</span>
-                    <span>₹{(stats?.paymentTotals.upi ?? 0).toFixed(2)}</span>
-                  </div>
-                  {(stats?.paymentTotals.others ?? 0) > 0 && (
-                    <div className="flex items-center justify-between">
-                      <span style={labelHighlightStyle}>Others</span>
-                      <span>₹{(stats?.paymentTotals.others ?? 0).toFixed(2)}</span>
+                <div className="rounded-md border bg-muted/40 p-2.5 space-y-2">
+                  {(handler.initialPendingAmount ?? 0) !== 0 && (
+                    <div className="flex items-center justify-between text-xs pb-1 border-b">
+                      <span className="text-muted-foreground">Opening Pending</span>
+                      <span>₹{(handler.initialPendingAmount ?? 0).toFixed(2)}</span>
                     </div>
                   )}
-                  <div className="flex items-center justify-between">
-                    <span style={labelHighlightStyle}>Wallet</span>
-                    <span>₹{(stats?.paymentTotals.wallet ?? 0).toFixed(2)}</span>
-                  </div>
-                  <div className="border-t pt-1.5 space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <span style={labelHighlightStyle}>Settled</span>
-                      <span>₹{(handler.settledAmount ?? 0).toFixed(2)}</span>
+
+                  {/* Bookings Paid */}
+                  <div className="space-y-1">
+                    <div className="text-xs font-semibold text-muted-foreground">Bookings Paid:</div>
+                    <div className="flex items-center justify-between pl-2">
+                      <span style={labelHighlightStyle}>UPI</span>
+                      <span>₹{(stats?.paymentTotals.upi ?? 0).toFixed(2)}</span>
                     </div>
+                    <div className="flex items-center justify-between pl-2">
+                      <span style={labelHighlightStyle}>Wallet</span>
+                      <span>₹{(stats?.paymentTotals.wallet ?? 0).toFixed(2)}</span>
+                    </div>
+                    {(stats?.paymentTotals.others ?? 0) > 0 && (
+                      <div className="flex items-center justify-between pl-2">
+                        <span style={labelHighlightStyle}>Others</span>
+                        <span>₹{(stats?.paymentTotals.others ?? 0).toFixed(2)}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between pl-2 pt-1 border-t border-dashed text-xs font-medium">
+                      <span>Total</span>
+                      <span>₹{(stats?.paymentTotals.total ?? 0).toFixed(2)}</span>
+                    </div>
+                  </div>
+
+                  {/* Deductions (Settled & NA) */}
+                  {((handler.settledAmount ?? 0) > 0 || (handler.naAmount ?? 0) > 0) && (
+                    <div className="space-y-1 pt-1 border-t">
+                      <div className="text-xs font-semibold text-muted-foreground">
+                        Deductions:
+                      </div>
+                      {(handler.settledAmount ?? 0) > 0 && (
+                        <div className="flex items-center justify-between pl-2 text-xs">
+                          <span>Settled (Repaid)</span>
+                          <span>₹{(handler.settledAmount ?? 0).toFixed(2)}</span>
+                        </div>
+                      )}
+                      {(handler.naAmount ?? 0) > 0 && (
+                        <div className="flex items-center justify-between pl-2 text-xs">
+                          <span>NA (Wallet Loaded)</span>
+                          <span>₹{(handler.naAmount ?? 0).toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Balance */}
+                  <div className="border-t pt-1.5 space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
-                      <span style={labelHighlightStyle}>
-                        {outstanding < 0 ? "Overpaid" : "Outstanding"}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <span className={`font-semibold ${outstanding !== 0 ? 'text-destructive' : ''}`}>
+                      <span style={labelHighlightStyle}>Balance</span>
+                      <div className="flex items-center gap-1.5">
+                        <span className={`font-semibold ${outstanding > 0 ? 'text-destructive' : outstanding < 0 ? 'text-emerald-500 dark:text-emerald-400' : ''}`}>
                           ₹{Math.abs(outstanding).toFixed(2)}
+                          {outstanding > 0 ? " (Due)" : outstanding < 0 ? " (Credit)" : ""}
                         </span>
                         <Button
                           variant="ghost"
                           size="sm"
                           className="h-6 text-primary hover:text-primary px-2 text-xs"
-                          onClick={() => handleSettleClick(handler)}
-                          title="Record a settlement"
+                          onClick={() => handleOpenAddPayment(handler)}
+                          title="Record a payment"
                         >
-                          <Plus className="h-3 w-3 mr-1" /> Settle
+                          <Plus className="h-3 w-3 mr-1" /> Add Payment
                         </Button>
                       </div>
                     </div>
                   </div>
-                  {handler.lastSettledDate && (
-                    <div className="text-xs text-muted-foreground">
-                      Last settled: {new Date(`${handler.lastSettledDate}T00:00:00`).toLocaleDateString()}
-                    </div>
-                  )}
+
+                  {/* History & last settled */}
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5">
+                    <span>
+                      {handler.lastSettledDate ? `Last settled: ${new Date(`${handler.lastSettledDate}T00:00:00`).toLocaleDateString()}` : ""}
+                    </span>
+                    {(handler.payments && handler.payments.length > 0) && (
+                      <button
+                        type="button"
+                        onClick={() => setHandlerForHistory(handler)}
+                        className="text-primary hover:underline flex items-center gap-1 font-medium"
+                      >
+                        <History className="h-3 w-3" /> {handler.payments.length} payment{handler.payments.length > 1 ? "s" : ""}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="text-xs text-muted-foreground">
                   Last Updated: {stats?.lastAssignedDate
@@ -1496,6 +1727,30 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
         </AlertDialogContent>
       </AlertDialog>
 
+      <AlertDialog open={showResetAllDialog} onOpenChange={(open) => !open && setShowResetAllDialog(false)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reset All Handlers' Balances to ₹0?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will set every handler's opening pending amount to ₹0, reset settled amount to ₹0, and restart payment tracking from now. Past booking records and activity counts will not be affected.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowResetAllDialog(false)}>
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleResetAllConfirm}
+              disabled={isResettingAll}
+              className="bg-primary text-primary-foreground hover:bg-primary/90"
+            >
+              {isResettingAll && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Reset All
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <Dialog open={!!handlerToEdit} onOpenChange={(open) => !open && setHandlerToEdit(null)}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
@@ -1517,6 +1772,22 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
               />
             </div>
 
+            <div className="space-y-2">
+              <Label htmlFor="edit-handler-pending">Pending Amount (₹)</Label>
+              <Input
+                id="edit-handler-pending"
+                type="number"
+                step="0.01"
+                value={editPendingAmount}
+                onChange={(e) => setEditPendingAmount(e.target.value)}
+                placeholder="0.00"
+                disabled={isSubmitting}
+              />
+              <p className="text-xs text-muted-foreground">
+                Updating pending amount will restart payment tracking from now with this value.
+              </p>
+            </div>
+
             <DialogFooter>
               <Button type="button" variant="outline" onClick={() => setHandlerToEdit(null)}>
                 Cancel
@@ -1530,70 +1801,300 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!handlerToSettle} onOpenChange={(open) => !open && setHandlerToSettle(null)}>
-        <DialogContent>
+      {/* Add Payment / Deduction Dialog */}
+      <Dialog open={!!handlerForPayment} onOpenChange={(open) => !open && setHandlerForPayment(null)}>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Settle Payment</DialogTitle>
+            <DialogTitle>Record Payment / Deduction</DialogTitle>
             <DialogDescription>
-              Record money repaid to {handlerToSettle?.name} for bookings they paid out of pocket.
-              Use a negative amount (e.g. -500) to reverse a settlement recorded by mistake.
+              Record a settlement or NA deduction for {handlerForPayment?.name}. Both payment types adjust the handler's balance.
             </DialogDescription>
           </DialogHeader>
-          {handlerToSettle && (() => {
-            const settleStats = findHandlerStats(handlerToSettle);
-            const paid = getHandlerPaidOutOfPocket(settleStats?.paymentTotals);
-            const alreadySettled = handlerToSettle.settledAmount || 0;
-            const outstanding = paid - alreadySettled;
-            const entered = Number(settlementAmount) || 0;
-            const remaining = outstanding - entered;
+          {handlerForPayment && (() => {
+            const stats = findHandlerStats(handlerForPayment);
+            const currentBalance = getHandlerOutstanding(
+              stats?.paymentTotals,
+              handlerForPayment.settledAmount,
+              handlerForPayment.initialPendingAmount,
+              handlerForPayment.naAmount
+            );
+            const entered = Number(paymentAmount) || 0;
+            const newBalance = currentBalance - entered;
+            const walletTotal = stats?.paymentTotals.wallet ?? 0;
 
             return (
-              <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right">Paid (UPI/Others)</Label>
-                  <div className="col-span-3">₹{paid.toFixed(2)}</div>
+              <form className="space-y-4" onSubmit={handleRecordPaymentSubmit}>
+                {/* Type Selection */}
+                <div className="space-y-2">
+                  <Label>Payment Type</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentType("settlement");
+                        setPaymentAmount(currentBalance > 0 ? currentBalance.toFixed(2) : "");
+                      }}
+                      className={cn(
+                        "flex flex-col items-start p-3 rounded-lg border text-left transition-colors",
+                        paymentType === "settlement"
+                          ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
+                          : "border-border hover:bg-muted/50 text-muted-foreground"
+                      )}
+                    >
+                      <span className="font-semibold text-sm text-foreground">Settlement</span>
+                      <span className="text-[11px] mt-0.5 leading-snug">
+                        Repaid money to handler (Cash / Bank / UPI)
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPaymentType("na");
+                        const unadjusted = Math.max(0, walletTotal - (handlerForPayment.naAmount ?? 0));
+                        setPaymentAmount(unadjusted > 0 ? unadjusted.toFixed(2) : "");
+                      }}
+                      className={cn(
+                        "flex flex-col items-start p-3 rounded-lg border text-left transition-colors",
+                        paymentType === "na"
+                          ? "border-primary bg-primary/10 text-foreground ring-1 ring-primary"
+                          : "border-border hover:bg-muted/50 text-muted-foreground"
+                      )}
+                    >
+                      <span className="font-semibold text-sm text-foreground">NA (Not Applicable)</span>
+                      <span className="text-[11px] mt-0.5 leading-snug">
+                        Pre-loaded wallet funded by business
+                      </span>
+                    </button>
+                  </div>
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right">Already Settled</Label>
-                  <div className="col-span-3">₹{alreadySettled.toFixed(2)}</div>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right">Outstanding</Label>
-                  <div className="col-span-3">₹{outstanding.toFixed(2)}</div>
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label htmlFor="settlement-amount" className="text-right">Settle Now</Label>
+
+                {/* Amount input */}
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <Label htmlFor="payment-amount">Amount (₹)</Label>
+                    <span className="text-xs text-muted-foreground">
+                      Current Balance: ₹{currentBalance.toFixed(2)}
+                    </span>
+                  </div>
                   <Input
-                    id="settlement-amount"
+                    id="payment-amount"
                     type="number"
-                    value={settlementAmount}
-                    onChange={(e) => setSettlementAmount(e.target.value)}
-                    className="col-span-3"
-                    placeholder="e.g. 500 or -500"
                     step="0.01"
+                    value={paymentAmount}
+                    onChange={(e) => setPaymentAmount(e.target.value)}
+                    placeholder="0.00"
+                    required
+                    disabled={isRecordingPayment}
                   />
-                </div>
-                <div className="grid grid-cols-4 items-center gap-4">
-                  <Label className="text-right font-bold">Remaining</Label>
-                  <div className={`col-span-3 font-bold ${remaining < 0 ? 'text-destructive' : ''}`}>
-                    ₹{remaining.toFixed(2)}
-                    {remaining < 0 && (
-                      <span className="ml-2 text-xs font-normal">(overpaid)</span>
+                  <div className="flex justify-between items-center text-[11px] text-muted-foreground">
+                    {paymentType === "na" ? (
+                      (() => {
+                        const unadjustedWallet = Math.max(0, walletTotal - (handlerForPayment.naAmount ?? 0));
+                        return unadjustedWallet > 0 ? (
+                          <>
+                            <span>Unadjusted wallet: ₹{unadjustedWallet.toFixed(2)}</span>
+                            <button
+                              type="button"
+                              onClick={() => setPaymentAmount(unadjustedWallet.toFixed(2))}
+                              className="text-primary hover:underline font-medium"
+                            >
+                              Deduct Wallet ({unadjustedWallet.toFixed(2)})
+                            </button>
+                          </>
+                        ) : (
+                          <span>All wallet bookings already adjusted</span>
+                        );
+                      })()
+                    ) : (
+                      currentBalance > 0 && (
+                        <>
+                          <span>Owed balance: ₹{currentBalance.toFixed(2)}</span>
+                          <button
+                            type="button"
+                            onClick={() => setPaymentAmount(currentBalance.toFixed(2))}
+                            className="text-primary hover:underline font-medium"
+                          >
+                            Full Balance
+                          </button>
+                        </>
+                      )
                     )}
                   </div>
                 </div>
+
+                {/* Date input */}
+                <div className="space-y-2">
+                  <Label htmlFor="payment-date">Date</Label>
+                  <Input
+                    id="payment-date"
+                    type="date"
+                    value={paymentDate}
+                    onChange={(e) => setPaymentDate(e.target.value)}
+                    required
+                    disabled={isRecordingPayment}
+                  />
+                </div>
+
+                {/* Notes input */}
+                <div className="space-y-2">
+                  <Label htmlFor="payment-notes">Notes / Reference (Optional)</Label>
+                  <Input
+                    id="payment-notes"
+                    value={paymentNotes}
+                    onChange={(e) => setPaymentNotes(e.target.value)}
+                    placeholder={
+                      paymentType === "settlement"
+                        ? "e.g. GPay ref #1234, cash given"
+                        : "e.g. 5k wallet loaded on 12 Mar"
+                    }
+                    disabled={isRecordingPayment}
+                  />
+                </div>
+
+                {/* Balance preview */}
+                <div className="rounded-md bg-muted/50 p-3 space-y-1.5 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Current Balance:</span>
+                    <span className={`font-medium ${currentBalance > 0 ? 'text-destructive' : currentBalance < 0 ? 'text-emerald-500 dark:text-emerald-400' : ''}`}>
+                      ₹{Math.abs(currentBalance).toFixed(2)}
+                      {currentBalance > 0 ? " (Due)" : currentBalance < 0 ? " (Credit)" : ""}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">
+                      Deduction ({paymentType === "settlement" ? "Settlement" : "NA"}):
+                    </span>
+                    <span className="text-destructive font-medium">-₹{entered.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between pt-1 border-t font-semibold">
+                    <span>New Balance:</span>
+                    <span className={newBalance > 0 ? "text-destructive" : newBalance < 0 ? "text-emerald-500 dark:text-emerald-400" : ""}>
+                      ₹{Math.abs(newBalance).toFixed(2)}
+                      {newBalance > 0 ? " (Due)" : newBalance < 0 ? " (Credit)" : ""}
+                    </span>
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button type="button" variant="outline" onClick={() => setHandlerForPayment(null)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={isRecordingPayment}>
+                    {isRecordingPayment && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Record Payment
+                  </Button>
+                </DialogFooter>
+              </form>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Payment History Dialog */}
+      <Dialog open={!!handlerForHistory} onOpenChange={(open) => !open && setHandlerForHistory(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 text-primary" />
+              Payment & Deduction History
+            </DialogTitle>
+            <DialogDescription>
+              Recorded payments and deductions for {handlerForHistory?.name}.
+            </DialogDescription>
+          </DialogHeader>
+          {handlerForHistory && (() => {
+            const payments = [...(handlerForHistory.payments || [])].sort(
+              (a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime()
+            );
+
+            return (
+              <div className="space-y-4 py-2">
+                {/* Summary bar */}
+                <div className="grid grid-cols-3 gap-2 p-2.5 rounded-lg bg-muted/40 border text-center text-xs">
+                  <div>
+                    <div className="text-muted-foreground">Settled</div>
+                    <div className="font-semibold text-sm">₹{(handlerForHistory.settledAmount ?? 0).toFixed(2)}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">NA (Wallet)</div>
+                    <div className="font-semibold text-sm">₹{(handlerForHistory.naAmount ?? 0).toFixed(2)}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Total Deductions</div>
+                    <div className="font-semibold text-sm text-primary">
+                      ₹{((handlerForHistory.settledAmount ?? 0) + (handlerForHistory.naAmount ?? 0)).toFixed(2)}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Transactions list */}
+                <div className="max-h-72 overflow-y-auto space-y-2 pr-1">
+                  {payments.length === 0 ? (
+                    <div className="text-center py-6 text-sm text-muted-foreground">
+                      No payment transactions recorded yet.
+                    </div>
+                  ) : (
+                    payments.map((payment) => (
+                      <div
+                        key={payment.id}
+                        className="flex items-center justify-between p-2.5 rounded-lg border bg-card hover:bg-muted/30 transition-colors text-xs"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Badge
+                              variant={payment.type === "settlement" ? "default" : "secondary"}
+                              className="text-[10px] px-1.5 py-0"
+                            >
+                              {payment.type === "settlement" ? "Settlement" : "NA (Wallet Loaded)"}
+                            </Badge>
+                            <span className="text-muted-foreground">
+                              {payment.date
+                                ? new Date(`${payment.date}T00:00:00`).toLocaleDateString()
+                                : new Date(payment.createdAt).toLocaleDateString()}
+                            </span>
+                          </div>
+                          {payment.notes && (
+                            <p className="text-muted-foreground italic pl-0.5">{payment.notes}</p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-3">
+                          <span className="font-semibold text-sm">
+                            ₹{payment.amount.toFixed(2)}
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                            onClick={() => handleDeletePayment(payment.id)}
+                            disabled={deletingPaymentId === payment.id}
+                            title="Delete transaction"
+                          >
+                            {deletingPaymentId === payment.id ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+
+                <DialogFooter className="sm:justify-between items-center pt-2">
+                  <span className="text-xs text-muted-foreground">
+                    {payments.length} transaction{payments.length === 1 ? "" : "s"}
+                  </span>
+                  <Button variant="outline" onClick={() => setHandlerForHistory(null)}>
+                    Close
+                  </Button>
+                </DialogFooter>
               </div>
             );
           })()}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setHandlerToSettle(null)}>Cancel</Button>
-            <Button onClick={handleSettleSubmit} disabled={isSettling}>
-              {isSettling && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Record Settlement
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </div>
   );
 }
