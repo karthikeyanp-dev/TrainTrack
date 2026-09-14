@@ -140,7 +140,7 @@ export function SmartSuggestionTool() {
               <Alert>
                 <Info className="h-4 w-4" />
                 <AlertTitle>No Suggestions</AlertTitle>
-                <AlertDescription>The AI couldn't generate any suggestions based on the provided data. Try adjusting the inputs.</AlertDescription>
+                <AlertDescription>The AI couldn&apos;t generate any suggestions based on the provided data. Try adjusting the inputs.</AlertDescription>
               </Alert>
             ) : (
               suggestions.map((suggestion, index) => (

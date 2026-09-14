@@ -80,7 +80,7 @@ export function StatusReasonDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Update Status to "{status}"</DialogTitle>
+          <DialogTitle>Update Status to &quot;{status}&quot;</DialogTitle>
         </DialogHeader>
         
         <div className="space-y-4 py-4">

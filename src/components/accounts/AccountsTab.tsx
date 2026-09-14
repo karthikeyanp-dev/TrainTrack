@@ -1738,9 +1738,9 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
       <AlertDialog open={showResetAllDialog} onOpenChange={(open) => !open && setShowResetAllDialog(false)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Reset All Handlers' Balances to ₹0?</AlertDialogTitle>
+            <AlertDialogTitle>Reset All Handlers&apos; Balances to ₹0?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will set every handler's opening pending amount to ₹0, reset settled amount to ₹0, and restart payment tracking from now. Past booking records and activity counts will not be affected.
+              This will set every handler&apos;s opening pending amount to ₹0, reset settled amount to ₹0, and restart payment tracking from now. Past booking records and activity counts will not be affected.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1815,7 +1815,7 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
           <DialogHeader>
             <DialogTitle>Record Payment / Deduction</DialogTitle>
             <DialogDescription>
-              Record a settlement or NA deduction for {handlerForPayment?.name}. Both payment types adjust the handler's balance.
+              Record a settlement or NA deduction for {handlerForPayment?.name}. Both payment types adjust the handler&apos;s balance.
             </DialogDescription>
           </DialogHeader>
           {handlerForPayment && (() => {

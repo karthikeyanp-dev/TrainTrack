@@ -834,7 +834,7 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
           animate={{ opacity: 1 }}
           className="text-center text-muted-foreground p-4"
         >
-          You've reached the end of the list.
+          You&apos;ve reached the end of the list.
         </motion.div>
       )}
     </motion.div>

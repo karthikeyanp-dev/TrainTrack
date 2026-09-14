@@ -799,14 +799,14 @@ function GroupStatusUpdate({ bookings, groupId }: GroupStatusUpdateProps) {
             <AlertDialogDescription>
               {statusToConfirm === "Requested" && currentStatus !== "Requested" ? (
                 <>
-                  Are you sure you want to revert to "Requested" status for all {bookings.length} bookings in this group?
+                  Are you sure you want to revert to &quot;Requested&quot; status for all {bookings.length} bookings in this group?
                   <span className="block mt-2 font-medium text-amber-600 dark:text-amber-500">
                     This will clear the status reason, handler, and booked details (if any), returning all bookings to pending state.
                   </span>
                 </>
               ) : (
                 <>
-                  Are you sure you want to change the status to "{statusToConfirm}" for all {bookings.length} bookings in this group?
+                  Are you sure you want to change the status to &quot;{statusToConfirm}&quot; for all {bookings.length} bookings in this group?
                 </>
               )}
             </AlertDialogDescription>

@@ -1354,7 +1354,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                 <AlertDialogDescription>
                   {statusToConfirm === "Requested" && booking.status !== "Requested" ? (
                     <>
-                      Are you sure you want to revert to "Requested" status for the booking
+                      Are you sure you want to revert to &quot;Requested&quot; status for the booking
                       from {booking.source.toUpperCase()} to {booking.destination.toUpperCase()} for {booking.userName}?
                       <span className="block mt-2 font-medium text-amber-600 dark:text-amber-500">
                         This will clear the status reason, handler, and booked details (if any), returning the booking to pending state.
@@ -1362,7 +1362,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                     </>
                   ) : (
                     <>
-                      Are you sure you want to change the status to "{statusToConfirm}" for the booking
+                      Are you sure you want to change the status to &quot;{statusToConfirm}&quot; for the booking
                       from {booking.source.toUpperCase()} to {booking.destination.toUpperCase()} for {booking.userName}?
                     </>
                   )}

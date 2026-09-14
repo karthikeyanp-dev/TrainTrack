@@ -50,7 +50,7 @@ export function RefundsManager() {
         <div className="text-center p-12 border border-dashed rounded-lg text-muted-foreground">
           <RefreshCcw className="mx-auto h-8 w-8 mb-4 opacity-50" />
           <p>No pending refunds found.</p>
-          <p className="text-sm mt-1">Bookings with status "Booking Failed (Paid)" or "CNF & Cancelled" will appear here.</p>
+          <p className="text-sm mt-1">Bookings with status &quot;Booking Failed (Paid)&quot; or &quot;CNF &amp; Cancelled&quot; will appear here.</p>
         </div>
       ) : (
         <Accordion type="multiple" className="w-full space-y-4" defaultValue={refundDates.length > 0 ? [refundDates[0]] : []}>

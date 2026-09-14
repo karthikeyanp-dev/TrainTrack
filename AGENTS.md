@@ -40,7 +40,7 @@ TrainTrack is a Next.js 15 static-export app for train booking operations. The f
 
 - `git pull --ff-only` reported `Already up to date.` on April 3, 2026.
 - `npm.cmd run typecheck` passes.
-- `npm.cmd run lint` currently fails because `next lint` hits a circular JSON/config error from `.eslintrc.json`; linting likely needs migration to the ESLint CLI for reliable execution on Next 15/16-era tooling.
+- `npm.cmd run lint` passes (exit 0) after migrating from `next lint`/`.eslintrc.json` to the ESLint CLI with flat config (`eslint.config.mjs`, `eslint .`). It reports ~149 warnings (`@typescript-eslint/no-explicit-any`, `no-unused-vars`, and new react-hooks Compiler rules are downgraded to warnings); warnings do not fail the command.
 
 ## Implementation Notes
 
