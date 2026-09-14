@@ -1626,6 +1626,14 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
                       <span>Total</span>
                       <span>₹{(stats?.paymentTotals.total ?? 0).toFixed(2)}</span>
                     </div>
+                    {(stats?.paymentTotals.commission ?? 0) > 0 && (
+                      <div className="flex items-center justify-between pl-2 text-[11px] text-muted-foreground">
+                        <span>Commissions Included</span>
+                        <span className="font-mono text-emerald-600 dark:text-emerald-400">
+                          ₹{(stats?.paymentTotals.commission ?? 0).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Deductions (Settled & NA) */}

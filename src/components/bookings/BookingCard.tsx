@@ -291,10 +291,10 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
     }
   };
 
-  const handleBookedDetailsSuccess = () => {
+  const handleBookedDetailsSuccess = (savedHandler?: string) => {
     // Update the status to Booked or Failed (Paid) after record is saved
     const status = statusToConfirm || "Booked";
-    statusUpdateMutation.mutate({ id: booking.id, status: status });
+    statusUpdateMutation.mutate({ id: booking.id, status: status, handler: savedHandler });
     setShowBookedDetailsDialog(false);
     fetchBookingRecord();
     setStatusToConfirm(null);
@@ -1094,6 +1094,11 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                       <div className="min-w-0">
                         <span className="text-muted-foreground text-[10px] font-semibold block uppercase tracking-wider">Amount</span>
                         <div className="font-mono font-bold text-sm text-emerald-600 dark:text-emerald-400 mt-0.5">₹{bookingRecord.amountCharged}</div>
+                        {typeof bookingRecord.commission === "number" && bookingRecord.commission > 0 && (
+                          <div className="text-[10px] text-muted-foreground mt-0.5 font-medium">
+                            Fare: ₹{bookingRecord.bookedAmount ?? (bookingRecord.amountCharged - bookingRecord.commission)} + Comm: ₹{bookingRecord.commission}
+                          </div>
+                        )}
                       </div>
 
                       <div className="min-w-0 pt-2 border-t border-border/40">
@@ -1128,6 +1133,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
           <div className="px-6">
             <BookingRecordForm
               bookingId={booking.id}
+              booking={booking}
               onClose={() => {
                 setShowRecordForm(false);
                 fetchBookingRecord();
@@ -1390,6 +1396,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
               </DialogHeader>
               <BookingRecordForm
                 bookingId={booking.id}
+                booking={booking}
                 onClose={() => setShowBookedDetailsDialog(false)}
                 onSave={handleBookedDetailsSuccess}
                 hideWrapper={true}

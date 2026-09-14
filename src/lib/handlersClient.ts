@@ -34,6 +34,8 @@ export interface HandlerPaymentTotals {
   others: number;
   /** wallet + upi + others */
   total: number;
+  /** Total commissions earned across all payment methods */
+  commission: number;
 }
 
 export interface HandlerStats {
@@ -50,6 +52,7 @@ const emptyPaymentTotals = (): HandlerPaymentTotals => ({
   upi: 0,
   others: 0,
   total: 0,
+  commission: 0,
 });
 
 /**
@@ -617,7 +620,8 @@ export async function getHandlerStatsForHandlers(
 
         if (createdAt >= trackingCutoff) {
           const amount = Number(data.amountCharged) || 0;
-          if (amount > 0) {
+          const commission = Number(data.commission) || 0;
+          if (amount > 0 || commission > 0) {
             const totals = handlerPayments.get(key) || emptyPaymentTotals();
 
             if (data.methodUsed === "Wallet") {
@@ -628,6 +632,7 @@ export async function getHandlerStatsForHandlers(
               totals.others += amount;
             }
             totals.total += amount;
+            totals.commission += commission;
 
             handlerPayments.set(key, totals);
           }

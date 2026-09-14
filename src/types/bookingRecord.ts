@@ -9,7 +9,11 @@ export interface BookingRecord {
   groupId?: string;         // For group bookings - reference to the booking group
   bookedBy: string;         // Person who initiated the booking
   bookedAccountUsername: string;  // IRCTC account username used
-  amountCharged: number;    // Final transaction cost (total for group)
+  amountCharged: number;    // Final transaction cost (total for group: bookedAmount + commission)
+  bookedAmount?: number;    // Ticket fare charged on IRCTC
+  commission?: number;      // Handler commission earned
+  commissionRate?: number;  // Commission rate per passenger (e.g. 100 for AC, 70 for Non-AC)
+  passengerCount?: number;  // Total passenger count for the booking
   methodUsed: PaymentMethod;
   trainName?: string;       // Optional train name/number at time of booking
   bookingDate?: string;     // YYYY-MM-DD - the 'Book by' date from the source booking

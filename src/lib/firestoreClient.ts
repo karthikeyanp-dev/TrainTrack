@@ -515,6 +515,12 @@ export async function getBookingRecordByBookingId(bookingId: string): Promise<an
         bookedBy: data.bookedBy,
         bookedAccountUsername: data.bookedAccountUsername,
         amountCharged: data.amountCharged,
+        bookedAmount: data.bookedAmount,
+        commission: data.commission,
+        commissionRate: data.commissionRate,
+        passengerCount: data.passengerCount,
+        bookingTransactionId: data.bookingTransactionId,
+        bookingDate: data.bookingDate,
         methodUsed: data.methodUsed,
         trainName: data.trainName as string | undefined,
         createdAt: toISOStringSafe(data.createdAt, "createdAt", docSnap.id),
@@ -538,6 +544,12 @@ export async function getBookingRecordByBookingId(bookingId: string): Promise<an
         bookedBy: data.bookedBy,
         bookedAccountUsername: data.bookedAccountUsername,
         amountCharged: data.amountCharged,
+        bookedAmount: data.bookedAmount,
+        commission: data.commission,
+        commissionRate: data.commissionRate,
+        passengerCount: data.passengerCount,
+        bookingTransactionId: data.bookingTransactionId,
+        bookingDate: data.bookingDate,
         methodUsed: data.methodUsed,
         trainName: data.trainName as string | undefined,
         createdAt: toISOStringSafe(data.createdAt, "createdAt", docSnap.id),
@@ -577,7 +589,7 @@ async function computeAccountRevertUpdate(
   };
 
   if (previousRecord.methodUsed === "Wallet") {
-    const refundAmount = previousRecord.amountCharged || 0;
+    const refundAmount = typeof previousRecord.bookedAmount === "number" ? previousRecord.bookedAmount : (previousRecord.amountCharged || 0);
     if (refundAmount > 0) {
       const currentWalletAmount = accountData.walletAmount || 0;
       updateData.walletAmount = currentWalletAmount + refundAmount;
@@ -629,6 +641,10 @@ export async function saveBookingRecord(data: {
   bookedBy: string;
   bookedAccountUsername: string;
   amountCharged: number;
+  bookedAmount?: number;
+  commission?: number;
+  commissionRate?: number;
+  passengerCount?: number;
   methodUsed: string;
   trainName?: string;
 }): Promise<{ success: boolean; error?: string; record?: any; errors?: any }> {
@@ -700,23 +716,28 @@ export async function saveBookingRecord(data: {
     // writes succeed or none do, leaving the account untouched on failure.
     const accountUpdateData: Record<string, any> = { updatedAt: serverTimestamp() };
 
-    // Wallet deduction / refund logic
+    const effectiveBookedAmount = typeof data.bookedAmount === "number" ? data.bookedAmount : data.amountCharged;
+    const prevEffectiveBookedAmount = previousRecord
+      ? (typeof previousRecord.bookedAmount === "number" ? previousRecord.bookedAmount : (previousRecord.amountCharged || 0))
+      : 0;
+
+    // Wallet deduction / refund logic - wallet only covers the actual ticket fare (bookedAmount)
     if (data.methodUsed === "Wallet") {
       if (!treatAsNew && previousRecord?.methodUsed === "Wallet") {
-        const refundAmount = previousRecord.amountCharged || 0;
+        const refundAmount = prevEffectiveBookedAmount;
         const newWalletAfterRefund = currentWalletAmount + refundAmount;
-        if (newWalletAfterRefund < data.amountCharged) {
-          return { success: false, error: `Insufficient wallet balance. Available: ₹${newWalletAfterRefund.toFixed(2)}, Required: ₹${data.amountCharged.toFixed(2)}` };
+        if (newWalletAfterRefund < effectiveBookedAmount) {
+          return { success: false, error: `Insufficient wallet balance. Available: ₹${newWalletAfterRefund.toFixed(2)}, Required: ₹${effectiveBookedAmount.toFixed(2)}` };
         }
-        accountUpdateData.walletAmount = newWalletAfterRefund - data.amountCharged;
+        accountUpdateData.walletAmount = newWalletAfterRefund - effectiveBookedAmount;
       } else {
-        if (currentWalletAmount < data.amountCharged) {
-          return { success: false, error: `Insufficient wallet balance. Available: ₹${currentWalletAmount.toFixed(2)}, Required: ₹${data.amountCharged.toFixed(2)}` };
+        if (currentWalletAmount < effectiveBookedAmount) {
+          return { success: false, error: `Insufficient wallet balance. Available: ₹${currentWalletAmount.toFixed(2)}, Required: ₹${effectiveBookedAmount.toFixed(2)}` };
         }
-        accountUpdateData.walletAmount = currentWalletAmount - data.amountCharged;
+        accountUpdateData.walletAmount = currentWalletAmount - effectiveBookedAmount;
       }
     } else if (!treatAsNew && previousRecord?.methodUsed === "Wallet") {
-      const refundAmount = previousRecord.amountCharged || 0;
+      const refundAmount = prevEffectiveBookedAmount;
       accountUpdateData.walletAmount = currentWalletAmount + refundAmount;
     }
 
@@ -747,6 +768,19 @@ export async function saveBookingRecord(data: {
       bookingDate,   // Store the booking's 'Book by' date for stats queries
       updatedAt: serverTimestamp(),
     };
+
+    if (typeof data.bookedAmount === "number") {
+      recordData.bookedAmount = data.bookedAmount;
+    }
+    if (typeof data.commission === "number") {
+      recordData.commission = data.commission;
+    }
+    if (typeof data.commissionRate === "number") {
+      recordData.commissionRate = data.commissionRate;
+    }
+    if (typeof data.passengerCount === "number") {
+      recordData.passengerCount = data.passengerCount;
+    }
 
     recordData.bookingTransactionId = bookingTransactionId;
 
@@ -840,6 +874,10 @@ export async function saveBookingRecord(data: {
       bookedBy: savedData.bookedBy,
       bookedAccountUsername: savedData.bookedAccountUsername,
       amountCharged: savedData.amountCharged,
+      bookedAmount: savedData.bookedAmount,
+      commission: savedData.commission,
+      commissionRate: savedData.commissionRate,
+      passengerCount: savedData.passengerCount,
       methodUsed: savedData.methodUsed,
       bookingTransactionId: savedData.bookingTransactionId,
       trainName: savedData.trainName as string | undefined,
@@ -864,6 +902,10 @@ export async function saveGroupBookingRecords(data: {
   bookedBy: string;
   bookedAccountUsername: string;
   totalAmount: number;
+  bookedAmount?: number;
+  commission?: number;
+  commissionRate?: number;
+  passengerCount?: number;
   methodUsed: string;
   trainName?: string;
 }): Promise<{ success: boolean; error?: string; record?: any }> {
@@ -961,23 +1003,28 @@ export async function saveGroupBookingRecords(data: {
     // writes succeed or none do, leaving the account untouched on failure.
     const accountUpdateData: Record<string, any> = { updatedAt: serverTimestamp() };
 
-    // Wallet deduction / refund logic
+    const effectiveBookedAmount = typeof data.bookedAmount === "number" ? data.bookedAmount : data.totalAmount;
+    const prevEffectiveBookedAmount = previousRecord
+      ? (typeof previousRecord.bookedAmount === "number" ? previousRecord.bookedAmount : (previousRecord.amountCharged || 0))
+      : 0;
+
+    // Wallet deduction / refund logic - wallet only covers the actual ticket fare (bookedAmount)
     if (data.methodUsed === "Wallet") {
       if (!treatAsNew && previousRecord?.methodUsed === "Wallet") {
-        const refundAmount = previousRecord.amountCharged || 0;
+        const refundAmount = prevEffectiveBookedAmount;
         const newWalletAfterRefund = currentWalletAmount + refundAmount;
-        if (newWalletAfterRefund < data.totalAmount) {
-          return { success: false, error: `Insufficient wallet balance. Available: ₹${newWalletAfterRefund.toFixed(2)}, Required: ₹${data.totalAmount.toFixed(2)}` };
+        if (newWalletAfterRefund < effectiveBookedAmount) {
+          return { success: false, error: `Insufficient wallet balance. Available: ₹${newWalletAfterRefund.toFixed(2)}, Required: ₹${effectiveBookedAmount.toFixed(2)}` };
         }
-        accountUpdateData.walletAmount = newWalletAfterRefund - data.totalAmount;
+        accountUpdateData.walletAmount = newWalletAfterRefund - effectiveBookedAmount;
       } else {
-        if (currentWalletAmount < data.totalAmount) {
-          return { success: false, error: `Insufficient wallet balance. Available: ₹${currentWalletAmount.toFixed(2)}, Required: ₹${data.totalAmount.toFixed(2)}` };
+        if (currentWalletAmount < effectiveBookedAmount) {
+          return { success: false, error: `Insufficient wallet balance. Available: ₹${currentWalletAmount.toFixed(2)}, Required: ₹${effectiveBookedAmount.toFixed(2)}` };
         }
-        accountUpdateData.walletAmount = currentWalletAmount - data.totalAmount;
+        accountUpdateData.walletAmount = currentWalletAmount - effectiveBookedAmount;
       }
     } else if (!treatAsNew && previousRecord?.methodUsed === "Wallet") {
-      const refundAmount = previousRecord.amountCharged || 0;
+      const refundAmount = prevEffectiveBookedAmount;
       accountUpdateData.walletAmount = currentWalletAmount + refundAmount;
     }
 
@@ -1006,12 +1053,25 @@ export async function saveGroupBookingRecords(data: {
       groupId: data.groupId,         // Reference to the group
       bookedBy: data.bookedBy,
       bookedAccountUsername: data.bookedAccountUsername,
-      amountCharged: data.totalAmount, // Total amount for entire group
+      amountCharged: data.totalAmount, // Total amount for entire group (bookedAmount + commission)
       methodUsed: data.methodUsed,
       bookingTransactionId,          // Track this booking transaction
       bookingDate,                   // Store the booking's 'Book by' date for stats queries
       updatedAt: serverTimestamp(),
     };
+
+    if (typeof data.bookedAmount === "number") {
+      recordData.bookedAmount = data.bookedAmount;
+    }
+    if (typeof data.commission === "number") {
+      recordData.commission = data.commission;
+    }
+    if (typeof data.commissionRate === "number") {
+      recordData.commissionRate = data.commissionRate;
+    }
+    if (typeof data.passengerCount === "number") {
+      recordData.passengerCount = data.passengerCount;
+    }
 
     if (data.trainName && data.trainName.trim() !== "") {
       recordData.trainName = data.trainName.trim();
@@ -1098,6 +1158,10 @@ export async function saveGroupBookingRecords(data: {
       bookedBy: savedData.bookedBy,
       bookedAccountUsername: savedData.bookedAccountUsername,
       amountCharged: savedData.amountCharged,
+      bookedAmount: savedData.bookedAmount,
+      commission: savedData.commission,
+      commissionRate: savedData.commissionRate,
+      passengerCount: savedData.passengerCount,
       methodUsed: savedData.methodUsed,
       bookingTransactionId: savedData.bookingTransactionId,
       trainName: savedData.trainName as string | undefined,
@@ -1145,9 +1209,12 @@ export async function deleteBookingRecord(id: string): Promise<{ success: boolea
         };
 
         // Wallet refund — only for records that were actually paid from the wallet.
-        if (methodUsed === "Wallet" && amountCharged) {
-          const currentWalletAmount = accountData.walletAmount || 0;
-          updateData.walletAmount = currentWalletAmount + amountCharged;
+        if (methodUsed === "Wallet") {
+          const refundAmount = typeof recordData.bookedAmount === "number" ? recordData.bookedAmount : (amountCharged || 0);
+          if (refundAmount > 0) {
+            const currentWalletAmount = accountData.walletAmount || 0;
+            updateData.walletAmount = currentWalletAmount + refundAmount;
+          }
         }
 
         // Revert lastBookedDate / lastBookedRecordId — these are tracked for
@@ -1302,12 +1369,14 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
        const groupRecordDoc = groupRecordSnapshot.docs[0];
        const groupRecordData = groupRecordDoc.data();
        const totalAmount = groupRecordData.amountCharged || 0;
+       const totalBookedAmount = groupRecordData.bookedAmount;
+       const totalCommission = groupRecordData.commission;
        const methodUsed = groupRecordData.methodUsed;
        const bookedBy = groupRecordData.bookedBy;
        const bookedAccountUsername = groupRecordData.bookedAccountUsername;
        const trainName = groupRecordData.trainName;
        const bookingTransactionId = groupRecordData.bookingTransactionId; // Preserve transaction ID
-      const groupRecordCreatedAt = groupRecordData.createdAt;
+       const groupRecordCreatedAt = groupRecordData.createdAt;
        const bookingDate = groupRecordData.bookingDate;
 
        // Calculate total passengers across all bookings
@@ -1316,7 +1385,9 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
        );
 
        // Calculate amount per passenger
-       const amountPerPassenger = totalAmount / totalPassengers;
+       const amountPerPassenger = totalPassengers > 0 ? totalAmount / totalPassengers : 0;
+       const bookedAmountPerPassenger = typeof totalBookedAmount === "number" && totalPassengers > 0 ? totalBookedAmount / totalPassengers : undefined;
+       const commissionPerPassenger = typeof totalCommission === "number" && totalPassengers > 0 ? totalCommission / totalPassengers : undefined;
 
        // Create individual booking records for each booking with proportional amount
        const individualRecordPromises = bookingsData.map(async (booking: any) => {
@@ -1330,8 +1401,16 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
            amountCharged: proportionalAmount,
            methodUsed,
            bookingTransactionId,
+           passengerCount,
            updatedAt: serverTimestamp(),
          } as Record<string, any>;
+
+          if (bookedAmountPerPassenger !== undefined) {
+            baseRecordData.bookedAmount = Number((bookedAmountPerPassenger * passengerCount).toFixed(2));
+          }
+          if (commissionPerPassenger !== undefined) {
+            baseRecordData.commission = Number((commissionPerPassenger * passengerCount).toFixed(2));
+          }
 
           if (trainName) {
             baseRecordData.trainName = trainName;
@@ -1410,6 +1489,8 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
 
          if (totalAmount > 0 && totalPassengers > 0) {
            const amountPerPassenger = totalAmount / totalPassengers;
+           const bookedAmountPerPassenger = typeof sourceRecord.bookedAmount === "number" && totalPassengers > 0 ? sourceRecord.bookedAmount / totalPassengers : undefined;
+           const commissionPerPassenger = typeof sourceRecord.commission === "number" && totalPassengers > 0 ? sourceRecord.commission / totalPassengers : undefined;
 
            const sharePromises = bookingsData.map(async (booking: any) => {
              const passengerCount = booking.passengers?.length || 0;
@@ -1418,8 +1499,16 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
              const sharedRecordData: Record<string, any> = {
                bookingId: booking.id,
                amountCharged: proportionalAmount,
+               passengerCount,
                updatedAt: serverTimestamp(),
              };
+
+             if (bookedAmountPerPassenger !== undefined) {
+               sharedRecordData.bookedAmount = Number((bookedAmountPerPassenger * passengerCount).toFixed(2));
+             }
+             if (commissionPerPassenger !== undefined) {
+               sharedRecordData.commission = Number((commissionPerPassenger * passengerCount).toFixed(2));
+             }
 
              if (sourceRecord.bookedBy) sharedRecordData.bookedBy = sourceRecord.bookedBy;
              if (sourceRecord.bookedAccountUsername) sharedRecordData.bookedAccountUsername = sourceRecord.bookedAccountUsername;

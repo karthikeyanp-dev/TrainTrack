@@ -68,6 +68,8 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
     bookedBy: string;
     bookedAccountUsername: string;
     totalAmount: number;
+    bookedAmount?: number;
+    commission?: number;
     methodUsed: string;
     splitByBooking: { bookingId: string; bookingFor: string; passengers: number; amountCharged: number }[];
   } | null>(null);
@@ -80,13 +82,9 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
       // Try to fetch a single group record first (by checking first booking)
       const firstRecord = await getBookingRecordByBookingId(bookings[0].id);
       
-      if (!firstRecord) {
-        setGroupBookingDetails(null);
-        return;
-      }
-
-      // If it's a group record (has bookingIds array), use it directly
-      if (firstRecord.bookingIds && firstRecord.bookingIds.length > 0) {
+      if (firstRecord && firstRecord.groupId === groupId) {
+        // We have a group record!
+        
         // Calculate split based on passenger counts
         const splitByBooking = bookings.map(booking => ({
           bookingId: booking.id,
@@ -107,6 +105,8 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
           bookedBy: firstRecord.bookedBy,
           bookedAccountUsername: firstRecord.bookedAccountUsername,
           totalAmount: Number(firstRecord.amountCharged.toFixed(2)),
+          bookedAmount: typeof firstRecord.bookedAmount === "number" ? Number(firstRecord.bookedAmount.toFixed(2)) : undefined,
+          commission: typeof firstRecord.commission === "number" ? Number(firstRecord.commission.toFixed(2)) : undefined,
           methodUsed: firstRecord.methodUsed,
           splitByBooking,
         });
@@ -528,6 +528,11 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                       <div className="min-w-0 space-y-1">
                         <span className="text-muted-foreground block">Total Amount</span>
                         <span className="font-medium">₹{groupBookingDetails!.totalAmount.toFixed(2)}</span>
+                        {typeof groupBookingDetails!.commission === "number" && groupBookingDetails!.commission > 0 && (
+                          <div className="text-[10px] text-muted-foreground">
+                            Fare: ₹{(groupBookingDetails!.bookedAmount ?? (groupBookingDetails!.totalAmount - groupBookingDetails!.commission)).toFixed(2)} + Comm: ₹{groupBookingDetails!.commission.toFixed(2)}
+                          </div>
+                        )}
                       </div>
                       <div className="min-w-0 space-y-1">
                         <span className="text-muted-foreground block">Account Used</span>
@@ -711,10 +716,10 @@ function GroupStatusUpdate({ bookings, groupId }: GroupStatusUpdateProps) {
     }
   };
 
-  const handleBookedDetailsSuccess = () => {
+  const handleBookedDetailsSuccess = (savedHandler?: string) => {
     // Update the status to Booked or Failed (Paid) after record is saved
     if (statusToConfirm) {
-      statusUpdateMutation.mutate({ status: statusToConfirm });
+      statusUpdateMutation.mutate({ status: statusToConfirm, handler: savedHandler });
     }
     setShowBookedDetailsDialog(false);
     setStatusToConfirm(null);
