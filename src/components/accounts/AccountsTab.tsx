@@ -1597,6 +1597,12 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
                   <span style={labelHighlightStyle}>Bookings (since Jan 1, 2026): </span>
                   {stats?.bookingCount ?? 0}
                 </div>
+                <div>
+                  <span style={labelHighlightStyle}>Last Booked: </span>
+                  {stats?.lastAssignedDate
+                    ? new Date(`${stats.lastAssignedDate}T00:00:00`).toLocaleDateString()
+                    : "—"}
+                </div>
                 <div className="rounded-md border bg-muted/40 p-2.5 space-y-2">
                   {(handler.initialPendingAmount ?? 0) !== 0 && (
                     <div className="flex items-center justify-between text-xs pb-1 border-b">
@@ -1622,8 +1628,8 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
                         <span>₹{(stats?.paymentTotals.others ?? 0).toFixed(2)}</span>
                       </div>
                     )}
-                    <div className="flex items-center justify-between pl-2 pt-1 border-t border-dashed text-xs font-medium">
-                      <span>Total</span>
+                    <div className="flex items-center justify-between pl-2">
+                      <span style={labelHighlightStyle}>Total</span>
                       <span>₹{(stats?.paymentTotals.total ?? 0).toFixed(2)}</span>
                     </div>
                     {(stats?.paymentTotals.commission ?? 0) > 0 && (
@@ -1635,27 +1641,6 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
                       </div>
                     )}
                   </div>
-
-                  {/* Deductions (Settled & NA) */}
-                  {((handler.settledAmount ?? 0) > 0 || (handler.naAmount ?? 0) > 0) && (
-                    <div className="space-y-1 pt-1 border-t">
-                      <div className="text-xs font-semibold text-muted-foreground">
-                        Deductions:
-                      </div>
-                      {(handler.settledAmount ?? 0) > 0 && (
-                        <div className="flex items-center justify-between pl-2 text-xs">
-                          <span>Settled (Repaid)</span>
-                          <span>₹{(handler.settledAmount ?? 0).toFixed(2)}</span>
-                        </div>
-                      )}
-                      {(handler.naAmount ?? 0) > 0 && (
-                        <div className="flex items-center justify-between pl-2 text-xs">
-                          <span>NA (Wallet Loaded)</span>
-                          <span>₹{(handler.naAmount ?? 0).toFixed(2)}</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
 
                   {/* Balance */}
                   <div className="border-t pt-1.5 space-y-1.5">
@@ -1694,11 +1679,6 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
                       </button>
                     )}
                   </div>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  Last Updated: {stats?.lastAssignedDate
-                    ? new Date(`${stats.lastAssignedDate}T00:00:00`).toLocaleDateString()
-                    : new Date(handler.updatedAt).toLocaleDateString()}
                 </div>
               </CardContent>
             </Card>
