@@ -527,12 +527,12 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                       </div>
                       <div className="min-w-0 space-y-1">
                         <span className="text-muted-foreground block">Total Amount</span>
-                        <span className="font-medium">₹{groupBookingDetails!.totalAmount.toFixed(2)}</span>
-                        {typeof groupBookingDetails!.commission === "number" && groupBookingDetails!.commission > 0 && (
-                          <div className="text-[10px] text-muted-foreground">
-                            Fare: ₹{(groupBookingDetails!.bookedAmount ?? (groupBookingDetails!.totalAmount - groupBookingDetails!.commission)).toFixed(2)} + Comm: ₹{groupBookingDetails!.commission.toFixed(2)}
-                          </div>
-                        )}
+                        <span className="font-medium">
+                          {groupBookingDetails!.bookedAmount != null ? `₹${groupBookingDetails!.bookedAmount}` : `₹${groupBookingDetails!.totalAmount.toFixed(2)}`}
+                          {typeof groupBookingDetails!.commission === "number" && groupBookingDetails!.commission > 0 && (
+                            <span className="ml-1 text-[10px] text-muted-foreground font-medium">+ ₹{groupBookingDetails!.commission.toFixed(2)} (comm)</span>
+                          )}
+                        </span>
                       </div>
                       <div className="min-w-0 space-y-1">
                         <span className="text-muted-foreground block">Account Used</span>

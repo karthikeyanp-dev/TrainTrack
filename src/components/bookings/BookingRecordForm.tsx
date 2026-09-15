@@ -432,32 +432,8 @@ export function BookingRecordForm({
         />
       </div>
 
-      {/* Commission Breakdown Information */}
-      <div className="rounded-md border bg-muted/40 p-2.5 text-xs space-y-1">
-        <div className="flex items-center justify-between">
-          <span className="text-muted-foreground font-medium">Passenger & Class:</span>
-          <span className="font-semibold text-foreground">
-            {isGroupMode
-              ? `${totalPassengers} Pax (${groupBookings.length} bookings)`
-              : `${singleCommissionInfo?.passengerCount || 1} Pax • ${
-                  singleCommissionInfo?.isAc ? "AC Class" : "Non-AC / General"
-                }`}
-          </span>
-        </div>
-        <div className="flex items-center justify-between text-muted-foreground">
-          <span>Standard Commission:</span>
-          <span className="font-medium text-emerald-600 dark:text-emerald-400">
-            {isGroupMode
-              ? `₹${suggestedCommission} total`
-              : `₹${singleCommissionInfo?.rate || 70}/pax × ${
-                  singleCommissionInfo?.passengerCount || 1
-                } = ₹${suggestedCommission}`}
-          </span>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <div className="space-y-1">
+      <div className="grid grid-cols-3 gap-2">
+        <div className="col-span-2 space-y-1">
           <Label htmlFor={`bookedAmount-${bookingId}`} className="text-xs">
             Booked Amount (₹)
           </Label>

@@ -1070,7 +1070,10 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                     <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
                     <span className="font-semibold text-foreground">Booked Details</span>
                     <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 ml-auto mr-1">
-                      ₹{bookingRecord.amountCharged}
+                      {bookingRecord.bookedAmount != null ? `₹${bookingRecord.bookedAmount}` : `₹${bookingRecord.amountCharged}`}
+                      {typeof bookingRecord.commission === "number" && bookingRecord.commission > 0 && (
+                        <span className="ml-1 text-[10px] text-muted-foreground">+ ₹{bookingRecord.commission} (comm)</span>
+                      )}
                     </span>
                   </div>
                 </AccordionTrigger>
@@ -1093,12 +1096,12 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                       </div>
                       <div className="min-w-0">
                         <span className="text-muted-foreground text-[10px] font-semibold block uppercase tracking-wider">Amount</span>
-                        <div className="font-mono font-bold text-sm text-emerald-600 dark:text-emerald-400 mt-0.5">₹{bookingRecord.amountCharged}</div>
-                        {typeof bookingRecord.commission === "number" && bookingRecord.commission > 0 && (
-                          <div className="text-[10px] text-muted-foreground mt-0.5 font-medium">
-                            Fare: ₹{bookingRecord.bookedAmount ?? (bookingRecord.amountCharged - bookingRecord.commission)} + Comm: ₹{bookingRecord.commission}
-                          </div>
-                        )}
+                        <div className="font-mono font-bold text-sm text-emerald-600 dark:text-emerald-400 mt-0.5">
+                          {bookingRecord.bookedAmount != null ? `₹${bookingRecord.bookedAmount}` : `₹${bookingRecord.amountCharged}`}
+                          {typeof bookingRecord.commission === "number" && bookingRecord.commission > 0 && (
+                            <span className="ml-1 text-[10px] text-muted-foreground font-medium">+ ₹{bookingRecord.commission} (comm)</span>
+                          )}
+                        </div>
                       </div>
 
                       <div className="min-w-0 pt-2 border-t border-border/40">
