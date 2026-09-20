@@ -44,6 +44,60 @@ import {
 
 const labelHighlightStyle = { color: '#AB945E', fontWeight: 700 };
 
+function BookingsPaidSection({ stats }: { stats?: HandlerStats }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const upi = stats?.paymentTotals.upi ?? 0;
+  const wallet = stats?.paymentTotals.wallet ?? 0;
+  const others = stats?.paymentTotals.others ?? 0;
+  const total = stats?.paymentTotals.total ?? 0;
+  const commission = stats?.paymentTotals.commission ?? 0;
+
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setIsExpanded(v => !v)}
+        aria-expanded={isExpanded}
+        title={isExpanded ? "Hide bookings paid breakdown" : "Show bookings paid breakdown"}
+        className="flex w-full items-center justify-between text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+      >
+        <span>Bookings Paid</span>
+        <ChevronDown className={cn("h-3 w-3 transition-transform", isExpanded && "rotate-180")} />
+      </button>
+      {isExpanded && (
+        <div className="space-y-1 pt-1">
+          <div className="flex items-center justify-between pl-2">
+            <span style={labelHighlightStyle}>UPI</span>
+            <span>₹{upi.toFixed(2)}</span>
+          </div>
+          <div className="flex items-center justify-between pl-2">
+            <span style={labelHighlightStyle}>Wallet</span>
+            <span>₹{wallet.toFixed(2)}</span>
+          </div>
+          {others > 0 && (
+            <div className="flex items-center justify-between pl-2">
+              <span style={labelHighlightStyle}>Others</span>
+              <span>₹{others.toFixed(2)}</span>
+            </div>
+          )}
+          <div className="flex items-center justify-between pl-2">
+            <span style={labelHighlightStyle}>Total</span>
+            <span>₹{total.toFixed(2)}</span>
+          </div>
+          {commission > 0 && (
+            <div className="flex items-center justify-between pl-2 text-[11px] text-muted-foreground">
+              <span>Commissions Included</span>
+              <span className="font-mono text-emerald-600 dark:text-emerald-400">
+                ₹{commission.toFixed(2)}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 interface AccountFormState {
   username: string;
   password: string;
@@ -1611,36 +1665,8 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
                     </div>
                   )}
 
-                  {/* Bookings Paid */}
-                  <div className="space-y-1">
-                    <div className="text-xs font-semibold text-muted-foreground">Bookings Paid:</div>
-                    <div className="flex items-center justify-between pl-2">
-                      <span style={labelHighlightStyle}>UPI</span>
-                      <span>₹{(stats?.paymentTotals.upi ?? 0).toFixed(2)}</span>
-                    </div>
-                    <div className="flex items-center justify-between pl-2">
-                      <span style={labelHighlightStyle}>Wallet</span>
-                      <span>₹{(stats?.paymentTotals.wallet ?? 0).toFixed(2)}</span>
-                    </div>
-                    {(stats?.paymentTotals.others ?? 0) > 0 && (
-                      <div className="flex items-center justify-between pl-2">
-                        <span style={labelHighlightStyle}>Others</span>
-                        <span>₹{(stats?.paymentTotals.others ?? 0).toFixed(2)}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between pl-2">
-                      <span style={labelHighlightStyle}>Total</span>
-                      <span>₹{(stats?.paymentTotals.total ?? 0).toFixed(2)}</span>
-                    </div>
-                    {(stats?.paymentTotals.commission ?? 0) > 0 && (
-                      <div className="flex items-center justify-between pl-2 text-[11px] text-muted-foreground">
-                        <span>Commissions Included</span>
-                        <span className="font-mono text-emerald-600 dark:text-emerald-400">
-                          ₹{(stats?.paymentTotals.commission ?? 0).toFixed(2)}
-                        </span>
-                      </div>
-                    )}
-                  </div>
+                  {/* Bookings Paid (collapsed by default) */}
+                  <BookingsPaidSection stats={stats} />
 
                   {/* Balance */}
                   <div className="border-t pt-1.5 space-y-1.5">
