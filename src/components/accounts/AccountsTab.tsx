@@ -41,62 +41,10 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { HandlerCard } from "@/components/accounts/HandlerCard";
 
 const labelHighlightStyle = { color: '#AB945E', fontWeight: 700 };
 
-function BookingsPaidSection({ stats }: { stats?: HandlerStats }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const upi = stats?.paymentTotals.upi ?? 0;
-  const wallet = stats?.paymentTotals.wallet ?? 0;
-  const others = stats?.paymentTotals.others ?? 0;
-  const total = stats?.paymentTotals.total ?? 0;
-  const commission = stats?.paymentTotals.commission ?? 0;
-
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={() => setIsExpanded(v => !v)}
-        aria-expanded={isExpanded}
-        title={isExpanded ? "Hide bookings paid breakdown" : "Show bookings paid breakdown"}
-        className="flex w-full items-center justify-between text-xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
-      >
-        <span>Bookings Paid</span>
-        <ChevronDown className={cn("h-3 w-3 transition-transform", isExpanded && "rotate-180")} />
-      </button>
-      {isExpanded && (
-        <div className="space-y-1 pt-1">
-          <div className="flex items-center justify-between pl-2">
-            <span style={labelHighlightStyle}>UPI</span>
-            <span>₹{upi.toFixed(2)}</span>
-          </div>
-          <div className="flex items-center justify-between pl-2">
-            <span style={labelHighlightStyle}>Wallet</span>
-            <span>₹{wallet.toFixed(2)}</span>
-          </div>
-          {others > 0 && (
-            <div className="flex items-center justify-between pl-2">
-              <span style={labelHighlightStyle}>Others</span>
-              <span>₹{others.toFixed(2)}</span>
-            </div>
-          )}
-          <div className="flex items-center justify-between pl-2">
-            <span style={labelHighlightStyle}>Total</span>
-            <span>₹{total.toFixed(2)}</span>
-          </div>
-          {commission > 0 && (
-            <div className="flex items-center justify-between pl-2 text-[11px] text-muted-foreground">
-              <span>Commissions Included</span>
-              <span className="font-mono text-emerald-600 dark:text-emerald-400">
-                ₹{commission.toFixed(2)}
-              </span>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
 
 interface AccountFormState {
   username: string;
@@ -1614,100 +1562,24 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
       )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {filteredHandlers.map(handler => {
+        {filteredHandlers.map((handler, index) => {
           const stats = findHandlerStats(handler);
-          const outstanding = getHandlerOutstanding(stats?.paymentTotals, handler.settledAmount, handler.initialPendingAmount, handler.naAmount);
           return (
-            <Card key={handler.id}>
-              <CardHeader className="pb-3">
-                <div className="flex justify-between items-start">
-                  <CardTitle className="text-base">
-                    {handler.name}
-                  </CardTitle>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-primary"
-                      onClick={() => handleEditClick(handler)}
-                      title="Edit Handler"
-                    >
-                      <Edit3 className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-destructive hover:text-destructive"
-                      onClick={() => handleDeleteClick(handler.id)}
-                      title="Delete Handler"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <div>
-                  <span style={labelHighlightStyle}>Bookings (since Jan 1, 2026): </span>
-                  {stats?.bookingCount ?? 0}
-                </div>
-                <div>
-                  <span style={labelHighlightStyle}>Last Booked: </span>
-                  {stats?.lastAssignedDate
-                    ? new Date(`${stats.lastAssignedDate}T00:00:00`).toLocaleDateString()
-                    : "—"}
-                </div>
-                <div className="rounded-md border bg-muted/40 p-2.5 space-y-2">
-                  {(handler.initialPendingAmount ?? 0) !== 0 && (
-                    <div className="flex items-center justify-between text-xs pb-1 border-b">
-                      <span className="text-muted-foreground">Opening Pending</span>
-                      <span>₹{(handler.initialPendingAmount ?? 0).toFixed(2)}</span>
-                    </div>
-                  )}
-
-                  {/* Bookings Paid (collapsed by default) */}
-                  <BookingsPaidSection stats={stats} />
-
-                  {/* Balance */}
-                  <div className="border-t pt-1.5 space-y-1.5">
-                    <div className="flex items-center justify-between gap-2">
-                      <span style={labelHighlightStyle}>Balance</span>
-                      <div className="flex items-center gap-1.5">
-                        <span className={`font-semibold ${outstanding > 0 ? 'text-destructive' : outstanding < 0 ? 'text-emerald-500 dark:text-emerald-400' : ''}`}>
-                          ₹{Math.abs(outstanding).toFixed(2)}
-                          {outstanding > 0 ? " (Due)" : outstanding < 0 ? " (Credit)" : ""}
-                        </span>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 text-primary hover:text-primary px-2 text-xs"
-                          onClick={() => handleOpenAddPayment(handler)}
-                          title="Record a payment"
-                        >
-                          <Plus className="h-3 w-3 mr-1" /> Add Payment
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* History & last settled */}
-                  <div className="flex items-center justify-between text-[11px] text-muted-foreground pt-0.5">
-                    <span>
-                      {handler.lastSettledDate ? `Last settled: ${new Date(`${handler.lastSettledDate}T00:00:00`).toLocaleDateString()}` : ""}
-                    </span>
-                    {(handler.payments && handler.payments.length > 0) && (
-                      <button
-                        type="button"
-                        onClick={() => setHandlerForHistory(handler)}
-                        className="text-primary hover:underline flex items-center gap-1 font-medium"
-                      >
-                        <History className="h-3 w-3" /> {handler.payments.length} payment{handler.payments.length > 1 ? "s" : ""}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <motion.div
+              key={handler.id}
+              initial={{ opacity: 0, y: 15 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: index * 0.04 }}
+            >
+              <HandlerCard
+                handler={handler}
+                stats={stats}
+                onEdit={handleEditClick}
+                onDelete={handleDeleteClick}
+                onAddPayment={handleOpenAddPayment}
+                onViewHistory={setHandlerForHistory}
+              />
+            </motion.div>
           );
         })}
         {filteredHandlers.length === 0 && (
