@@ -1561,7 +1561,7 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
         </Card>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 items-start gap-5 md:grid-cols-2 lg:grid-cols-3 xl:gap-6">
         {filteredHandlers.map((handler, index) => {
           const stats = findHandlerStats(handler);
           return (
