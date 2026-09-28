@@ -316,12 +316,14 @@ export async function recordHandlerPayment(
     const currentSettled = Number(currentData.settledAmount || 0);
     const currentNa = Number(currentData.naAmount || 0);
     const existingPayments: HandlerPaymentRecord[] = currentData.payments || [];
+    const trimmedNotes = notes?.trim();
 
     const newPayment: HandlerPaymentRecord = {
       id: docRef.id + "_" + Date.now() + "_" + Math.random().toString(36).substring(2, 7),
       type,
       amount: Number(amount.toFixed(2)),
-      notes: notes?.trim() || undefined,
+      // Firestore rejects undefined field values, so omit notes entirely when empty.
+      ...(trimmedNotes ? { notes: trimmedNotes } : {}),
       date: date || new Date().toISOString().split("T")[0],
       createdAt: new Date().toISOString(),
     };
