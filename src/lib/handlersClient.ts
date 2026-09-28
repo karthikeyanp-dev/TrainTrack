@@ -15,6 +15,7 @@ import {
   query, 
   orderBy,
   where,
+  documentId,
   Timestamp,
   deleteField,
   writeBatch,
@@ -54,6 +55,23 @@ const emptyPaymentTotals = (): HandlerPaymentTotals => ({
   total: 0,
   commission: 0,
 });
+
+function toDateSafe(value: any): Date | null {
+  if (!value) return null;
+  if (value instanceof Timestamp) return value.toDate();
+  if (typeof value?.toDate === "function") {
+    try {
+      return value.toDate();
+    } catch {
+      return null;
+    }
+  }
+  if (typeof value === "string" || typeof value === "number") {
+    const parsed = new Date(value);
+    return isNaN(parsed.getTime()) ? null : parsed;
+  }
+  return null;
+}
 
 /**
  * Amount the handler paid out of their own pocket. Wallet payments are funded by
@@ -576,27 +594,6 @@ export async function getHandlerStatsForHandlers(
     const processedGroupIds = new Set<string>();
     const processedDocIds = new Set<string>();
 
-    const toDateSafe = (value: any): Date | null => {
-      if (!value) return null;
-      if (value instanceof Timestamp) return value.toDate();
-      if (typeof value?.toDate === "function") {
-        try {
-          return value.toDate();
-        } catch {
-          return null;
-        }
-      }
-      if (typeof value === "string") {
-        const parsed = new Date(value);
-        return isNaN(parsed.getTime()) ? null : parsed;
-      }
-      if (typeof value === "number") {
-        const parsed = new Date(value);
-        return isNaN(parsed.getTime()) ? null : parsed;
-      }
-      return null;
-    };
-    
     // Lookup for per-handler tracking start date
     const handlerLookup = new Map<string, Handler>();
     handlers.forEach(h => {
@@ -687,5 +684,134 @@ export async function getHandlerStatsForHandlers(
   } catch (error) {
     console.error("[Firestore Error] getHandlerStatsForHandlers:", error);
     return [];
+  }
+}
+
+export interface HandlerBookingBreakdownItem {
+  /** bookingRecords doc id */
+  id: string;
+  /** YYYY-MM-DD — the 'Book by' date, falling back to the record's created date */
+  bookingDate: string;
+  /** Passenger name(s) from the source booking(s) */
+  bookedFor: string;
+  /** amountCharged — the value summed into the handler's payment totals */
+  cost: number;
+  commission: number;
+  methodUsed: string;
+}
+
+/**
+ * The per-booking rows behind a handler's outstanding balance: exactly the
+ * booking records summed into `paymentTotals` by getHandlerStatsForHandlers,
+ * joined with their source bookings for passenger names.
+ */
+export async function getHandlerBookingBreakdown(
+  handler: Handler
+): Promise<HandlerBookingBreakdownItem[]> {
+  if (!db) {
+    console.error("[Firestore Error] Database not initialized");
+    return [];
+  }
+  const database = db;
+
+  try {
+    const fromDate = new Date(Date.UTC(2026, 0, 1, 0, 0, 0));
+    const trackingCutoff = handler.trackingStartDate
+      ? new Date(handler.trackingStartDate)
+      : HANDLER_PAYMENT_TRACKING_START_DATE;
+    const handlerName = handler.name.toLowerCase().trim();
+
+    const recordsSnapshot = await getDocs(
+      query(
+        collection(database, "bookingRecords"),
+        where("createdAt", ">=", Timestamp.fromDate(fromDate))
+      )
+    );
+
+    type Row = {
+      id: string;
+      bookingIds: string[];
+      bookingDate: string;
+      cost: number;
+      commission: number;
+      methodUsed: string;
+    };
+    const rows: Row[] = [];
+    const bookingIdSet = new Set<string>();
+
+    recordsSnapshot.docs.forEach(d => {
+      const data = d.data();
+      const bookedBy = typeof data.bookedBy === "string" ? data.bookedBy.toLowerCase().trim() : "";
+      if (bookedBy !== handlerName) return;
+
+      const createdAt = toDateSafe(data.createdAt);
+      if (!createdAt || createdAt < fromDate || createdAt < trackingCutoff) return;
+
+      const cost = Number(data.amountCharged) || 0;
+      const commission = Number(data.commission) || 0;
+      if (cost <= 0 && commission <= 0) return;
+
+      const bookingIds: string[] =
+        Array.isArray(data.bookingIds) && data.bookingIds.length > 0
+          ? data.bookingIds.filter((id: unknown): id is string => typeof id === "string" && !!id)
+          : typeof data.bookingId === "string" && data.bookingId
+            ? [data.bookingId]
+            : [];
+
+      rows.push({
+        id: d.id,
+        bookingIds,
+        bookingDate:
+          typeof data.bookingDate === "string" && data.bookingDate
+            ? data.bookingDate
+            : createdAt.toISOString().split("T")[0],
+        cost,
+        commission,
+        methodUsed: typeof data.methodUsed === "string" ? data.methodUsed : "Others",
+      });
+      bookingIds.forEach(id => bookingIdSet.add(id));
+    });
+
+    // Resolve passenger names from the source bookings, chunked for the `in` filter limit.
+    const bookedForById = new Map<string, string>();
+    const allIds = [...bookingIdSet];
+    const chunks: string[][] = [];
+    for (let i = 0; i < allIds.length; i += 30) {
+      chunks.push(allIds.slice(i, i + 30));
+    }
+    const bookingSnapshots = await Promise.all(
+      chunks.map(chunk =>
+        getDocs(query(collection(database, "bookings"), where(documentId(), "in", chunk)))
+      )
+    );
+    bookingSnapshots.forEach(snap => {
+      snap.docs.forEach(bd => {
+        const bdata = bd.data();
+        const passengers: { name?: unknown }[] = Array.isArray(bdata.passengers) ? bdata.passengers : [];
+        const names = passengers
+          .map(p => (typeof p?.name === "string" ? p.name.trim() : ""))
+          .filter(n => n !== "");
+        const fallback = typeof bdata.userName === "string" ? bdata.userName : "";
+        bookedForById.set(bd.id, names.join(", ") || fallback);
+      });
+    });
+
+    return rows
+      .map(row => ({
+        id: row.id,
+        bookingDate: row.bookingDate,
+        bookedFor:
+          row.bookingIds
+            .map(id => bookedForById.get(id) || "")
+            .filter(n => n !== "")
+            .join(", ") || "—",
+        cost: row.cost,
+        commission: row.commission,
+        methodUsed: row.methodUsed,
+      }))
+      .sort((a, b) => b.bookingDate.localeCompare(a.bookingDate));
+  } catch (error) {
+    console.error("[Firestore Error] getHandlerBookingBreakdown:", error);
+    throw error;
   }
 }

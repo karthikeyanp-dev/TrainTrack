@@ -24,6 +24,7 @@ import {
   ArrowDownRight,
   Clock,
   Wallet,
+  ListChecks,
 } from "lucide-react";
 
 export interface HandlerCardProps {
@@ -33,6 +34,7 @@ export interface HandlerCardProps {
   onDelete: (handlerId: string) => void;
   onAddPayment: (handler: Handler) => void;
   onViewHistory: (handler: Handler) => void;
+  onViewBookings: (handler: Handler) => void;
 }
 
 function getInitials(name: string): string {
@@ -87,6 +89,7 @@ export function HandlerCard({
   onDelete,
   onAddPayment,
   onViewHistory,
+  onViewBookings,
 }: HandlerCardProps) {
   const [isBreakdownExpanded, setIsBreakdownExpanded] = useState(false);
   const cardId = useId();
@@ -249,6 +252,15 @@ export function HandlerCard({
                   Includes {formatCurrency(handler.initialPendingAmount ?? 0)} opening balance
                 </p>
               )}
+              <button
+                type="button"
+                onClick={() => onViewBookings(handler)}
+                className="mt-2 inline-flex items-center gap-1 rounded text-[11px] font-semibold text-indigo-700 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 dark:text-indigo-300 motion-reduce:transition-none"
+                title="View the bookings behind this balance"
+              >
+                <ListChecks className="h-3 w-3" />
+                <span>View booking breakdown</span>
+              </button>
             </div>
 
             {/* Quick Action: Settle / Pay */}

@@ -42,6 +42,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { HandlerCard } from "@/components/accounts/HandlerCard";
+import { HandlerBookingsDialog } from "@/components/accounts/HandlerBookingsDialog";
 
 const labelHighlightStyle = { color: '#AB945E', fontWeight: 700 };
 
@@ -1126,6 +1127,9 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
   const [handlerForHistory, setHandlerForHistory] = useState<Handler | null>(null);
   const [deletingPaymentId, setDeletingPaymentId] = useState<string | null>(null);
 
+  // Booking Breakdown Modal state
+  const [handlerForBookings, setHandlerForBookings] = useState<Handler | null>(null);
+
   const { toast } = useToast();
 
   const [name, setName] = useState("");
@@ -1578,6 +1582,7 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
                 onDelete={handleDeleteClick}
                 onAddPayment={handleOpenAddPayment}
                 onViewHistory={setHandlerForHistory}
+                onViewBookings={setHandlerForBookings}
               />
             </motion.div>
           );
@@ -1980,6 +1985,12 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
           })()}
         </DialogContent>
       </Dialog>
+
+      {/* Booking Breakdown Dialog */}
+      <HandlerBookingsDialog
+        handler={handlerForBookings}
+        onOpenChange={(open) => !open && setHandlerForBookings(null)}
+      />
 
     </div>
   );
