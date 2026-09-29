@@ -43,8 +43,21 @@ import {
 } from "@/components/ui/alert-dialog";
 import { HandlerCard } from "@/components/accounts/HandlerCard";
 import { HandlerBookingsDialog } from "@/components/accounts/HandlerBookingsDialog";
+import { usePendingBookings } from "@/hooks/useBookings";
 
 const labelHighlightStyle = { color: '#AB945E', fontWeight: 700 };
+
+function AccountTakenBadge({ detail }: { detail: string }) {
+  return (
+    <span
+      className="inline-flex items-center shrink-0 rounded-full bg-rose-600 px-2.5 py-1 text-xs font-bold tracking-wide text-white shadow-sm shadow-rose-950/40"
+      title={detail === "Pending booking" ? "Assigned to a booking" : `Assigned to ${detail}'s booking`}
+      aria-label={detail === "Pending booking" ? "Taken, assigned to a booking" : `Taken, assigned to ${detail}'s booking`}
+    >
+      Taken
+    </span>
+  );
+}
 
 
 interface AccountFormState {
@@ -181,6 +194,28 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
 
   const [verifiedSort, setVerifiedSort] = useState<AccountSortOption>("last-booked-asc");
   const [nonVerifiedSort, setNonVerifiedSort] = useState<AccountSortOption>("last-booked-asc");
+
+  const { data: pendingBookings } = usePendingBookings();
+
+  // Usernames currently listed under "ID(s) for Booking" on a Requested booking.
+  // Derived live so the badge clears when the ID is removed or the booking leaves pending.
+  const takenByUsername = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const booking of pendingBookings ?? []) {
+      for (const acc of booking.preparedAccounts ?? []) {
+        const key = acc.username?.trim().toLowerCase();
+        if (!key) continue;
+        const who = booking.userName?.trim();
+        const existing = map.get(key);
+        if (!existing) {
+          map.set(key, who || "Pending booking");
+        } else if (who && !existing.split(", ").includes(who)) {
+          map.set(key, `${existing}, ${who}`);
+        }
+      }
+    }
+    return map;
+  }, [pendingBookings]);
 
   const [form, setForm] = useState<AccountFormState>({
     username: "",
@@ -668,6 +703,7 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                       {verifiedAccounts.map((account, index) => {
                         const stats = accountStats.find(s => s.accountId === account.id);
+                        const takenDetail = takenByUsername.get(account.username.trim().toLowerCase());
                         return (
                           <motion.div
                             key={account.id}
@@ -678,17 +714,18 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
                           >
                             <Card className="group hover:shadow-lg transition-shadow duration-300">
                               <CardHeader className="pb-3">
-                                <div className="flex justify-between items-start">
-                                  <CardTitle className="text-base flex items-center gap-1.5">
-                                    {account.username}
+                                <div className="flex justify-between items-start gap-2">
+                                  <CardTitle className="text-base flex items-center gap-1.5 min-w-0">
+                                    <span className="truncate">{account.username}</span>
                                     {account.isVerified && (
                                       <CheckCircle2
-                                        className="h-4 w-4 fill-green-600 text-white"
+                                        className="h-4 w-4 shrink-0 fill-green-600 text-white"
                                         aria-label="Verified"
                                       />
                                     )}
                                   </CardTitle>
-                                  <div className="flex gap-1">
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {takenDetail && <AccountTakenBadge detail={takenDetail} />}
                                     <Button
                                       variant="ghost"
                                       size="icon"
@@ -841,6 +878,7 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
                     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                       {nonVerifiedAccounts.map((account, index) => {
                         const stats = accountStats.find(s => s.accountId === account.id);
+                        const takenDetail = takenByUsername.get(account.username.trim().toLowerCase());
                         return (
                           <motion.div
                             key={account.id}
@@ -851,17 +889,18 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
                           >
                             <Card className="group hover:shadow-lg transition-shadow duration-300">
                               <CardHeader className="pb-3">
-                                <div className="flex justify-between items-start">
-                                  <CardTitle className="text-base flex items-center gap-1.5">
-                                    {account.username}
+                                <div className="flex justify-between items-start gap-2">
+                                  <CardTitle className="text-base flex items-center gap-1.5 min-w-0">
+                                    <span className="truncate">{account.username}</span>
                                     {account.isVerified && (
                                       <CheckCircle2
-                                        className="h-4 w-4 fill-green-600 text-white"
+                                        className="h-4 w-4 shrink-0 fill-green-600 text-white"
                                         aria-label="Verified"
                                       />
                                     )}
                                   </CardTitle>
-                                  <div className="flex gap-1">
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    {takenDetail && <AccountTakenBadge detail={takenDetail} />}
                                     <Button
                                       variant="ghost"
                                       size="icon"
