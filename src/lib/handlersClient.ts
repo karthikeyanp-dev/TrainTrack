@@ -692,8 +692,8 @@ export interface HandlerBookingBreakdownItem {
   id: string;
   /** YYYY-MM-DD — the 'Book by' date, falling back to the record's created date */
   bookingDate: string;
-  /** Passenger name(s) from the source booking(s) */
-  bookedFor: string;
+  /** Passenger names from the source booking(s) */
+  bookedFor: string[];
   /** amountCharged — the value summed into the handler's payment totals */
   cost: number;
   commission: number;
@@ -773,7 +773,7 @@ export async function getHandlerBookingBreakdown(
     });
 
     // Resolve passenger names from the source bookings, chunked for the `in` filter limit.
-    const bookedForById = new Map<string, string>();
+    const bookedForById = new Map<string, string[]>();
     const allIds = [...bookingIdSet];
     const chunks: string[][] = [];
     for (let i = 0; i < allIds.length; i += 30) {
@@ -792,7 +792,7 @@ export async function getHandlerBookingBreakdown(
           .map(p => (typeof p?.name === "string" ? p.name.trim() : ""))
           .filter(n => n !== "");
         const fallback = typeof bdata.userName === "string" ? bdata.userName : "";
-        bookedForById.set(bd.id, names.join(", ") || fallback);
+        bookedForById.set(bd.id, names.length > 0 ? names : fallback ? [fallback] : []);
       });
     });
 
@@ -800,11 +800,7 @@ export async function getHandlerBookingBreakdown(
       .map(row => ({
         id: row.id,
         bookingDate: row.bookingDate,
-        bookedFor:
-          row.bookingIds
-            .map(id => bookedForById.get(id) || "")
-            .filter(n => n !== "")
-            .join(", ") || "—",
+        bookedFor: row.bookingIds.flatMap(id => bookedForById.get(id) ?? []),
         cost: row.cost,
         commission: row.commission,
         methodUsed: row.methodUsed,
