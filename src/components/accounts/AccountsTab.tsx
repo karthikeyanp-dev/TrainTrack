@@ -47,6 +47,8 @@ import { usePendingBookings } from "@/hooks/useBookings";
 
 const labelHighlightStyle = { color: '#AB945E', fontWeight: 700 };
 
+type TakenFilter = "all" | "taken" | "not-taken";
+
 function AccountTakenBadge({ detail }: { detail: string }) {
   return (
     <span
@@ -174,7 +176,7 @@ function AccountSortSelect({
   );
 }
 
-function AccountsManager({ searchQuery }: { searchQuery: string }) {
+function AccountsManager({ searchQuery, takenFilter }: { searchQuery: string; takenFilter: TakenFilter }) {
   const [accounts, setAccounts] = useState<IrctcAccount[]>([]);
   const [accountStats, setAccountStats] = useState<AccountStats[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -500,9 +502,16 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
 
   const { verifiedAccounts, nonVerifiedAccounts } = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    const matches = q
+    let matches = q
       ? accounts.filter(a => a.username.toLowerCase().includes(q))
       : accounts;
+
+    if (takenFilter !== "all") {
+      const wantTaken = takenFilter === "taken";
+      matches = matches.filter(
+        a => takenByUsername.has(a.username.trim().toLowerCase()) === wantTaken
+      );
+    }
 
     const rawVerified = matches.filter(a => Boolean(a.isVerified));
     const rawNonVerified = matches.filter(a => !a.isVerified);
@@ -511,7 +520,7 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
       verifiedAccounts: sortAccounts(rawVerified, verifiedSort, accountStats),
       nonVerifiedAccounts: sortAccounts(rawNonVerified, nonVerifiedSort, accountStats),
     };
-  }, [accounts, searchQuery, verifiedSort, nonVerifiedSort, accountStats]);
+  }, [accounts, searchQuery, takenFilter, takenByUsername, verifiedSort, nonVerifiedSort, accountStats]);
 
   const verifiedTotalCount = useMemo(() => accounts.filter(a => Boolean(a.isVerified)).length, [accounts]);
   const nonVerifiedTotalCount = accounts.length - verifiedTotalCount;
@@ -809,7 +818,9 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
                     <p className="text-sm text-muted-foreground py-4 text-center">
                       {searchQuery.trim()
                         ? `No verified accounts match "${searchQuery}".`
-                        : "No verified accounts found."}
+                        : takenFilter !== "all"
+                          ? `No ${takenFilter === "taken" ? "taken" : "not-taken"} verified accounts found.`
+                          : "No verified accounts found."}
                     </p>
                   )}
                 </div>
@@ -984,7 +995,9 @@ function AccountsManager({ searchQuery }: { searchQuery: string }) {
                     <p className="text-sm text-muted-foreground py-4 text-center">
                       {searchQuery.trim()
                         ? `No non-verified accounts match "${searchQuery}".`
-                        : "No non-verified accounts found."}
+                        : takenFilter !== "all"
+                          ? `No ${takenFilter === "taken" ? "taken" : "not-taken"} non-verified accounts found.`
+                          : "No non-verified accounts found."}
                     </p>
                   )}
                 </div>
@@ -2037,36 +2050,52 @@ function HandlersManager({ searchQuery }: { searchQuery: string }) {
 
 export function AccountsTab() {
   const [searchQuery, setSearchQuery] = useState('');
+  const [takenFilter, setTakenFilter] = useState<TakenFilter>("all");
+  const [activeTab, setActiveTab] = useState("accounts");
 
   return (
     <>
-      <div className="relative mb-4">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-        <Input
-          type="search"
-          placeholder="Search accounts and handlers..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="pl-9 pr-9"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => setSearchQuery('')}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            aria-label="Clear search"
-          >
-            <X className="h-4 w-4" />
-          </button>
+      <div className="flex items-center gap-2 mb-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+          <Input
+            type="search"
+            placeholder="Search accounts and handlers..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9 pr-9"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              aria-label="Clear search"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
+        </div>
+        {activeTab === "accounts" && (
+          <Select value={takenFilter} onValueChange={(val) => setTakenFilter(val as TakenFilter)}>
+            <SelectTrigger className="h-10 w-[130px] shrink-0 bg-background focus:ring-0 focus:ring-offset-0 focus:outline-none focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:outline-none">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="taken">Taken</SelectItem>
+              <SelectItem value="not-taken">Not Taken</SelectItem>
+            </SelectContent>
+          </Select>
         )}
       </div>
 
-      <Tabs defaultValue="accounts" className="w-full" onValueChange={() => setSearchQuery('')}>
+      <Tabs defaultValue="accounts" className="w-full" onValueChange={(value) => { setActiveTab(value); setSearchQuery(''); }}>
         <TabsList className="mb-4">
           <TabsTrigger value="accounts">Accounts</TabsTrigger>
           <TabsTrigger value="handlers">Handlers</TabsTrigger>
         </TabsList>
         <TabsContent value="accounts">
-          <AccountsManager searchQuery={searchQuery} />
+          <AccountsManager searchQuery={searchQuery} takenFilter={takenFilter} />
         </TabsContent>
         <TabsContent value="handlers">
           <HandlersManager searchQuery={searchQuery} />
