@@ -35,7 +35,15 @@ function formatDate(dateStr: string): string {
   }
 }
 
-const ROW_GRID = "grid grid-cols-[86px_minmax(0,1fr)_92px_84px] items-center gap-2";
+const ROW_GRID = "grid grid-cols-[80px_minmax(0,1fr)_72px_64px_80px] items-center gap-2";
+
+/** "Name" for one passenger, "Name +2 others" for several. */
+function formatBookedFor(names: string[]): string {
+  if (names.length === 0) return "—";
+  if (names.length === 1) return names[0];
+  const others = names.length - 1;
+  return `${names[0]} +${others} other${others === 1 ? "" : "s"}`;
+}
 
 interface HandlerBookingsDialogProps {
   handler: Handler | null;
@@ -113,8 +121,9 @@ export function HandlerBookingsDialog({ handler, onOpenChange }: HandlerBookings
             <div className={`${ROW_GRID} px-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground`}>
               <span>Booked date</span>
               <span>Booked for</span>
-              <span className="text-right">Cost</span>
-              <span className="text-right">Commission</span>
+              <span className="text-right">Fare</span>
+              <span className="text-right">Comn</span>
+              <span className="text-right">Total</span>
             </div>
           )}
 
@@ -143,11 +152,11 @@ export function HandlerBookingsDialog({ handler, onOpenChange }: HandlerBookings
                   <span className="tabular-nums text-muted-foreground">
                     {formatDate(item.bookingDate)}
                   </span>
-                  <span className="truncate font-medium" title={item.bookedFor}>
-                    {item.bookedFor}
+                  <span className="truncate font-medium" title={item.bookedFor.join(", ")}>
+                    {formatBookedFor(item.bookedFor)}
                   </span>
-                  <span className="text-right font-mono font-semibold tabular-nums">
-                    {formatCurrency(item.cost)}
+                  <span className="text-right font-mono tabular-nums">
+                    {formatCurrency(Math.max(item.cost - item.commission, 0))}
                   </span>
                   <span
                     className={
@@ -157,6 +166,9 @@ export function HandlerBookingsDialog({ handler, onOpenChange }: HandlerBookings
                     }
                   >
                     {formatCurrency(item.commission)}
+                  </span>
+                  <span className="text-right font-mono font-semibold tabular-nums">
+                    {formatCurrency(item.cost)}
                   </span>
                 </div>
               ))
