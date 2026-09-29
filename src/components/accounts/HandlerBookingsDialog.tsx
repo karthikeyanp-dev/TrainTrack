@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Handler } from "@/types/handler";
 import {
   getHandlerBookingBreakdown,
@@ -54,6 +54,14 @@ export function HandlerBookingsDialog({ handler, onOpenChange }: HandlerBookings
   const [items, setItems] = useState<HandlerBookingBreakdownItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasError, setHasError] = useState(false);
+  const rowsRef = useRef<HTMLDivElement>(null);
+  const [scrollbarWidth, setScrollbarWidth] = useState(0);
+
+  // Reserve the rows' scrollbar width in the header so its columns line up with the rows.
+  useLayoutEffect(() => {
+    const el = rowsRef.current;
+    setScrollbarWidth(el ? el.offsetWidth - el.clientWidth : 0);
+  }, [items, isLoading, hasError]);
 
   useEffect(() => {
     if (!handler) {
@@ -118,7 +126,10 @@ export function HandlerBookingsDialog({ handler, onOpenChange }: HandlerBookings
 
           {/* Column headers */}
           {!isLoading && !hasError && items.length > 0 && (
-            <div className={`${ROW_GRID} px-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground`}>
+            <div
+              style={{ paddingRight: `calc(0.625rem + 0.25rem + ${scrollbarWidth}px)` }}
+              className={`${ROW_GRID} pl-2.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground`}
+            >
               <span>Booked date</span>
               <span>Booked for</span>
               <span className="text-right">Fare</span>
@@ -128,7 +139,7 @@ export function HandlerBookingsDialog({ handler, onOpenChange }: HandlerBookings
           )}
 
           {/* Rows */}
-          <div className="max-h-[50vh] space-y-1 overflow-y-auto pr-1">
+          <div ref={rowsRef} className="max-h-[50vh] space-y-1 overflow-y-auto pr-1">
             {isLoading ? (
               <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted-foreground">
                 <Loader2 className="h-4 w-4 animate-spin" />
