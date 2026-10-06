@@ -701,9 +701,12 @@ export interface HandlerBookingBreakdownItem {
 }
 
 /**
- * The per-booking rows behind a handler's outstanding balance: exactly the
- * booking records summed into `paymentTotals` by getHandlerStatsForHandlers,
- * joined with their source bookings for passenger names.
+ * The per-booking rows behind a handler's outstanding balance, limited to the
+ * current and previous month — settlements happen weekly/bi-weekly, so older
+ * bookings are not needed for reference. Within that window the rows are
+ * exactly the booking records summed into `paymentTotals` by
+ * getHandlerStatsForHandlers, joined with their source bookings for passenger
+ * names.
  */
 export async function getHandlerBookingBreakdown(
   handler: Handler
@@ -720,6 +723,13 @@ export async function getHandlerBookingBreakdown(
       ? new Date(handler.trackingStartDate)
       : HANDLER_PAYMENT_TRACKING_START_DATE;
     const handlerName = handler.name.toLowerCase().trim();
+
+    // Settlement reference window: first day of the previous month, so the
+    // breakdown lists only recent bookings. Bucketed by the 'Book by' date
+    // (bookingDate, falling back to createdAt) like the rest of the app.
+    const now = new Date();
+    const windowStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const windowStartStr = `${windowStart.getFullYear()}-${String(windowStart.getMonth() + 1).padStart(2, "0")}-01`;
 
     const recordsSnapshot = await getDocs(
       query(
@@ -751,6 +761,13 @@ export async function getHandlerBookingBreakdown(
       const commission = Number(data.commission) || 0;
       if (cost <= 0 && commission <= 0) return;
 
+      const bookingDate =
+        typeof data.bookingDate === "string" && data.bookingDate
+          ? data.bookingDate
+          : createdAt.toISOString().split("T")[0];
+      // YYYY-MM-DD strings order correctly lexicographically.
+      if (bookingDate < windowStartStr) return;
+
       const bookingIds: string[] =
         Array.isArray(data.bookingIds) && data.bookingIds.length > 0
           ? data.bookingIds.filter((id: unknown): id is string => typeof id === "string" && !!id)
@@ -761,10 +778,7 @@ export async function getHandlerBookingBreakdown(
       rows.push({
         id: d.id,
         bookingIds,
-        bookingDate:
-          typeof data.bookingDate === "string" && data.bookingDate
-            ? data.bookingDate
-            : createdAt.toISOString().split("T")[0],
+        bookingDate,
         cost,
         commission,
         methodUsed: typeof data.methodUsed === "string" ? data.methodUsed : "Others",

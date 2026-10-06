@@ -101,7 +101,7 @@ export function HandlerBookingsDialog({ handler, onOpenChange }: HandlerBookings
             Booking Breakdown
           </DialogTitle>
           <DialogDescription>
-            Bookings by {handler?.name} included in the outstanding balance.
+            Bookings by {handler?.name} in the current and previous month.
           </DialogDescription>
         </DialogHeader>
 
@@ -152,7 +152,7 @@ export function HandlerBookingsDialog({ handler, onOpenChange }: HandlerBookings
               </div>
             ) : items.length === 0 ? (
               <div className="py-10 text-center text-sm text-muted-foreground">
-                No bookings found in the tracking period.
+                No bookings found in the current or previous month.
               </div>
             ) : (
               items.map(item => (
