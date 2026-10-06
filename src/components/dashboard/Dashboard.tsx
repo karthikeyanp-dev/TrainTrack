@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { MonthlyBookingProgressChart } from "@/components/dashboard/MonthlyBookingProgressChart";
 import { 
   Calendar, 
   CheckCircle2, 
@@ -244,6 +245,12 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
           delay={0.35}
         />
       </div>
+
+      <MonthlyBookingProgressChart
+        months={visibleMonthlyPerformance}
+        year={currentYear}
+        currentMonthIndex={currentMonthIndex}
+      />
 
       {/* Current Year Performance & Recent Activity */}
       <div className="grid gap-6 lg:grid-cols-5">
