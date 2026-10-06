@@ -15,6 +15,7 @@
 
 # next.js
 /.next/
+/.next-emulators/
 /out/
 
 # production
@@ -60,3 +61,14 @@ mcps/
 
 # CommandCode config folder — local editor/tool configuration
 .commandcode/
+
+# Independently built customer site and server functions
+/customer-form/node_modules/
+/customer-form/.next/
+/customer-form/out/
+/functions/node_modules/
+/functions/lib/
+/functions/.npm-cache/
+/.tmp/
+!/customer-form/.env.example
+!/.env.example

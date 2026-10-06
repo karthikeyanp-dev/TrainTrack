@@ -48,6 +48,11 @@ export interface Booking {
   destination: string;
   journeyDate: string; // ISO string YYYY-MM-DD
   userName: string;
+  customerPhone?: string;
+  intakeRequestId?: string;
+  intakeReceiptReference?: string;
+  sourceStationName?: string;
+  destinationStationName?: string;
   passengers: Passenger[]; // Replaces passengerDetails
   bookingDate: string; // ISO string YYYY-MM-DD (date by which it needs to be booked)
   classType: TrainClass;

@@ -9,7 +9,14 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "customer:dev": "npm --prefix customer-form run dev",
+    "customer:build": "npm --prefix customer-form run build",
+    "customer:typecheck": "npm --prefix customer-form run typecheck",
+    "customer:lint": "npm --prefix customer-form run lint",
+    "intake:build": "npm --prefix functions run build",
+    "intake:test": "npm --prefix functions test",
+    "intake:test:emulator": "npm --prefix functions run test:emulator"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.8.0",

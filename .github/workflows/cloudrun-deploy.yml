@@ -1,5 +1,8 @@
 name: Deploy to Firebase Hosting
 
+# This workflow deploys hosting only. Roll out the secure booking-intake
+# functions and Firestore rules before deploying this staff frontend.
+
 on:
   push:
     branches:
@@ -13,6 +16,20 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Validate staff sign-in deployment prerequisites
+        env:
+          STAFF_APPCHECK_SITE_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_APPCHECK_SITE_KEY }}
+          STAFF_CUSTOMER_FORM_URL: ${{ secrets.NEXT_PUBLIC_CUSTOMER_FORM_URL }}
+          STAFF_FIREBASE_DATABASE_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_DATABASE_ID }}
+        run: |
+          if [ -z "$STAFF_APPCHECK_SITE_KEY" ]; then
+            echo "::error::Set NEXT_PUBLIC_FIREBASE_APPCHECK_SITE_KEY before deploying. Staff sign-in requires Firebase App Check."
+            exit 1
+          fi
+          printf '%s\n' "NEXT_PUBLIC_FIREBASE_APPCHECK_SITE_KEY=$STAFF_APPCHECK_SITE_KEY" >> .env
+          printf '%s\n' "NEXT_PUBLIC_CUSTOMER_FORM_URL=$STAFF_CUSTOMER_FORM_URL" >> .env
+          printf '%s\n' "NEXT_PUBLIC_FIREBASE_DATABASE_ID=$STAFF_FIREBASE_DATABASE_ID" >> .env
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -44,4 +61,3 @@ jobs:
           firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           projectId: ${{ secrets.FIREBASE_PROJECT_ID }}
           channelId: live
-            

@@ -835,6 +835,10 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
           </div>
         </CardHeader>
         <CardContent className="px-3.5 sm:px-5 py-2 space-y-3 text-sm flex-grow min-w-0">
+          {booking.intakeReceiptReference && <div className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+            <p className="break-all"><span className="text-muted-foreground">Customer request: </span><span className="font-semibold">{booking.intakeReceiptReference}</span></p>
+            {booking.customerPhone && <a className="mt-1 inline-block font-medium text-primary hover:underline" href={`tel:${booking.customerPhone}`}>{booking.customerPhone}</a>}
+          </div>}
           <div className="my-1 rounded-xl border border-slate-300/80 dark:border-slate-700/90 bg-white/60 dark:bg-slate-900/50 px-2.5 py-3 sm:px-3 sm:py-3.5 space-y-2 shadow-xs">
             {/* Journey, Book By, Train, Upgrade & Remarks Strip - Left aligned */}
             <div className="grid grid-cols-1 divide-y divide-slate-200/60 dark:divide-slate-800/60 rounded-xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/60 dark:border-slate-800/60 overflow-hidden text-xs py-2">

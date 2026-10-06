@@ -6,6 +6,7 @@ import {
   getHandlerBookingBreakdown,
   type HandlerBookingBreakdownItem,
 } from "@/lib/handlersClient";
+import { getHandlerBreakdownWindowStart } from "@/lib/handlerBreakdownWindow";
 import {
   Dialog,
   DialogContent,
@@ -91,6 +92,10 @@ export function HandlerBookingsDialog({ handler, onOpenChange }: HandlerBookings
 
   const totalCost = items.reduce((sum, item) => sum + item.cost, 0);
   const totalCommission = items.reduce((sum, item) => sum + item.commission, 0);
+  const windowLabel = format(
+    new Date(`${getHandlerBreakdownWindowStart()}T00:00:00`),
+    "MMM yyyy"
+  );
 
   return (
     <Dialog open={!!handler} onOpenChange={onOpenChange}>
@@ -101,7 +106,8 @@ export function HandlerBookingsDialog({ handler, onOpenChange }: HandlerBookings
             Booking Breakdown
           </DialogTitle>
           <DialogDescription>
-            Bookings by {handler?.name} included in the outstanding balance.
+            Bookings by {handler?.name} from {windowLabel} onwards (current and
+            previous month).
           </DialogDescription>
         </DialogHeader>
 
@@ -152,7 +158,7 @@ export function HandlerBookingsDialog({ handler, onOpenChange }: HandlerBookings
               </div>
             ) : items.length === 0 ? (
               <div className="py-10 text-center text-sm text-muted-foreground">
-                No bookings found in the tracking period.
+                No bookings in the current or previous month.
               </div>
             ) : (
               items.map(item => (

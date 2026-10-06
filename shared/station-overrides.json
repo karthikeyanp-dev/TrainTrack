@@ -1,0 +1,13 @@
+{
+  "MAS": {"city":"Chennai","aliases":["Chennai","Madras","MGR Chennai Central","சென்னை","சென்னை சென்ட்ரல்"]},
+  "MS": {"city":"Chennai","aliases":["Chennai","Madras","Egmore","சென்னை","எழும்பூர்"]},
+  "TBM": {"aliases":["Chennai","Tambaram","தாம்பரம்"]},
+  "CBE": {"name":"Coimbatore Junction","city":"Coimbatore","state":"Tamil Nadu","priority":55,"aliases":["Kovai","கோவை","கோயம்புத்தூர்"]},
+  "SBC": {"city":"Bengaluru","aliases":["Bangalore","Bengaluru","KSR Bengaluru","Majestic"]},
+  "YPR": {"city":"Bengaluru","aliases":["Bangalore","Bengaluru","Yeshwantpur","Yeswanthpur"]},
+  "NDLS": {"city":"New Delhi","aliases":["Delhi","New Delhi"]},
+  "DLI": {"city":"Delhi","aliases":["Delhi","Old Delhi"]},
+  "CSMT": {"name":"Chhatrapati Shivaji Maharaj Terminus","aliases":["Mumbai CSMT","CST","CSTM","Victoria Terminus","Bombay"]},
+  "MMCT": {"aliases":["Bombay Central","Mumbai"]},
+  "PRYJ": {"aliases":["Allahabad","Allahabad Junction"]}
+}

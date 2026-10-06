@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 TrainTrack is a Next.js 15 train booking management application with Firebase Firestore backend and Genkit AI integration. It uses Client-Side Rendering (CSR) with Firestore client SDK, TypeScript, and a mobile-first design with Tailwind CSS and Radix UI (shadcn/ui). The app is deployed as a static site to Firebase Hosting.
 
+The customer booking request form is a separate static app in `customer-form/`, intended for an independent subdomain. Firebase callable Functions in `functions/` verify staff PINs, validate submissions and approve requests atomically. Setup and rollout are documented in `docs/customer-intake.md`; keep this file aligned with `AGENTS.md`.
+
 ## Development Commands
 
 ```bash
@@ -26,6 +28,16 @@ npm run lint
 
 # Type checking (no build)
 npm run typecheck
+
+# Separate public customer site
+npm run customer:dev
+npm run customer:typecheck
+npm run customer:build
+
+# Callable backend dependencies and tests
+npm --prefix functions ci
+npm run intake:test
+npm run intake:test:emulator
 ```
 
 ## Architecture
@@ -40,7 +52,7 @@ npm run typecheck
 
 ### Data Fetching Pattern
 
-All data operations use Firestore client SDK with React Query hooks:
+Staff operational data uses the Firestore client SDK with React Query hooks or realtime subscriptions. Public customer submissions and staff approval/authentication use callable Functions.
 
 **Custom hooks in `src/hooks/`:**
 - `useBookings.ts` - Real-time bookings via `onSnapshot()` listener; also exports `usePendingBookings()`, `useBookingDates()`. `usePendingBookings()` is also used by `BookingRequirementsSheet` to compute account assignment conflicts.
@@ -51,6 +63,7 @@ All data operations use Firestore client SDK with React Query hooks:
 - `firestoreClient.ts` - All booking CRUD, status updates, group operations, booking records
 - `accountsClient.ts` - Account CRUD, wallet tracking, monthly stats
 - `handlersClient.ts` - Handler CRUD, booking assignment stats, and per-handler payment totals
+- `bookingRequestsClient.ts` - Authenticated inbox subscription and request review callables, wrapped by `useBookingRequests.ts`
 
 **Important patterns:**
 - Firestore client methods: `collection()`, `doc()`, `getDocs()`, `addDoc()`, `updateDoc()`, `deleteDoc()`
@@ -78,6 +91,13 @@ All data operations use Firestore client SDK with React Query hooks:
 - `bookingRecords/` - Completion/payment records
 - `handlers/` - Handler/agent names
 - `bookingGroups/` - Group booking metadata (links multiple bookings)
+- `bookingRequests/` - Private customer requests and server-written review state/audit events
+- `appConfig/pin` - Server-only staff PIN hash and session version
+- `intakeRateLimits/` - Server-only transactional rate limits
+
+**Staff authentication:** The global `PinGate` mounts data hooks only after server PIN verification and current Firebase custom-token claims. Never use a localStorage flag as authorization. PIN changes increment a version checked by Firestore rules and callables. Existing PIN hashes remain usable; new PINs are 6–12 digits.
+
+**Public intake:** `customer-form/` has no staff shell or Firestore SDK access. `shared/bookingRequest.ts` shares schemas and the offline station catalogue with both frontends and the backend. Station spelling suggestions require explicit selection; passenger names are never autocorrected. The server validates authoritative codes and creates one normal `Requested` booking only on staff approval. Preserve immutable customer snapshots and retry UUIDs. Clarification/rejection are internal notes and do not send WhatsApp messages. Under-five requests require separate staff handling.
 
 **Data conversion:** Always convert Firestore Timestamps to ISO strings when reading data, as Timestamps cannot be serialized for client components. Use `toISOStringSafe()` from `firestoreClient.ts` for safe conversion with error logging.
 
@@ -92,7 +112,7 @@ All data operations use Firestore client SDK with React Query hooks:
 
 ### Form Handling
 
-All forms use React Hook Form + Zod + Firestore client SDK:
+Existing staff booking forms use React Hook Form + Zod + the Firestore client SDK:
 
 1. Define Zod schema for validation
 2. Use `useForm` with zodResolver
@@ -103,6 +123,8 @@ All forms use React Hook Form + Zod + Firestore client SDK:
 **Key forms:**
 - `BookingForm.tsx` - Complex form with dynamic passenger array, prepared accounts sheet
 - `BookingRecordForm.tsx` - Simple completion recording
+- `customer-form/src/components/BookingRequestForm.tsx` - Separate three-step public request form using shared schemas and a callable, with opt-in drafts and idempotent retries
+- `requests/BookingRequestReview.tsx` - Staff review with explicit booking plan, customer verification and child checks
 
 ### Type System
 
@@ -175,6 +197,10 @@ NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=<bucket>
 NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=<sender_id>
 NEXT_PUBLIC_FIREBASE_APP_ID=<app_id>
 NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID=<measurement_id>
+NEXT_PUBLIC_FIREBASE_APPCHECK_SITE_KEY=<staff_recaptcha_enterprise_site_key>
+
+# Optional public-form shortcut in the staff inbox
+NEXT_PUBLIC_CUSTOMER_FORM_URL=<customer_site_url>
 
 # Optional: Named Firestore database
 NEXT_PUBLIC_FIREBASE_DATABASE_ID=<database_id>
@@ -221,10 +247,7 @@ firebase deploy --only hosting
 
 ### Security Rules
 
-Current Firestore rules (`firestore.rules`) allow unrestricted read/write. In production, add:
-- Authentication checks (`request.auth != null`)
-- User-specific access rules
-- Data validation
+Firestore rules (`firestore.rules`) require current `traintrackStaff` and `traintrackPinVersion` claims for operational data. Customers cannot read operational collections or the request inbox. Browser writes to requests, audit events and the PIN configuration are denied; server callables validate and write these. Production callables require App Check. Deploy the backend, restrictive rules and updated staff app together before publishing the customer form. Named database rules must be deployed to the actual configured database. See `docs/customer-intake.md` and `functions/README.md` for configuration, custom-token signing permissions and the separate `firebase.customer-form.json` Hosting target.
 
 ### Build Configuration
 
@@ -249,10 +272,7 @@ Current Firestore rules (`firestore.rules`) allow unrestricted read/write. In pr
 
 ## Testing
 
-Currently no test setup. When adding tests:
-- Place test files alongside source: `*.test.ts(x)`
-- Focus on form validation (Zod schemas) and Firestore client functions
-- Mock Firebase in tests
+The intake backend has Node test-runner unit tests in `functions/test/` and real Firebase Auth/Firestore/Functions integration tests in `functions/test/emulator/`. Use `npm run intake:test` and the emulator workflow in `functions/README.md`. Emulator tests require a disposable `demo-*` project and never access live customer data. Also run explicit staff/customer type checks, lint and both static builds. Production App Check attestation requires staging verification.
 
 ## Genkit Development
 

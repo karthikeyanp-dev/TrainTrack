@@ -4,6 +4,8 @@
 
 TrainTrack is a Next.js 15 static-export app for train booking operations. The frontend is TypeScript + React 18 + Tailwind + Radix/shadcn UI. Data is handled client-side through Firebase Firestore, with Genkit used for AI-powered suggestions.
 
+The independently deployed customer request site lives in `customer-form/`; its export is `customer-form/out/`. Firebase callable Functions in `functions/` validate public requests, verify staff PINs and approve requests atomically. See `docs/customer-intake.md` for setup and coordinated rollout.
+
 ## Working Rules
 
 - Treat this as a client-rendered app. New pages and interactive app surfaces should usually use "use client".
@@ -12,6 +14,9 @@ TrainTrack is a Next.js 15 static-export app for train booking operations. The f
 - Keep shared domain types in `src/types/`.
 - Prefer existing UI primitives from `src/components/ui/` before introducing new component patterns.
 - Respect the `@/*` path alias to `src/*`.
+- Public intake never reads Firestore directly. Keep request validation/station search in `shared/bookingRequest.ts`; server code resolves station codes from the shared offline catalogue. Do not silently correct passenger names or ambiguous stations.
+- Staff pages must remain under the global `PinGate`, which verifies the PIN on the server and restores current Firebase staff claims before mounting data hooks. Browser flags are not authorization.
+- Preserve staff-only Firestore rules and production App Check on callables. Deploy Functions, rules and the updated staff app together before opening the public site.
 
 ## Useful Paths
 
@@ -27,6 +32,13 @@ TrainTrack is a Next.js 15 static-export app for train booking operations. The f
 - `src/lib/handlersClient.ts` handler Firestore operations
 - `src/lib/firebase.ts` Firebase initialization
 - `src/ai/` Genkit setup and flows
+- `src/components/requests/` staff request inbox and approval review
+- `src/lib/bookingRequestsClient.ts` staff request subscription and callable operations
+- `customer-form/` separate static customer form (no staff shell)
+- `shared/bookingRequest.ts` shared intake schemas and station lookup
+- `shared/STATIONS.md` station sources and catalogue maintenance
+- `functions/src/` server validation, staff auth and atomic transactions
+- `docs/customer-intake.md` deployment and workflow guide
 
 ## Commands
 
@@ -35,6 +47,11 @@ TrainTrack is a Next.js 15 static-export app for train booking operations. The f
 - `npm run genkit:watch` starts Genkit with reload
 - `npm run build` creates the static export
 - `npm run typecheck` runs TypeScript checks
+- `npm run customer:dev` starts the separate customer site on port `9030`
+- `npm run customer:typecheck` and `npm run customer:build` check/build that site
+- `npm --prefix functions ci` installs server dependencies
+- `npm run intake:test` builds and runs backend unit tests
+- `npm run intake:test:emulator` runs integration tests against an already started disposable demo emulator project
 
 ## Current Repo State
 
@@ -46,6 +63,9 @@ TrainTrack is a Next.js 15 static-export app for train booking operations. The f
 
 - Firestore timestamp values should be converted to ISO strings before use in client components.
 - The app is deployed to Firebase Hosting from the static `out/` directory.
+- Customer requests enter `bookingRequests/`; only server approval creates a `Requested` booking, with the customer phone/reference and immutable intake provenance. Duplicate retries and concurrent approvals return the same booking ID. Clarification/rejection are internal review actions, with no automatic WhatsApp messages.
+- `firebase.customer-form.json` deploys only the separately configured `customer-form` Hosting target. No domain/DNS configuration is embedded in the repo.
+- Existing PIN hashes remain compatible; new PINs are 6–12 digits. `appConfig/pin` is server-only and versioned to invalidate old staff sessions. Production requires Firebase Auth, App Check and callable deployment.
 - `next.config.mjs` currently ignores TypeScript and ESLint errors during build, so do not assume a successful production build means the codebase is clean.
 - **Payment tracking**: Bookings have `paymentReceived` and `amountSettled` fields for tracking customer payments and handler settlements. Use `isEligibleForPaymentTracking()` helper to filter bookings created/updated after March 6, 2026.
 - **Group bookings**: Bookings can be grouped using `bookingGroups/` collection. Group operations include creation, status updates, and record editing. Ungrouping splits one group `bookingRecords` doc into individual records while preserving the original `createdAt` timestamp to keep date-bucketed counts stable.

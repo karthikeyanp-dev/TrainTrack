@@ -2,6 +2,20 @@
   "firestore": {
     "rules": "firestore.rules"
   },
+  "functions": [{
+    "source": "functions",
+    "codebase": "booking-intake",
+    "runtime": "nodejs22",
+    "ignore": ["node_modules", ".git", ".npm-cache", "src", "test", "tsconfig.json", "*.log", ".env*"],
+    "predeploy": ["npm --prefix \"$RESOURCE_DIR\" run build"]
+  }],
+  "emulators": {
+    "auth": { "port": 9099 },
+    "firestore": { "port": 8080 },
+    "functions": { "port": 5001 },
+    "ui": { "enabled": true, "port": 4000 },
+    "singleProjectMode": true
+  },
   "hosting": {
     "public": "out",
     "ignore": [

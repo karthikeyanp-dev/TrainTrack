@@ -4,6 +4,7 @@ import './globals.css';
 import { Providers } from './providers';
 import type { ReactNode } from 'react';
 import { ThemeProvider } from 'next-themes';
+import { PinGate } from '@/components/auth/PinGate';
 
 const inter = Inter({
   subsets: ['latin'],
@@ -32,7 +33,7 @@ export default function RootLayout({
           disableTransitionOnChange
         >
           <section id="main" className='w-full px-0 sm:px-0 lg:px-8'>
-            <Providers>{children}</Providers>
+            <Providers><PinGate>{children}</PinGate></Providers>
           </section>
         </ThemeProvider>
       </body>

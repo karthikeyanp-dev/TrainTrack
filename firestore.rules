@@ -1,35 +1,54 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isStaff() {
+      return request.auth != null
+        && request.auth.token.traintrackStaff == true
+        && request.auth.token.traintrackPinVersion == get(/databases/$(database)/documents/appConfig/pin).data.get('version', 0);
+    }
 
-    // App-wide PIN config (used by the client-side PIN lock screen)
+    // Staff PIN verification is server-only; browsers never receive the hash.
     match /appConfig/pin {
-      allow read, write: if true;
+      allow read, write: if false;
     }
 
     // Existing bookings collection rules
     match /bookings/{bookingId} {
-      allow read, write: if true;
+      allow read, write: if isStaff();
     }
     
     // IRCTC Accounts collection
     match /irctcAccounts/{accountId} {
-      allow read, write: if true;
+      allow read, write: if isStaff();
     }
     
     // Booking Records collection
     match /bookingRecords/{recordId} {
-      allow read, write: if true;
+      allow read, write: if isStaff();
     }
 
     // Handlers collection
     match /handlers/{handlerId} {
-      allow read, write: if true;
+      allow read, write: if isStaff();
     }
 
     // Booking Groups collection
     match /bookingGroups/{groupId} {
-      allow read, write: if true;
+      allow read, write: if isStaff();
+    }
+
+    // Public clients only use validated callable functions; they cannot list or
+    // read requests, approve bookings, or access credentials through Firestore.
+    match /bookingRequests/{requestId} {
+      allow read: if isStaff();
+      allow write: if false;
+      match /reviewEvents/{eventId} {
+        allow read: if isStaff();
+        allow write: if false;
+      }
+    }
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }

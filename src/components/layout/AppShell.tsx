@@ -16,7 +16,8 @@ import {
   X,
   ChevronRight,
   Lock,
-  KeyRound
+  KeyRound,
+  Inbox
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
@@ -29,11 +30,12 @@ import { fadeIn, slideUp, staggerContainer, staggerItem } from "@/lib/animations
 interface AppShellProps {
   children: ReactNode;
   showAddButton?: boolean;
-  activeTab?: "bookings" | "accounts" | "dashboard" | "suggestions";
+  activeTab?: "bookings" | "accounts" | "dashboard" | "suggestions" | "requests";
 }
 
 const navItems = [
   { href: "/", label: "Bookings", icon: Calendar, id: "bookings" },
+  { href: "/requests", label: "Requests", icon: Inbox, id: "requests" },
   { href: "/accounts", label: "Accounts", icon: Users, id: "accounts" },
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard, id: "dashboard" },
 ];
@@ -253,7 +255,7 @@ function MobileNav({ activeTab }: { activeTab?: string }) {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="relative flex flex-col items-center gap-1 py-2 px-4"
+                  className="relative flex flex-col items-center gap-1 py-2 px-2"
                 >
                   {isActive && (
                     <motion.div
@@ -314,6 +316,7 @@ export function AppShell({ children, showAddButton = false, activeTab }: AppShel
                   {activeTab === "accounts" && "Accounts"}
                   {activeTab === "dashboard" && "Dashboard"}
                   {activeTab === "suggestions" && "Smart Suggestions"}
+                  {activeTab === "requests" && "Customer Requests"}
                 </h1>
               </div>
               <nav className="flex items-center gap-2">

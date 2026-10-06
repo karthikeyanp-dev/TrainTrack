@@ -1,6 +1,10 @@
 
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
 import { getFirestore, type Firestore } from "firebase/firestore";
+import { connectAuthEmulator, getAuth, type Auth } from "firebase/auth";
+import { connectFunctionsEmulator, getFunctions, type Functions } from "firebase/functions";
+import { connectFirestoreEmulator } from "firebase/firestore";
+import { initializeAppCheck, ReCaptchaEnterpriseProvider } from "firebase/app-check";
 // import { getAuth } from "firebase/auth"; // If you need auth later
 // import { getStorage } from "firebase/storage"; // If you need storage later
 
@@ -76,4 +80,33 @@ if (missingKeys.length > 0) {
   }
 }
 
-export { app, db }; // db can be null here if initialization failed or config was missing
+let auth: Auth | null = null;
+let functions: Functions | null = null;
+let isAppCheckConfigured = false;
+const useEmulators = process.env.NODE_ENV !== "production" && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true" && typeof window !== "undefined" && ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+if (app) {
+  try {
+    auth = getAuth(app);
+    functions = getFunctions(app, "asia-south1");
+    if (typeof window !== "undefined") {
+      const runtime = globalThis as unknown as Record<string, unknown>;
+      if (useEmulators) {
+        if (!runtime.__traintrackEmulatorsConnected) {
+          connectAuthEmulator(auth, "http://127.0.0.1:9099", { disableWarnings: true });
+          connectFunctionsEmulator(functions, "127.0.0.1", 5001);
+          if (db) connectFirestoreEmulator(db, "127.0.0.1", 8080);
+          runtime.__traintrackEmulatorsConnected = true;
+        }
+        isAppCheckConfigured = true;
+      } else if (process.env.NEXT_PUBLIC_FIREBASE_APPCHECK_SITE_KEY) {
+        if (!runtime.__traintrackAppCheckInitialized) {
+          initializeAppCheck(app, { provider: new ReCaptchaEnterpriseProvider(process.env.NEXT_PUBLIC_FIREBASE_APPCHECK_SITE_KEY), isTokenAutoRefreshEnabled: true });
+          runtime.__traintrackAppCheckInitialized = true;
+        }
+        isAppCheckConfigured = true;
+      }
+    }
+  } catch (error) { console.error("Staff authentication services could not be initialized.", error); }
+}
+
+export { app, db, auth, functions, isAppCheckConfigured };

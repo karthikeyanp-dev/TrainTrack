@@ -21,6 +21,7 @@ import {
   writeBatch,
 } from "firebase/firestore";
 import type { Handler, HandlerPaymentRecord, HandlerPaymentType } from "@/types/handler";
+import { getHandlerBreakdownWindowStart } from "@/lib/handlerBreakdownWindow";
 
 /**
  * Handler payment tracking starts from this date as a fallback if a handler does
@@ -719,6 +720,7 @@ export async function getHandlerBookingBreakdown(
     const trackingCutoff = handler.trackingStartDate
       ? new Date(handler.trackingStartDate)
       : HANDLER_PAYMENT_TRACKING_START_DATE;
+    const windowStart = getHandlerBreakdownWindowStart();
     const handlerName = handler.name.toLowerCase().trim();
 
     const recordsSnapshot = await getDocs(
@@ -750,6 +752,14 @@ export async function getHandlerBookingBreakdown(
       const cost = Number(data.amountCharged) || 0;
       const commission = Number(data.commission) || 0;
       if (cost <= 0 && commission <= 0) return;
+      // Settlement window: current month + full previous month only.
+      // Same bookingDate rule as rows.push below; skip pre-window rows
+      // before resolving passenger names for them.
+      const windowBookingDate =
+        typeof data.bookingDate === "string" && data.bookingDate
+          ? data.bookingDate
+          : createdAt.toISOString().split("T")[0];
+      if (windowBookingDate < windowStart) return;
 
       const bookingIds: string[] =
         Array.isArray(data.bookingIds) && data.bookingIds.length > 0
