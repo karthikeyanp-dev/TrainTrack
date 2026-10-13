@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import { motion } from "framer-motion";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -105,9 +106,6 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
     b => (b.status === "Booking Failed (Paid)" || b.status === "CNF & Cancelled") && !b.refundDetails
   ).length;
 
-  const currentYear = new Date().getFullYear();
-  const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
   const parseBookByDate = (dateValue: string): Date | null => {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
     if (match) {
@@ -121,34 +119,90 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   };
 
-  const monthlyPerformance = monthLabels.map((label, monthIndex) => {
-    const monthBookings = allBookings.filter((booking) => {
-      const bookByDate = parseBookByDate(booking.bookingDate);
-      return (
-        bookByDate !== null &&
-        bookByDate.getFullYear() === currentYear &&
-        bookByDate.getMonth() === monthIndex
-      );
+  const currentYear = new Date().getFullYear();
+  const availableYears = useMemo(() => {
+    const years = new Set<number>();
+    allBookings.forEach((b) => {
+      const d = parseBookByDate(b.bookingDate);
+      if (d) years.add(d.getFullYear());
     });
+    years.add(currentYear);
+    return Array.from(years).sort((a, b) => b - a);
+  }, [allBookings, currentYear]);
 
-    const total = monthBookings.length;
-    const booked = monthBookings.filter((booking) => booking.status === "Booked").length;
-    const failed = monthBookings.filter(
-      (booking) => booking.status === "Booking Failed (Unpaid)" || booking.status === "Booking Failed (Paid)"
-    ).length;
-    const cancelled = monthBookings.filter(
-      (booking) => booking.status === "User Cancelled" || booking.status === "CNF & Cancelled"
-    ).length;
-    const pending = monthBookings.filter((booking) => booking.status === "Requested").length;
-    const userCancelled = monthBookings.filter((booking) => booking.status === "User Cancelled").length;
-    const successRateDenominator = total - (userCancelled + pending);
-    const successRate = successRateDenominator > 0
-      ? Math.round((booked / successRateDenominator) * 100)
-      : 0;
+  const [selectedYear, setSelectedYear] = useState<number>(currentYear);
 
+  const monthLabels = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+  const monthlyPerformance = useMemo(() => {
+    return monthLabels.map((label, monthIndex) => {
+      const monthBookings = allBookings.filter((booking) => {
+        const bookByDate = parseBookByDate(booking.bookingDate);
+        return (
+          bookByDate !== null &&
+          bookByDate.getFullYear() === selectedYear &&
+          bookByDate.getMonth() === monthIndex
+        );
+      });
+
+      const total = monthBookings.length;
+      const booked = monthBookings.filter((booking) => booking.status === "Booked").length;
+      const failed = monthBookings.filter(
+        (booking) => booking.status === "Booking Failed (Unpaid)" || booking.status === "Booking Failed (Paid)"
+      ).length;
+      const cancelled = monthBookings.filter(
+        (booking) => booking.status === "User Cancelled" || booking.status === "CNF & Cancelled"
+      ).length;
+      const pending = monthBookings.filter((booking) => booking.status === "Requested").length;
+      const userCancelled = monthBookings.filter((booking) => booking.status === "User Cancelled").length;
+      const successRateDenominator = total - (userCancelled + pending);
+      const successRate = successRateDenominator > 0
+        ? Math.round((booked / successRateDenominator) * 100)
+        : 0;
+      const rawSuccessRate = total > 0 ? Math.round((booked / total) * 100) : 0;
+      const tatkal = monthBookings.filter((booking) => booking.bookingType === "Tatkal").length;
+      const general = monthBookings.filter((booking) => booking.bookingType === "General").length;
+      const passengers = monthBookings.reduce((sum, b) => sum + (b.passengers?.length || 1), 0);
+      const bookedPassengers = monthBookings
+        .filter((b) => b.status === "Booked")
+        .reduce((sum, b) => sum + (b.passengers?.length || 1), 0);
+
+      return {
+        label,
+        monthIndex,
+        total,
+        booked,
+        failed,
+        cancelled,
+        pending,
+        successRate,
+        rawSuccessRate,
+        tatkal,
+        general,
+        passengers,
+        bookedPassengers,
+      };
+    });
+  }, [allBookings, selectedYear]);
+
+  const isCurrentYear = selectedYear === currentYear;
+  const currentMonthIndex = isCurrentYear ? new Date().getMonth() : -1;
+  const visibleMonthlyPerformance = useMemo(() => {
+    return isCurrentYear
+      ? monthlyPerformance.filter((month) => month.monthIndex <= currentMonthIndex || month.total > 0)
+      : monthlyPerformance;
+  }, [isCurrentYear, monthlyPerformance, currentMonthIndex]);
+
+  const annualPerformance = useMemo(() => {
+    const total = monthlyPerformance.reduce((sum, m) => sum + m.total, 0);
+    const booked = monthlyPerformance.reduce((sum, m) => sum + m.booked, 0);
+    const failed = monthlyPerformance.reduce((sum, m) => sum + m.failed, 0);
+    const cancelled = monthlyPerformance.reduce((sum, m) => sum + m.cancelled, 0);
+    const pending = monthlyPerformance.reduce((sum, m) => sum + m.pending, 0);
+    const eligible = total - (cancelled + pending);
+    const successRate = eligible > 0 ? Math.round((booked / eligible) * 100) : 0;
     return {
-      label,
-      monthIndex,
+      label: `${selectedYear} Annual`,
       total,
       booked,
       failed,
@@ -156,15 +210,22 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
       pending,
       successRate,
     };
-  });
-  const currentMonthIndex = new Date().getMonth();
-  const visibleMonthlyPerformance = monthlyPerformance.filter(
-    (month) => month.monthIndex <= currentMonthIndex || month.total > 0
-  );
-  const currentMonthPerformance = monthlyPerformance[currentMonthIndex];
-  const previousMonthsPerformance = visibleMonthlyPerformance.filter(
-    (month) => month.monthIndex !== currentMonthIndex
-  );
+  }, [monthlyPerformance, selectedYear]);
+
+  const snapshotPerformance = isCurrentYear
+    ? (monthlyPerformance[currentMonthIndex] ?? monthlyPerformance[0])
+    : annualPerformance;
+
+  const snapshotTitle = isCurrentYear
+    ? `Current Month Snapshot (${snapshotPerformance.label})`
+    : `${selectedYear} Annual Snapshot`;
+
+  const breakdownMonths = useMemo(() => {
+    if (isCurrentYear) {
+      return visibleMonthlyPerformance.filter((month) => month.monthIndex !== currentMonthIndex);
+    }
+    return monthlyPerformance.filter((month) => month.total > 0);
+  }, [isCurrentYear, visibleMonthlyPerformance, currentMonthIndex, monthlyPerformance]);
 
   // Recent bookings (last 5)
   const recentBookings = [...allBookings]
@@ -248,7 +309,9 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
 
       <MonthlyBookingProgressChart
         months={visibleMonthlyPerformance}
-        year={currentYear}
+        year={selectedYear}
+        availableYears={availableYears}
+        onYearChange={setSelectedYear}
         currentMonthIndex={currentMonthIndex}
       />
 
@@ -264,10 +327,10 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
           <div className="space-y-8">
             {/* Snapshot Card */}
             <div className="rounded-[1.5rem] bg-[#0f1225] p-6 text-white shadow-lg border border-slate-800/50">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-indigo-400 mb-6">Current Month Snapshot</p>
+              <p className="text-[11px] font-bold uppercase tracking-widest text-indigo-400 mb-6">{snapshotTitle}</p>
               
               <div className="flex items-end gap-3 mb-6">
-                <span className="text-5xl font-bold leading-none">{currentMonthPerformance.total}</span>
+                <span className="text-5xl font-bold leading-none">{snapshotPerformance.total}</span>
                 <span className="text-sm text-slate-400 mb-1 font-medium">total requests</span>
               </div>
 
@@ -279,7 +342,7 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
                     </div>
                     Successfully Booked
                   </div>
-                  <span className="text-2xl font-bold ml-[34px]">{currentMonthPerformance.booked}</span>
+                  <span className="text-2xl font-bold ml-[34px]">{snapshotPerformance.booked}</span>
                 </div>
 
                 <div className="rounded-xl bg-[#1a1f36] border border-slate-700/50 p-4 flex flex-col gap-3 shadow-sm">
@@ -289,7 +352,7 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
                     </div>
                     Pending
                   </div>
-                  <span className="text-2xl font-bold ml-[34px]">{currentMonthPerformance.pending}</span>
+                  <span className="text-2xl font-bold ml-[34px]">{snapshotPerformance.pending}</span>
                 </div>
 
                 <div className="rounded-xl bg-[#1a1f36] border border-slate-700/50 p-4 flex flex-col gap-3 shadow-sm">
@@ -299,7 +362,7 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
                     </div>
                     Failed
                   </div>
-                  <span className="text-2xl font-bold ml-[34px]">{currentMonthPerformance.failed}</span>
+                  <span className="text-2xl font-bold ml-[34px]">{snapshotPerformance.failed}</span>
                 </div>
 
                 <div className="rounded-xl bg-[#1a1f36] border border-slate-700/50 p-4 flex flex-col gap-3 shadow-sm">
@@ -309,18 +372,18 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
                     </div>
                     Cancelled
                   </div>
-                  <span className="text-2xl font-bold ml-[34px]">{currentMonthPerformance.cancelled}</span>
+                  <span className="text-2xl font-bold ml-[34px]">{snapshotPerformance.cancelled}</span>
                 </div>
               </div>
 
               <div className="flex items-center justify-between text-sm mb-3 px-1">
                 <span className="text-slate-300 font-medium">Success Rate</span>
-                <span className="text-emerald-400 font-bold">{currentMonthPerformance.successRate}%</span>
+                <span className="text-emerald-400 font-bold">{snapshotPerformance.successRate}%</span>
               </div>
               <div className="h-2.5 w-full bg-[#1a1f36] rounded-full overflow-hidden shadow-inner">
                 <div 
                   className="h-full bg-emerald-400 rounded-full transition-all duration-1000 ease-out" 
-                  style={{ width: `${currentMonthPerformance.successRate}%` }}
+                  style={{ width: `${snapshotPerformance.successRate}%` }}
                 />
               </div>
             </div>
@@ -328,41 +391,47 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
             {/* Monthly Breakdown */}
             <div>
               <h3 className="text-lg font-bold mb-4 text-foreground">Monthly Breakdown</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {previousMonthsPerformance.map((month) => (
-                  <div key={month.label} className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow">
-                    <div className="flex items-center justify-between mb-5">
-                      <div className="flex items-center gap-2 font-bold text-base">
-                        <Calendar className="h-4 w-4 text-indigo-400" />
-                        {month.label}
+              {breakdownMonths.length === 0 ? (
+                <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+                  No other monthly booking records for {selectedYear}.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {breakdownMonths.map((month) => (
+                    <div key={month.label} className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between mb-5">
+                        <div className="flex items-center gap-2 font-bold text-base">
+                          <Calendar className="h-4 w-4 text-indigo-400" />
+                          {month.label}
+                        </div>
+                        <div className="flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 text-xs font-semibold">
+                          <TrendingUp className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
+                          <span className="text-foreground">{month.successRate}%</span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 text-xs font-semibold">
-                        <TrendingUp className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
-                        <span className="text-foreground">{month.successRate}%</span>
+                      
+                      <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground font-medium">Total</span>
+                          <span className="font-bold text-foreground">{month.total}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground font-medium">Booked</span>
+                          <span className="font-bold text-emerald-500">{month.booked}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground font-medium">Failed</span>
+                          <span className="font-bold text-rose-500">{month.failed}</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-muted-foreground font-medium">Cancelled</span>
+                          <span className="font-bold text-orange-500">{month.cancelled}</span>
+                        </div>
                       </div>
                     </div>
-                    
-                    <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground font-medium">Total</span>
-                        <span className="font-bold text-foreground">{month.total}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground font-medium">Booked</span>
-                        <span className="font-bold text-emerald-500">{month.booked}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground font-medium">Failed</span>
-                        <span className="font-bold text-rose-500">{month.failed}</span>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-muted-foreground font-medium">Cancelled</span>
-                        <span className="font-bold text-orange-500">{month.cancelled}</span>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </motion.div>
