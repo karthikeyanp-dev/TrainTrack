@@ -407,7 +407,7 @@ export function MonthlyBookingProgressChart({
             {/* Scrollable / Responsive SVG Chart */}
             <div className="overflow-x-auto pb-1">
               <div 
-                className="relative mx-auto min-w-[620px] max-w-4xl"
+                className="relative mx-auto min-w-[620px] w-full"
                 onMouseLeave={() => setHoveredMonthIndex(null)}
               >
                 {/* Floating Interactive Hover Tooltip */}

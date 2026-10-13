@@ -255,15 +255,15 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
         </Link>
       </motion.div>
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-2 gap-3 md:gap-4">
+      {/* Top KPI Stats Ribbon */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 md:gap-4">
         <StatCard
           title="Total Bookings"
           value={totalBookings}
           description="All time bookings"
           icon={Calendar}
           color="blue"
-          delay={0.1}
+          delay={0.05}
         />
         <StatCard
           title="Booked"
@@ -271,6 +271,14 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
           description="Successfully booked"
           icon={CheckCircle2}
           color="green"
+          delay={0.1}
+        />
+        <StatCard
+          title="Pending"
+          value={pendingCount}
+          description="Awaiting action"
+          icon={Clock}
+          color="amber"
           delay={0.15}
         />
         <StatCard
@@ -290,51 +298,41 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
           delay={0.25}
         />
         <StatCard
-          title="Pending"
-          value={pendingCount}
-          description="Awaiting action"
-          icon={Clock}
-          color="amber"
-          delay={0.3}
-        />
-        <StatCard
           title="Refund Pending"
           value={refundPendingCount}
           description="Awaiting refund"
           icon={Receipt}
           color="red"
-          delay={0.35}
+          delay={0.3}
         />
       </div>
 
-      <MonthlyBookingProgressChart
-        months={visibleMonthlyPerformance}
-        year={selectedYear}
-        availableYears={availableYears}
-        onYearChange={setSelectedYear}
-        currentMonthIndex={currentMonthIndex}
-      />
-
-      {/* Current Year Performance & Recent Activity */}
-      <div className="grid gap-6 lg:grid-cols-5">
-        {/* Current Year Performance */}
+      {/* Operational Overview: Current Snapshot & Recent Bookings */}
+      <div className="grid gap-6 lg:grid-cols-5 items-stretch">
+        {/* Snapshot Card */}
         <motion.div
-          className="lg:col-span-3"
+          className="lg:col-span-3 h-full"
           initial={{ opacity: 0, x: -20 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.3, duration: 0.4 }}
+          transition={{ delay: 0.25, duration: 0.4 }}
         >
-          <div className="space-y-8">
-            {/* Snapshot Card */}
-            <div className="rounded-[1.5rem] bg-[#0f1225] p-6 text-white shadow-lg border border-slate-800/50">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-indigo-400 mb-6">{snapshotTitle}</p>
-              
+          <div className="h-full rounded-[1.5rem] bg-[#0f1225] p-6 text-white shadow-lg border border-slate-800/50 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between gap-2 mb-6">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-indigo-400">
+                  {snapshotTitle}
+                </p>
+                <span className="rounded-full bg-indigo-500/10 border border-indigo-500/20 px-2.5 py-0.5 text-[11px] font-semibold text-indigo-300">
+                  {selectedYear}
+                </span>
+              </div>
+
               <div className="flex items-end gap-3 mb-6">
                 <span className="text-5xl font-bold leading-none">{snapshotPerformance.total}</span>
                 <span className="text-sm text-slate-400 mb-1 font-medium">total requests</span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
                 <div className="rounded-xl bg-[#1a1f36] border border-slate-700/50 p-4 flex flex-col gap-3 shadow-sm">
                   <div className="flex items-center gap-2 text-sm font-medium text-slate-300">
                     <div className="rounded-full bg-emerald-500/10 p-1.5">
@@ -375,7 +373,9 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
                   <span className="text-2xl font-bold ml-[34px]">{snapshotPerformance.cancelled}</span>
                 </div>
               </div>
+            </div>
 
+            <div>
               <div className="flex items-center justify-between text-sm mb-3 px-1">
                 <span className="text-slate-300 font-medium">Success Rate</span>
                 <span className="text-emerald-400 font-bold">{snapshotPerformance.successRate}%</span>
@@ -387,64 +387,18 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
                 />
               </div>
             </div>
-
-            {/* Monthly Breakdown */}
-            <div>
-              <h3 className="text-lg font-bold mb-4 text-foreground">Monthly Breakdown</h3>
-              {breakdownMonths.length === 0 ? (
-                <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                  No other monthly booking records for {selectedYear}.
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {breakdownMonths.map((month) => (
-                    <div key={month.label} className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-center justify-between mb-5">
-                        <div className="flex items-center gap-2 font-bold text-base">
-                          <Calendar className="h-4 w-4 text-indigo-400" />
-                          {month.label}
-                        </div>
-                        <div className="flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 text-xs font-semibold">
-                          <TrendingUp className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
-                          <span className="text-foreground">{month.successRate}%</span>
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground font-medium">Total</span>
-                          <span className="font-bold text-foreground">{month.total}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground font-medium">Booked</span>
-                          <span className="font-bold text-emerald-500">{month.booked}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground font-medium">Failed</span>
-                          <span className="font-bold text-rose-500">{month.failed}</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground font-medium">Cancelled</span>
-                          <span className="font-bold text-orange-500">{month.cancelled}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
           </div>
         </motion.div>
 
         {/* Recent Bookings */}
         <motion.div
-          className="lg:col-span-2"
+          className="lg:col-span-2 h-full"
           initial={{ opacity: 0, x: 20 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.35, duration: 0.4 }}
+          transition={{ delay: 0.3, duration: 0.4 }}
         >
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
+          <Card className="h-full flex flex-col">
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="text-lg">Recent Bookings</CardTitle>
               <Link href="/">
                 <Button variant="ghost" size="sm" className="rounded-full">
@@ -453,7 +407,7 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
                 </Button>
               </Link>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex-1 flex flex-col justify-center">
               {recentBookings.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Train className="h-12 w-12 mx-auto mb-3 opacity-30" />
@@ -467,23 +421,23 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
                       key={booking.id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.4 + index * 0.05 }}
-                      className="flex items-center justify-between p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors"
+                      transition={{ delay: 0.35 + index * 0.05 }}
+                      className="flex items-center justify-between p-3 rounded-xl bg-muted/50 hover:bg-muted transition-colors gap-3"
                     >
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                           <Train className="h-5 w-5 text-primary" />
                         </div>
-                        <div>
-                          <p className="font-medium text-sm">
+                        <div className="min-w-0">
+                          <p className="font-medium text-sm truncate">
                             {booking.source} → {booking.destination}
                           </p>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="text-xs text-muted-foreground truncate">
                             {booking.userName} • {booking.journeyDate}
                           </p>
                         </div>
                       </div>
-                      <div className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                      <div className={`px-2.5 py-1 rounded-full text-xs font-medium shrink-0 ${
                         booking.status === "Booked" ? "bg-green-500/10 text-green-600" :
                         booking.status === "CNF & Cancelled" || booking.status === "User Cancelled" ? "bg-red-500/10 text-red-600" :
                         booking.status === "Requested" ? "bg-blue-500/10 text-blue-600" :
@@ -499,6 +453,70 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
           </Card>
         </motion.div>
       </div>
+
+      {/* Full-Width Monthly Booking Progress Chart */}
+      <MonthlyBookingProgressChart
+        months={visibleMonthlyPerformance}
+        year={selectedYear}
+        availableYears={availableYears}
+        onYearChange={setSelectedYear}
+        currentMonthIndex={currentMonthIndex}
+      />
+
+      {/* Full-Width Monthly Breakdown Grid */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4, duration: 0.4 }}
+      >
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-bold text-foreground">Monthly Breakdown</h3>
+          <span className="text-xs font-medium text-muted-foreground">
+            {selectedYear} • {breakdownMonths.length} {breakdownMonths.length === 1 ? "month" : "months"}
+          </span>
+        </div>
+        {breakdownMonths.length === 0 ? (
+          <div className="rounded-xl border border-dashed p-6 text-center text-sm text-muted-foreground">
+            No other monthly booking records for {selectedYear}.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {breakdownMonths.map((month) => (
+              <div key={month.label} className="rounded-xl border bg-card p-4 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-center justify-between mb-5">
+                  <div className="flex items-center gap-2 font-bold text-base">
+                    <Calendar className="h-4 w-4 text-indigo-400" />
+                    {month.label}
+                  </div>
+                  <div className="flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800/80 px-2.5 py-1 text-xs font-semibold">
+                    <TrendingUp className="h-3.5 w-3.5 text-emerald-500 dark:text-emerald-400" />
+                    <span className="text-foreground">{month.successRate}%</span>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-y-4 gap-x-6 text-sm">
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground font-medium">Total</span>
+                    <span className="font-bold text-foreground">{month.total}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground font-medium">Booked</span>
+                    <span className="font-bold text-emerald-500">{month.booked}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground font-medium">Failed</span>
+                    <span className="font-bold text-rose-500">{month.failed}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground font-medium">Cancelled</span>
+                    <span className="font-bold text-orange-500">{month.cancelled}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </motion.div>
     </div>
   );
 }
