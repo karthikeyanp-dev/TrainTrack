@@ -341,6 +341,17 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                 <Share2 className="h-5 w-5" />
               </Button>
             )}
+            {/* Shared ID(s) entry point: the ID(s) accordion below only renders once accounts are added */}
+            {!selectionMode && (
+              <BookingRequirementsSheet
+                booking={{ ...firstBookingWithAccounts, id: groupId }}
+                iconComponent={CreditCard}
+                isGroupMode={true}
+                groupBookings={bookings}
+                onSaveGroup={handleSaveGroupRequirements}
+                className="flex-none aspect-auto h-8 w-8 p-0 border-0 bg-white hover:bg-white/90 text-primary hover:text-primary"
+              />
+            )}
             {!selectionMode && allowUngroup && (
                 <Button
                   variant="ghost"
@@ -378,204 +389,179 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
         ))}
       </CardContent>
 
-      {/* Shared Actions Section */}
-      <CardContent className="p-4 border-t bg-muted/5 grid grid-cols-1 gap-4">
-        
-        {/* Shared Prepared Accounts Section */}
-        <div className="flex flex-col h-full">
-          <Accordion type="single" collapsible className="w-full">
-            <AccordionItem value="group-ids" className="rounded-xl border border-slate-300/80 dark:border-slate-700/90 bg-white/60 dark:bg-slate-900/50 px-3.5 shadow-xs overflow-hidden">
-              <AccordionTrigger className="py-2.5 text-sm hover:no-underline">
-                <div className="flex items-center gap-2">
-                  <CreditCard className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-                  <span className="font-semibold text-foreground">ID(s) for Booking</span>
-                  {hasSharedPreparedAccounts && (
-                    <span className="bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 text-xs px-2 py-0.5 rounded-full font-semibold">
-                      {firstBookingWithAccounts.preparedAccounts?.length}
-                    </span>
-                  )}
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="pt-1 pb-2.5">
-                <div
-                  className="flex items-center justify-end gap-2 pb-2"
-                  onClick={(e) => e.stopPropagation()}
-                  onKeyDown={(e) => e.stopPropagation()}
-                >
-                  <BookingRequirementsSheet
-                    booking={{ ...firstBookingWithAccounts, id: groupId }}
-                    iconComponent={CreditCard}
-                    isGroupMode={true}
-                    groupBookings={bookings}
-                    onSaveGroup={handleSaveGroupRequirements}
-                    className="flex-none w-auto aspect-auto px-3"
-                  />
-                </div>
-                {hasSharedPreparedAccounts ? (
-                  <div className="space-y-2">
-                    {firstBookingWithAccounts.preparedAccounts?.map((account, index) => (
-                      <div
-                        key={index}
-                        className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-800/80 p-2.5 text-xs space-y-2 shadow-xs"
-                      >
-                        <div className="flex justify-between items-center gap-2">
-                          <span className="font-semibold text-foreground/90 text-xs">
-                            Account #{index + 1}
-                          </span>
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <span className={cn(
-                              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium",
-                              account.isMasterAdded
-                                ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20"
-                                : "bg-muted text-muted-foreground border border-border/40"
-                            )}>
-                              {account.isMasterAdded ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                              Master
-                            </span>
-                            <span className={cn(
-                              "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium",
-                              account.isWalletLoaded
-                                ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20"
-                                : "bg-muted text-muted-foreground border border-border/40"
-                            )}>
-                              {account.isWalletLoaded ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
-                              Wallet{account.walletAmount !== undefined ? ` (₹${account.walletAmount.toFixed(2)})` : ''}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="space-y-1.5 pt-1.5 border-t border-border/40 text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground text-[11px] w-12 shrink-0">User:</span>
-                            <span className="font-mono font-medium text-foreground select-all">{account.username}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-muted-foreground text-[11px] w-12 shrink-0">Pass:</span>
-                            <span className="font-mono font-medium text-foreground bg-muted/60 dark:bg-slate-900/60 px-1.5 py-0.5 rounded select-all">{account.password}</span>
-                          </div>
-                          {account.handlingBy && (
-                            <div className="flex items-center gap-2 pt-0.5">
-                              <span className="text-muted-foreground text-[11px] w-12 shrink-0">Handler:</span>
-                              <span className="font-medium text-foreground">{account.handlingBy}</span>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center p-4 text-center border-2 border-dashed rounded-md bg-muted/5">
-                    <CreditCard className="h-8 w-8 text-muted-foreground/30 mb-2" />
-                    <p className="text-sm text-muted-foreground">No accounts added yet</p>
-                    <p className="text-xs text-muted-foreground/70 mt-1">Add accounts to process this group booking</p>
-                  </div>
-                )}
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        </div>
-
-        {/* Shared Booked Details Section */}
-        <div className="flex flex-col h-full min-w-0">
-          <Accordion type="single" collapsible className="w-full">
-            <AccordionItem value="group-booked-details" className="rounded-xl border border-emerald-500/30 dark:border-emerald-500/20 bg-emerald-500/[0.04] dark:bg-emerald-950/20 px-3.5 shadow-xs overflow-hidden">
-              <AccordionTrigger className="py-2.5 text-sm hover:no-underline">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
-                  <span className="font-semibold text-foreground">Booked Details</span>
-                  {groupBookingDetails && (
-                    <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 ml-auto mr-1">
-                      ₹{groupBookingDetails.totalAmount.toFixed(2)}
-                    </span>
-                  )}
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="pt-1 pb-2.5">
-                {isLoadingGroupBookingDetails ? (
-                  <div className="h-full flex items-center justify-center p-6 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Loading…
-                  </div>
-                ) : hasGroupBookedDetails ? (
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">
-                      <span className="text-xs font-medium text-green-700 dark:text-green-400 flex items-center gap-1.5">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        Status: Booked
+      {/* Shared Details Section - each accordion only renders once its details are added */}
+      {(hasSharedPreparedAccounts || hasGroupBookedDetails) && (
+        <CardContent className="p-4 border-t bg-muted/5 grid grid-cols-1 gap-4">
+          {/* Shared Prepared Accounts Section */}
+          {hasSharedPreparedAccounts && (
+            <div className="flex flex-col h-full">
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="group-ids" className="rounded-xl border border-slate-300/80 dark:border-slate-700/90 bg-white/60 dark:bg-slate-900/50 px-3.5 shadow-xs overflow-hidden">
+                  <AccordionTrigger className="py-2.5 text-sm hover:no-underline">
+                    <div className="flex items-center gap-2">
+                      <CreditCard className="h-4 w-4 text-purple-600 dark:text-purple-400" />
+                      <span className="font-semibold text-foreground">ID(s) for Booking</span>
+                      <span className="bg-purple-500/10 text-purple-700 dark:text-purple-300 border border-purple-500/20 text-xs px-2 py-0.5 rounded-full font-semibold">
+                        {firstBookingWithAccounts.preparedAccounts?.length}
                       </span>
-                      <div className="flex items-center gap-1.5">
-                        <Badge variant="outline" className="bg-background text-xs">
-                          {bookings.length} Bookings
-                        </Badge>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                          onClick={() => setShowEditRecordForm(true)}
-                          title="Edit Booked Details"
-                        >
-                          <Edit3 className="h-3 w-3" />
-                        </Button>
-                      </div>
                     </div>
-                    
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div className="min-w-0 space-y-1">
-                        <span className="text-muted-foreground block">Booked By</span>
-                        <span className="font-medium truncate block" title={groupBookingDetails!.bookedBy}>
-                          {groupBookingDetails!.bookedBy}
-                        </span>
-                      </div>
-                      <div className="min-w-0 space-y-1">
-                        <span className="text-muted-foreground block">Total Amount</span>
-                        <span className="font-medium">
-                          {groupBookingDetails!.bookedAmount != null ? `₹${groupBookingDetails!.bookedAmount}` : `₹${groupBookingDetails!.totalAmount.toFixed(2)}`}
-                          {typeof groupBookingDetails!.commission === "number" && groupBookingDetails!.commission > 0 && (
-                            <span className="ml-1 text-[10px] text-muted-foreground font-medium">+ ₹{groupBookingDetails!.commission.toFixed(2)} (comm)</span>
-                          )}
-                        </span>
-                      </div>
-                      <div className="min-w-0 space-y-1">
-                        <span className="text-muted-foreground block">Account Used</span>
-                        <span className="font-medium truncate block" title={groupBookingDetails!.bookedAccountUsername}>
-                          {groupBookingDetails!.bookedAccountUsername}
-                        </span>
-                      </div>
-                      <div className="min-w-0 space-y-1">
-                        <span className="text-muted-foreground block">Payment Method</span>
-                        <span className="font-medium">{groupBookingDetails!.methodUsed}</span>
-                      </div>
-                    </div>
-
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-1 pb-2.5">
                     <div className="space-y-2">
-                      <div className="text-xs font-medium text-foreground/80">Split per booking</div>
-                      <div className="space-y-2">
-                        {groupBookingDetails!.splitByBooking.map(x => (
-                          <div key={x.bookingId} className="flex items-center justify-between rounded-md border bg-muted/10 px-3 py-2 text-xs">
-                            <span className="text-muted-foreground">
-                              {x.passengers} pax • {x.bookingFor}
+                      {firstBookingWithAccounts.preparedAccounts?.map((account, index) => (
+                        <div
+                          key={index}
+                          className="rounded-lg border border-slate-200 dark:border-slate-800 bg-white/90 dark:bg-slate-800/80 p-2.5 text-xs space-y-2 shadow-xs"
+                        >
+                          <div className="flex justify-between items-center gap-2">
+                            <span className="font-semibold text-foreground/90 text-xs">
+                              Account #{index + 1}
                             </span>
-                            <span className="font-medium">₹{x.amountCharged.toFixed(2)}</span>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <span className={cn(
+                                "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium",
+                                account.isMasterAdded
+                                  ? "bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border border-emerald-500/20"
+                                  : "bg-muted text-muted-foreground border border-border/40"
+                              )}>
+                                {account.isMasterAdded ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                                Master
+                              </span>
+                              <span className={cn(
+                                "inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium",
+                                account.isWalletLoaded
+                                  ? "bg-blue-500/10 text-blue-700 dark:text-blue-400 border border-blue-500/20"
+                                  : "bg-muted text-muted-foreground border border-border/40"
+                              )}>
+                                {account.isWalletLoaded ? <Check className="h-3 w-3" /> : <X className="h-3 w-3" />}
+                                Wallet{account.walletAmount !== undefined ? ` (₹${account.walletAmount.toFixed(2)})` : ''}
+                              </span>
+                            </div>
                           </div>
-                        ))}
-                      </div>
+                          <div className="space-y-1.5 pt-1.5 border-t border-border/40 text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground text-[11px] w-12 shrink-0">User:</span>
+                              <span className="font-mono font-medium text-foreground select-all">{account.username}</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-muted-foreground text-[11px] w-12 shrink-0">Pass:</span>
+                              <span className="font-mono font-medium text-foreground bg-muted/60 dark:bg-slate-900/60 px-1.5 py-0.5 rounded select-all">{account.password}</span>
+                            </div>
+                            {account.handlingBy && (
+                              <div className="flex items-center gap-2 pt-0.5">
+                                <span className="text-muted-foreground text-[11px] w-12 shrink-0">Handler:</span>
+                                <span className="font-medium text-foreground">{account.handlingBy}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </div>
+          )}
 
-                    <div className="text-xs text-center text-muted-foreground border-t pt-2">
-                      Details are applied to all bookings in this group.
+          {/* Shared Booked Details Section */}
+          {hasGroupBookedDetails && (
+            <div className="flex flex-col h-full min-w-0">
+              <Accordion type="single" collapsible className="w-full">
+                <AccordionItem value="group-booked-details" className="rounded-xl border border-emerald-500/30 dark:border-emerald-500/20 bg-emerald-500/[0.04] dark:bg-emerald-950/20 px-3.5 shadow-xs overflow-hidden">
+                  <AccordionTrigger className="py-2.5 text-sm hover:no-underline">
+                    <div className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                      <span className="font-semibold text-foreground">Booked Details</span>
+                      {groupBookingDetails && (
+                        <span className="text-xs font-mono font-bold text-emerald-600 dark:text-emerald-400 ml-auto mr-1">
+                          ₹{groupBookingDetails.totalAmount.toFixed(2)}
+                        </span>
+                      )}
                     </div>
-                  </div>
-                ) : (
-                  <div className="h-full flex flex-col items-center justify-center p-4 text-center border-2 border-dashed rounded-md bg-muted/5">
-                    <CheckCircle2 className="h-8 w-8 text-muted-foreground/30 mb-2" />
-                    <p className="text-sm text-muted-foreground">Not booked yet</p>
-                    <p className="text-xs text-muted-foreground/70 mt-1">Add details once tickets are confirmed</p>
-                  </div>
-                )}
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        </div>
-      </CardContent>
+                  </AccordionTrigger>
+                  <AccordionContent className="pt-1 pb-2.5">
+                    {isLoadingGroupBookingDetails ? (
+                      <div className="h-full flex items-center justify-center p-6 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        Loading…
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">
+                          <span className="text-xs font-medium text-green-700 dark:text-green-400 flex items-center gap-1.5">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Status: Booked
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="outline" className="bg-background text-xs">
+                              {bookings.length} Bookings
+                            </Badge>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-muted-foreground hover:text-foreground"
+                              onClick={() => setShowEditRecordForm(true)}
+                              title="Edit Booked Details"
+                            >
+                              <Edit3 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2 text-xs">
+                          <div className="min-w-0 space-y-1">
+                            <span className="text-muted-foreground block">Booked By</span>
+                            <span className="font-medium truncate block" title={groupBookingDetails!.bookedBy}>
+                              {groupBookingDetails!.bookedBy}
+                            </span>
+                          </div>
+                          <div className="min-w-0 space-y-1">
+                            <span className="text-muted-foreground block">Total Amount</span>
+                            <span className="font-medium">
+                              {groupBookingDetails!.bookedAmount != null ? `₹${groupBookingDetails!.bookedAmount}` : `₹${groupBookingDetails!.totalAmount.toFixed(2)}`}
+                              {typeof groupBookingDetails!.commission === "number" && groupBookingDetails!.commission > 0 && (
+                                <span className="ml-1 text-[10px] text-muted-foreground font-medium">+ ₹{groupBookingDetails!.commission.toFixed(2)} (comm)</span>
+                              )}
+                            </span>
+                          </div>
+                          <div className="min-w-0 space-y-1">
+                            <span className="text-muted-foreground block">Account Used</span>
+                            <span className="font-medium truncate block" title={groupBookingDetails!.bookedAccountUsername}>
+                              {groupBookingDetails!.bookedAccountUsername}
+                            </span>
+                          </div>
+                          <div className="min-w-0 space-y-1">
+                            <span className="text-muted-foreground block">Payment Method</span>
+                            <span className="font-medium">{groupBookingDetails!.methodUsed}</span>
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <div className="text-xs font-medium text-foreground/80">Split per booking</div>
+                          <div className="space-y-2">
+                            {groupBookingDetails!.splitByBooking.map(x => (
+                              <div key={x.bookingId} className="flex items-center justify-between rounded-md border bg-muted/10 px-3 py-2 text-xs">
+                                <span className="text-muted-foreground">
+                                  {x.passengers} pax • {x.bookingFor}
+                                </span>
+                                <span className="font-medium">₹{x.amountCharged.toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div className="text-xs text-center text-muted-foreground border-t pt-2">
+                          Details are applied to all bookings in this group.
+                        </div>
+                      </div>
+                    )}
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            </div>
+          )}
+        </CardContent>
+      )}
 
       {/* Group Status Update Section */}
       <CardContent className="p-4 border-t bg-muted/5">
