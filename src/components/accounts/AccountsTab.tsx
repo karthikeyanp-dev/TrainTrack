@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Trash2, Edit3, Eye, EyeOff, Plus, X, CreditCard, UserCircle, Wallet, Calendar, TrendingUp, Users, Briefcase, Search, CheckCircle2, ChevronDown, ShieldCheck, ShieldAlert, ArrowUpDown, RotateCcw, History } from "lucide-react";
+import { Loader2, Trash2, Plus, X, CreditCard, UserCircle, Wallet, Calendar, TrendingUp, Users, Briefcase, Search, ChevronDown, ShieldCheck, ShieldAlert, ArrowUpDown, RotateCcw, History } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import type { IrctcAccount } from "@/types/account";
@@ -41,26 +41,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { AccountCard } from "@/components/accounts/AccountCard";
 import { HandlerCard } from "@/components/accounts/HandlerCard";
 import { HandlerBookingsDialog } from "@/components/accounts/HandlerBookingsDialog";
 import { usePendingBookings } from "@/hooks/useBookings";
 
-const labelHighlightStyle = { color: '#AB945E', fontWeight: 700 };
-
 type TakenFilter = "all" | "taken" | "not-taken";
-
-function AccountTakenBadge({ detail }: { detail: string }) {
-  return (
-    <span
-      className="inline-flex items-center shrink-0 rounded-full bg-rose-600 px-2.5 py-1 text-xs font-bold tracking-wide text-white shadow-sm shadow-rose-950/40"
-      title={detail === "Pending booking" ? "Assigned to a booking" : `Assigned to ${detail}'s booking`}
-      aria-label={detail === "Pending booking" ? "Taken, assigned to a booking" : `Taken, assigned to ${detail}'s booking`}
-    >
-      Taken
-    </span>
-  );
-}
-
 
 interface AccountFormState {
   username: string;
@@ -184,7 +170,6 @@ function AccountsManager({ searchQuery, takenFilter }: { searchQuery: string; ta
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [accountToDelete, setAccountToDelete] = useState<string | null>(null);
-  const [visiblePasswords, setVisiblePasswords] = useState<Set<string>>(new Set());
   const [accountToTopUp, setAccountToTopUp] = useState<IrctcAccount | null>(null);
   const [accountToEdit, setAccountToEdit] = useState<IrctcAccount | null>(null);
   const [topUpAmount, setTopUpAmount] = useState<string>("");
@@ -483,20 +468,6 @@ function AccountsManager({ searchQuery, takenFilter }: { searchQuery: string; ta
     setIsSubmitting(false);
   };
 
-  const togglePasswordVisibility = (accountId: string) => {
-    setVisiblePasswords(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(accountId)) {
-        newSet.delete(accountId);
-      } else {
-        newSet.add(accountId);
-      }
-      return newSet;
-    });
-  };
-
-  const maskPassword = (password: string) => "•".repeat(Math.min(password.length, 8));
-
   const totalAccounts = accounts.length;
   const totalWalletAmount = accounts.reduce((sum, acc) => sum + acc.walletAmount, 0);
 
@@ -721,95 +692,17 @@ function AccountsManager({ searchQuery, takenFilter }: { searchQuery: string; ta
                             exit={{ opacity: 0, scale: 0.95 }}
                             transition={{ delay: index * 0.04 }}
                           >
-                            <Card className="group hover:shadow-lg transition-shadow duration-300">
-                              <CardHeader className="pb-3">
-                                <div className="flex justify-between items-start gap-2">
-                                  <CardTitle className="text-base flex items-center gap-1.5 min-w-0">
-                                    <span className="truncate">{account.username}</span>
-                                    {account.isVerified && (
-                                      <CheckCircle2
-                                        className="h-4 w-4 shrink-0 fill-green-600 text-white"
-                                        aria-label="Verified"
-                                      />
-                                    )}
-                                  </CardTitle>
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    {takenDetail && <AccountTakenBadge detail={takenDetail} />}
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-muted-foreground hover:text-primary"
-                                      onClick={() => handleEditClick(account)}
-                                      title="Edit Account"
-                                    >
-                                      <Edit3 className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-destructive hover:text-destructive"
-                                      onClick={() => handleDeleteClick(account.id)}
-                                      title="Delete Account"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              </CardHeader>
-                              <CardContent className="space-y-2 text-sm">
-                                <div className="flex items-center gap-2">
-                                  <span style={labelHighlightStyle}>Password: </span>
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-mono text-xs">
-                                      {visiblePasswords.has(account.id)
-                                        ? account.password
-                                        : maskPassword(account.password)
-                                      }
-                                    </span>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6"
-                                      onClick={() => togglePasswordVisibility(account.id)}
-                                      title={visiblePasswords.has(account.id) ? "Hide password" : "Show password"}
-                                    >
-                                      {visiblePasswords.has(account.id)
-                                        ? <EyeOff className="h-3 w-3" />
-                                        : <Eye className="h-3 w-3" />
-                                      }
-                                    </Button>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span style={labelHighlightStyle}>Wallet: </span>
-                                  <span>₹{account.walletAmount.toFixed(2)}</span>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 text-primary hover:text-primary px-2 text-xs"
-                                    onClick={() => {
-                                      setAccountToTopUp(account);
-                                      setTopUpAmount("");
-                                    }}
-                                    title="Add Wallet Amount"
-                                  >
-                                    <Plus className="h-3 w-3 mr-1" /> Add
-                                  </Button>
-                                </div>
-                                <div>
-                                  <span style={labelHighlightStyle}>Booked ({new Date().toLocaleString('default', { month: 'long' })}): </span>
-                                  {stats?.bookingCount ?? 0}
-                                </div>
-                                <div>
-                                  <span style={labelHighlightStyle}>Booked ({new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleString('default', { month: 'long' })}): </span>
-                                  {stats?.previousMonthBookingCount ?? 0}
-                                </div>
-                                <div>
-                                  <span style={labelHighlightStyle}>Last Booked: </span>
-                                  {account.lastBookedDate || "—"}
-                                </div>
-                              </CardContent>
-                            </Card>
+                            <AccountCard
+                              account={account}
+                              stats={stats}
+                              takenDetail={takenDetail}
+                              onEdit={handleEditClick}
+                              onDelete={handleDeleteClick}
+                              onTopUp={(acc) => {
+                                setAccountToTopUp(acc);
+                                setTopUpAmount("");
+                              }}
+                            />
                           </motion.div>
                         );
                       })}
@@ -898,95 +791,17 @@ function AccountsManager({ searchQuery, takenFilter }: { searchQuery: string; ta
                             exit={{ opacity: 0, scale: 0.95 }}
                             transition={{ delay: index * 0.04 }}
                           >
-                            <Card className="group hover:shadow-lg transition-shadow duration-300">
-                              <CardHeader className="pb-3">
-                                <div className="flex justify-between items-start gap-2">
-                                  <CardTitle className="text-base flex items-center gap-1.5 min-w-0">
-                                    <span className="truncate">{account.username}</span>
-                                    {account.isVerified && (
-                                      <CheckCircle2
-                                        className="h-4 w-4 shrink-0 fill-green-600 text-white"
-                                        aria-label="Verified"
-                                      />
-                                    )}
-                                  </CardTitle>
-                                  <div className="flex items-center gap-1.5 shrink-0">
-                                    {takenDetail && <AccountTakenBadge detail={takenDetail} />}
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-muted-foreground hover:text-primary"
-                                      onClick={() => handleEditClick(account)}
-                                      title="Edit Account"
-                                    >
-                                      <Edit3 className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-destructive hover:text-destructive"
-                                      onClick={() => handleDeleteClick(account.id)}
-                                      title="Delete Account"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </div>
-                              </CardHeader>
-                              <CardContent className="space-y-2 text-sm">
-                                <div className="flex items-center gap-2">
-                                  <span style={labelHighlightStyle}>Password: </span>
-                                  <div className="flex items-center gap-2">
-                                    <span className="font-mono text-xs">
-                                      {visiblePasswords.has(account.id)
-                                        ? account.password
-                                        : maskPassword(account.password)
-                                      }
-                                    </span>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6"
-                                      onClick={() => togglePasswordVisibility(account.id)}
-                                      title={visiblePasswords.has(account.id) ? "Hide password" : "Show password"}
-                                    >
-                                      {visiblePasswords.has(account.id)
-                                        ? <EyeOff className="h-3 w-3" />
-                                        : <Eye className="h-3 w-3" />
-                                      }
-                                    </Button>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                  <span style={labelHighlightStyle}>Wallet: </span>
-                                  <span>₹{account.walletAmount.toFixed(2)}</span>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-6 text-primary hover:text-primary px-2 text-xs"
-                                    onClick={() => {
-                                      setAccountToTopUp(account);
-                                      setTopUpAmount("");
-                                    }}
-                                    title="Add Wallet Amount"
-                                  >
-                                    <Plus className="h-3 w-3 mr-1" /> Add
-                                  </Button>
-                                </div>
-                                <div>
-                                  <span style={labelHighlightStyle}>Booked ({new Date().toLocaleString('default', { month: 'long' })}): </span>
-                                  {stats?.bookingCount ?? 0}
-                                </div>
-                                <div>
-                                  <span style={labelHighlightStyle}>Booked ({new Date(new Date().getFullYear(), new Date().getMonth() - 1, 1).toLocaleString('default', { month: 'long' })}): </span>
-                                  {stats?.previousMonthBookingCount ?? 0}
-                                </div>
-                                <div>
-                                  <span style={labelHighlightStyle}>Last Booked: </span>
-                                  {account.lastBookedDate || "—"}
-                                </div>
-                              </CardContent>
-                            </Card>
+                            <AccountCard
+                              account={account}
+                              stats={stats}
+                              takenDetail={takenDetail}
+                              onEdit={handleEditClick}
+                              onDelete={handleDeleteClick}
+                              onTopUp={(acc) => {
+                                setAccountToTopUp(acc);
+                                setTopUpAmount("");
+                              }}
+                            />
                           </motion.div>
                         );
                       })}
