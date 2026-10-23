@@ -137,27 +137,24 @@ function CredentialRow({
 function StatTile({
   icon,
   label,
-  hint,
   value,
 }: {
   icon: React.ReactNode;
   label: string;
-  hint: string;
   value: number;
 }) {
   return (
-    <div className="min-w-0 rounded-xl border border-slate-200/80 bg-slate-50/70 px-2.5 py-2 dark:border-slate-700/60 dark:bg-slate-900/40">
-      <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
-        <span className="shrink-0 rounded bg-amber-500/10 p-0.5 text-amber-500/80 dark:text-amber-400/80">
-          {icon}
+    <div className="flex min-w-0 items-start gap-1.5 rounded-xl border border-slate-200/80 bg-slate-50/70 px-2.5 py-2 dark:border-slate-700/60 dark:bg-slate-900/40">
+      <span className="shrink-0 rounded bg-amber-500/10 p-0.5 text-amber-500/80 dark:text-amber-400/80" aria-hidden="true">
+        {icon}
+      </span>
+      <div className="min-w-0 flex-1 text-left">
+        <span className="block text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+          {label}
         </span>
-        <span className="truncate">{label}</span>
-      </div>
-      <div className="mt-1.5 flex items-baseline gap-1.5">
-        <span className="text-lg font-bold tabular-nums leading-none text-foreground">
+        <span className="mt-1.5 block text-lg font-bold tabular-nums leading-none text-foreground">
           {value}
         </span>
-        <span className="truncate text-[11px] text-muted-foreground">{hint}</span>
       </div>
     </div>
   );
@@ -184,12 +181,12 @@ export function AccountCard({
   const cardId = useId();
 
   const now = new Date();
-  const currentMonthName = now.toLocaleString("default", { month: "long" });
+  const currentMonthName = now.toLocaleString("en-US", { month: "short" });
   const previousMonthName = new Date(
     now.getFullYear(),
     now.getMonth() - 1,
     1
-  ).toLocaleString("default", { month: "long" });
+  ).toLocaleString("en-US", { month: "short" });
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -329,14 +326,12 @@ export function AccountCard({
           <div className="grid grid-cols-2 gap-2">
             <StatTile
               icon={<Ticket className="h-3 w-3" />}
-              label="This Month"
-              hint={currentMonthName}
+              label={`This Month (${currentMonthName})`}
               value={stats?.bookingCount ?? 0}
             />
             <StatTile
               icon={<CalendarDays className="h-3 w-3" />}
-              label="Last Month"
-              hint={previousMonthName}
+              label={`Last Month (${previousMonthName})`}
               value={stats?.previousMonthBookingCount ?? 0}
             />
           </div>
