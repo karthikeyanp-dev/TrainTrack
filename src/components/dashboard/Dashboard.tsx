@@ -308,7 +308,7 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
       </div>
 
       {/* Operational Overview: Current Snapshot & Recent Bookings */}
-      <div className="grid gap-6 lg:grid-cols-5 items-stretch">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5 items-stretch">
         {/* Snapshot Card */}
         <motion.div
           className="lg:col-span-3 h-full"

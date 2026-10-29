@@ -1000,33 +1000,35 @@ export function MonthlyBookingProgressChart({
             )}
 
             {/* Screen Reader Accessible Table */}
-            <table className="sr-only">
-              <caption>Monthly booking progress breakdown for {year}.</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Month</th>
-                  <th scope="col">Total</th>
-                  <th scope="col">Booked</th>
-                  <th scope="col">Failed</th>
-                  <th scope="col">Cancelled</th>
-                  <th scope="col">Pending</th>
-                  <th scope="col">Success Rate</th>
-                </tr>
-              </thead>
-              <tbody>
-                {months.map((month) => (
-                  <tr key={month.monthIndex}>
-                    <th scope="row">{month.label} {year}</th>
-                    <td>{month.total}</td>
-                    <td>{month.booked}</td>
-                    <td>{month.failed}</td>
-                    <td>{month.cancelled}</td>
-                    <td>{month.pending}</td>
-                    <td>{month.successRate}%</td>
+            <div className="sr-only">
+              <table>
+                <caption>Monthly booking progress breakdown for {year}.</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Month</th>
+                    <th scope="col">Total</th>
+                    <th scope="col">Booked</th>
+                    <th scope="col">Failed</th>
+                    <th scope="col">Cancelled</th>
+                    <th scope="col">Pending</th>
+                    <th scope="col">Success Rate</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {months.map((month) => (
+                    <tr key={month.monthIndex}>
+                      <th scope="row">{month.label} {year}</th>
+                      <td>{month.total}</td>
+                      <td>{month.booked}</td>
+                      <td>{month.failed}</td>
+                      <td>{month.cancelled}</td>
+                      <td>{month.pending}</td>
+                      <td>{month.successRate}%</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </>
         ) : (
           <p className="py-12 text-center text-sm text-muted-foreground">
