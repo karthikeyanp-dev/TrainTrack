@@ -93,9 +93,13 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
           amountCharged: 0, // Will be calculated below
         }));
         
-        // Calculate amount per passenger for proportional split display
+        // Calculate ticket fare per passenger for proportional split display.
+        // Only the ticket fare (bookedAmount) is shared per passenger — the commission
+        // charged to each customer differs, so it is intentionally excluded here.
+        // Older records without bookedAmount fall back to amountCharged.
         const totalPassengers = bookings.reduce((sum, b) => sum + b.passengers.length, 0);
-        const amountPerPassenger = firstRecord.amountCharged / totalPassengers;
+        const splitBaseAmount = typeof firstRecord.bookedAmount === "number" ? firstRecord.bookedAmount : firstRecord.amountCharged;
+        const amountPerPassenger = totalPassengers > 0 ? splitBaseAmount / totalPassengers : 0;
         
         splitByBooking.forEach(item => {
           item.amountCharged = Number((amountPerPassenger * item.passengers).toFixed(2));
@@ -131,7 +135,8 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
           bookingId: x.booking.id,
           bookingFor: x.booking.userName,
           passengers: x.booking.passengers.length,
-          amountCharged: Number((x.record.amountCharged || 0).toFixed(2)),
+          // Show only the ticket fare share (exclude commission) when available
+          amountCharged: Number(((typeof x.record.bookedAmount === "number" ? x.record.bookedAmount : x.record.amountCharged) || 0).toFixed(2)),
         }));
 
         setGroupBookingDetails({
