@@ -20,6 +20,11 @@ export type BookingType = typeof ALL_BOOKING_TYPES[number];
 
 
 export interface Passenger {
+  // Stable passenger id. Assigned lazily the first time a passenger of the
+  // booking is cancelled, so cancellations can reference passengers even after
+  // the booking is edited. (Named `pid`, not `id`, because react-hook-form's
+  // useFieldArray reserves `id`.)
+  pid?: string;
   name: string;
   age: number;
   gender: PassengerGender;
@@ -35,11 +40,81 @@ export interface PreparedAccount {
   handlingBy?: string;
 }
 
+/**
+ * Legacy single-refund shape. Still read from old bookings (see
+ * `getCancellations()` in `src/lib/cancellations.ts`) but never written — new
+ * refunds live in `Booking.cancellations`.
+ */
 export interface RefundDetails {
   amount: number;
   date: string; // ISO string YYYY-MM-DD
   method: string;
   accountId: string;
+}
+
+// ----- Cancellations & refunds -----
+
+/** Leg 1: IRCTC returning the money to wherever the ticket was paid from. */
+export const ALL_IRCTC_REFUND_STATUSES = ["Pending", "Received", "No Refund"] as const;
+export type IrctcRefundStatus = typeof ALL_IRCTC_REFUND_STATUSES[number];
+
+/** Leg 2: the business paying the customer back. */
+export const ALL_CUSTOMER_REFUND_STATUSES = ["Pending", "Paid", "Not Applicable"] as const;
+export type CustomerRefundStatus = typeof ALL_CUSTOMER_REFUND_STATUSES[number];
+
+/** Who ends up holding the IRCTC refund. */
+export const ALL_REFUND_RECIPIENT_TYPES = ["Wallet", "Handler", "Other"] as const;
+export type RefundRecipientType = typeof ALL_REFUND_RECIPIENT_TYPES[number];
+
+export interface IrctcRefundLeg {
+  status: IrctcRefundStatus;
+  recipientType: RefundRecipientType;
+  recipientName?: string;  // IRCTC account username / handler name / free text
+  accountId?: string;      // irctcAccounts doc id when recipientType is "Wallet"
+  expectedAmount?: number;
+  receivedAmount?: number;
+  receivedDate?: string;   // YYYY-MM-DD
+  // Amount actually added to the IRCTC account's walletAmount for this refund.
+  // Maintained by firestoreClient so an edit/undo can reverse it exactly.
+  walletCredited?: number;
+}
+
+export interface CustomerRefundLeg {
+  status: CustomerRefundStatus;
+  recipientName?: string;  // who gets paid back; defaults to booking.userName
+  amount?: number;         // amount owed to the customer
+  paidAmount?: number;
+  paidDate?: string;       // YYYY-MM-DD
+  paidBy?: string;         // who paid the customer (handler / owner)
+  method?: string;
+  note?: string;
+}
+
+export type CancellationKind = "cancellation" | "failed-payment";
+
+export interface BookingCancellation {
+  id: string;
+  // "cancellation": passengers of a confirmed ticket were cancelled.
+  // "failed-payment": Booking Failed (Paid) — money debited, no ticket issued.
+  kind: CancellationKind;
+  passengerPids: string[];
+  passengerNames: string[];   // display snapshot taken at cancellation time
+  // True for entries synthesised from pre-feature data, where the whole booking
+  // was cancelled and passengers had no pids to reference.
+  allPassengers?: boolean;
+  cancelledOn: string;        // YYYY-MM-DD
+  cancelledBy?: string;       // handler who cancelled the ticket
+  reason?: string;
+  fareCancelled?: number;     // ticket fare share of the cancelled passengers
+  cancellationCharge?: number;
+  cancellationGroupId?: string; // links entries created together for one group PNR
+  // Set on the entry that turned the booking "CNF & Cancelled": the booking's
+  // statusHandler just before, restored if that cancellation is undone.
+  previousStatusHandler?: string;
+  irctcRefund: IrctcRefundLeg;
+  customerRefund: CustomerRefundLeg;
+  createdAt: string;          // ISO string
+  updatedAt: string;          // ISO string
 }
 
 export interface Booking {
@@ -63,7 +138,10 @@ export interface Booking {
   preparedAccounts?: PreparedAccount[]; // Optional array of prepared accounts for booking requirements
   paymentReceived?: boolean;
   amountSettled?: boolean;
-  refundDetails?: RefundDetails;
+  refundDetails?: RefundDetails; // Legacy — superseded by `cancellations`
+  // Cancellation events (full or partial) with their refund legs. Cancelled
+  // passengers stay in `passengers`; this is an overlay on top of them.
+  cancellations?: BookingCancellation[];
   groupId?: string; // ID of the booking group this booking belongs to
 }
 
@@ -77,7 +155,7 @@ export interface BookingGroup {
   updatedAt: string;
 }
 
-export type BookingFormData = Omit<Booking, "id" | "createdAt" | "updatedAt" | "status" | "preparedAccounts" | "groupId">;
+export type BookingFormData = Omit<Booking, "id" | "createdAt" | "updatedAt" | "status" | "preparedAccounts" | "groupId" | "cancellations" | "refundDetails">;
 
     
 

@@ -4,6 +4,7 @@ import { BookingForm } from "@/components/bookings/BookingForm";
 import { AppShell } from "@/components/layout/AppShell";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getBookingById } from "@/lib/firestoreClient";
+import { getCancelledPids } from "@/lib/cancellations";
 import type { BookingFormData, Passenger } from "@/types/booking";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
@@ -15,6 +16,7 @@ function EditBookingContent() {
   const bookingId = searchParams.get('id');
 
   const [initialDataForForm, setInitialDataForForm] = useState<(BookingFormData & { journeyDateObj?: Date; bookingDateObj?: Date; passengers?: Passenger[] }) | undefined>(undefined);
+  const [cancelledPassengerPids, setCancelledPassengerPids] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -30,6 +32,8 @@ function EditBookingContent() {
       try {
         const booking = await getBookingById(bookingId);
         if (booking) {
+          // Cancelled passengers stay on the booking; the form locks their rows.
+          setCancelledPassengerPids(Array.from(getCancelledPids(booking)));
           setInitialDataForForm({
             source: booking.source,
             destination: booking.destination,
@@ -86,7 +90,11 @@ function EditBookingContent() {
               <p className="text-muted-foreground">Unable to load booking for editing.</p>
             </div>
           ) : (
-            <BookingForm initialData={initialDataForForm} bookingId={bookingId || undefined} />
+            <BookingForm
+              initialData={initialDataForForm}
+              bookingId={bookingId || undefined}
+              cancelledPassengerPids={cancelledPassengerPids}
+            />
           )}
         </CardContent>
       </Card>

@@ -3,7 +3,7 @@ import { Booking } from "@/types/booking";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Layers, Link2Off, CheckCircle2, CreditCard, Loader2, Share2, Check, X, Edit3 } from "lucide-react";
+import { Layers, Link2Off, CheckCircle2, CreditCard, Loader2, Share2, Check, X, Edit3, UserX } from "lucide-react";
 import { BookingCard } from "./BookingCard";
 import { BookingRequirementsSheet } from "./BookingRequirementsSheet";
 import { ungroupBookings, updateBookingRequirements, saveBookingRecord, getBookingRecordByBookingId } from "@/lib/firestoreClient";
@@ -25,7 +25,7 @@ import { format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ALL_BOOKING_STATUSES, type BookingStatus } from "@/types/booking";
-import { updateGroupBookingStatus } from "@/lib/firestoreClient";
+import { updateGroupBookingStatus, clearBookingCancellations } from "@/lib/firestoreClient";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { StatusReasonDialog } from "./StatusReasonDialog";
 import {
@@ -35,6 +35,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { BookingRecordForm } from "./BookingRecordForm";
+import { CancelPassengersDialog } from "./CancelPassengersDialog";
+import { getActivePassengers, getCancellations, isPassengerCancelled } from "@/lib/cancellations";
 
 interface BookingGroupCardProps {
   groupId: string;
@@ -50,10 +52,17 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
   const [showUngroupDialog, setShowUngroupDialog] = useState(false);
   const [isUngrouping, setIsUngrouping] = useState(false);
   const [showEditRecordForm, setShowEditRecordForm] = useState(false);
+  // Cancellation dialog: `all` pre-ticks every travelling passenger (full cancel).
+  const [cancelDialog, setCancelDialog] = useState<{ open: boolean; all: boolean }>({ open: false, all: false });
   const { toast } = useToast();
   const router = useRouter();
 
   const totalPassengers = bookings.reduce((sum, b) => sum + b.passengers.length, 0);
+  // Passengers of booked tickets who can still be cancelled.
+  const cancellablePassengers = bookings.reduce(
+    (sum, b) => sum + (b.status === "Booked" ? getActivePassengers(b).length : 0),
+    0
+  );
   const uniqueSources = Array.from(new Set(bookings.map(b => b.source)));
   const uniqueDestinations = Array.from(new Set(bookings.map(b => b.destination)));
   const classes = Array.from(new Set(bookings.map(b => b.classType)));
@@ -214,11 +223,16 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
       Array.from(new Set(values.filter(Boolean))).join(", ") || "N/A";
 
     const passengerDetailsText = bookings
-      .flatMap(booking => booking.passengers)
-      .map((passenger, index) => {
+      .flatMap(booking =>
+        booking.passengers.map(passenger => ({
+          passenger,
+          cancelled: booking.status === "Booked" && isPassengerCancelled(booking, passenger),
+        }))
+      )
+      .map(({ passenger, cancelled }, index) => {
         const isChild = passenger.age >= 5 && passenger.age <= 11;
         const berthInfo = isChild ? (passenger.berthRequired ? " [Berth Required]" : " [No Berth]") : "";
-        return `${index + 1}. ${passenger.name} ${passenger.age} ${passenger.gender.toUpperCase()}${berthInfo}`;
+        return `${index + 1}. ${passenger.name} ${passenger.age} ${passenger.gender.toUpperCase()}${berthInfo}${cancelled ? " [CANCELLED]" : ""}`;
       })
       .join("\n");
 
@@ -356,6 +370,17 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                 onSaveGroup={handleSaveGroupRequirements}
                 className="flex-none aspect-auto h-8 w-8 p-0 border-0 bg-white hover:bg-white/90 text-primary hover:text-primary"
               />
+            )}
+            {!selectionMode && cancellablePassengers > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setCancelDialog({ open: true, all: false })}
+                className="h-8 w-8 px-0 justify-center bg-white hover:bg-white/90 text-orange-600 hover:text-orange-700"
+                title="Cancel passengers"
+              >
+                <UserX className="h-5 w-5" />
+              </Button>
             )}
             {!selectionMode && allowUngroup && (
                 <Button
@@ -570,8 +595,31 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
 
       {/* Group Status Update Section */}
       <CardContent className="p-4 border-t bg-muted/5">
-        <GroupStatusUpdate bookings={bookings} groupId={groupId} />
+        <GroupStatusUpdate
+          bookings={bookings}
+          groupId={groupId}
+          onCancelAll={() => setCancelDialog({ open: true, all: true })}
+        />
       </CardContent>
+
+      {/* Cancel passengers across the group's bookings (one PNR) */}
+      <CancelPassengersDialog
+        open={cancelDialog.open}
+        onOpenChange={(open) => setCancelDialog(prev => ({ ...prev, open }))}
+        bookings={bookings}
+        record={
+          groupBookingDetails
+            ? {
+                bookedBy: groupBookingDetails.bookedBy,
+                bookedAccountUsername: groupBookingDetails.bookedAccountUsername,
+                methodUsed: groupBookingDetails.methodUsed as any,
+                amountCharged: groupBookingDetails.totalAmount,
+                bookedAmount: groupBookingDetails.bookedAmount,
+              }
+            : null
+        }
+        preselectAll={cancelDialog.all}
+      />
 
       {/* Ungroup Dialog */}
       <AlertDialog open={showUngroupDialog} onOpenChange={setShowUngroupDialog}>
@@ -622,9 +670,11 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
 interface GroupStatusUpdateProps {
   bookings: Booking[];
   groupId: string;
+  /** Open the cancellation dialog with every travelling passenger ticked. */
+  onCancelAll: () => void;
 }
 
-function GroupStatusUpdate({ bookings, groupId }: GroupStatusUpdateProps) {
+function GroupStatusUpdate({ bookings, groupId, onCancelAll }: GroupStatusUpdateProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [showStatusConfirmDialog, setShowStatusConfirmDialog] = useState(false);
@@ -647,6 +697,18 @@ function GroupStatusUpdate({ bookings, groupId }: GroupStatusUpdateProps) {
       handler?: string;
     }) => {
       const bookingIds = bookings.map(b => b.id);
+      if (status === "Requested") {
+        // Going back to pending drops cancellation/refund details and takes back
+        // any refund that was added to a wallet balance for them.
+        for (const booking of bookings) {
+          if (getCancellations(booking).length === 0 && !booking.refundDetails) continue;
+          const cleared = await clearBookingCancellations(booking.id);
+          if (!cleared.success) {
+            return { success: false, error: cleared.error };
+          }
+        }
+        queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      }
       return await updateGroupBookingStatus(bookingIds, status, reason, handler);
     },
     onSuccess: (result) => {
@@ -683,6 +745,10 @@ function GroupStatusUpdate({ bookings, groupId }: GroupStatusUpdateProps) {
       // Show the booked details dialog
       setStatusToConfirm(newStatus as BookingStatus);
       setShowBookedDetailsDialog(true);
+    } else if (newStatus === "CNF & Cancelled" && currentStatus === "Booked") {
+      // Cancelling confirmed tickets goes through the cancellation dialog so
+      // the refund is captured along with it.
+      onCancelAll();
     } else if (newStatus === "Missed" || newStatus === "CNF & Cancelled" || newStatus === "User Cancelled") {
       // Show reason dialog for Missed and Cancelled statuses
       setStatusToConfirm(newStatus as BookingStatus);
