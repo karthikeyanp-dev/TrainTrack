@@ -18,6 +18,7 @@ import {
   Plus
 } from "lucide-react";
 import type { Booking } from "@/types/booking";
+import { formatRupees, getRefundTotals, hasOpenRefund } from "@/lib/cancellations";
 import Link from "next/link";
 
 interface DashboardProps {
@@ -102,9 +103,15 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
     b => b.status === "Booking Failed (Unpaid)" || b.status === "Booking Failed (Paid)"
   ).length;
   const userCancelledCount = allBookings.filter(b => b.status === "User Cancelled").length;
-  const refundPendingCount = allBookings.filter(
-    b => (b.status === "Booking Failed (Paid)" || b.status === "CNF & Cancelled") && !b.refundDetails
-  ).length;
+  // Bookings with a refund leg still open: the IRCTC refund has not arrived, or
+  // the customer has not been paid back (full and partial cancellations alike).
+  const refundPendingBookings = allBookings.filter(hasOpenRefund);
+  const refundPendingCount = refundPendingBookings.length;
+  const refundTotals = getRefundTotals(refundPendingBookings);
+  const refundPendingDescription =
+    refundPendingCount === 0
+      ? "Awaiting refund"
+      : `IRCTC ${formatRupees(refundTotals.awaitingIrctc)} · Customers ${formatRupees(refundTotals.owedToCustomers)}`;
 
   const parseBookByDate = (dateValue: string): Date | null => {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
@@ -300,7 +307,7 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
         <StatCard
           title="Refund Pending"
           value={refundPendingCount}
-          description="Awaiting refund"
+          description={refundPendingDescription}
           icon={Receipt}
           color="red"
           delay={0.3}

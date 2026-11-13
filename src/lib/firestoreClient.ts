@@ -19,6 +19,7 @@ import {
   where,
   Timestamp,
   writeBatch,
+  runTransaction,
   type DocumentSnapshot,
   type DocumentData,
   deleteField
@@ -31,9 +32,26 @@ import type {
   PreparedAccount,
   TrainClass,
   RefundDetails,
-  BookingGroup
+  BookingGroup,
+  BookingCancellation,
+  IrctcRefundLeg,
+  CustomerRefundLeg,
+  RefundRecipientType,
 } from "@/types/booking";
 import { LEGACY_CLASS_MAP } from "@/types/booking";
+import {
+  LEGACY_CANCELLATION_ID,
+  buildLegacyCancellation,
+  computeWalletCredit,
+  ensurePassengerPids,
+  generateLocalId,
+  normalizeCustomerLeg,
+  normalizeIrctcLeg,
+  roundMoney,
+  splitAmountByCounts,
+  stripUndefined,
+  type CancellationSource,
+} from "@/lib/cancellations";
 
 // Helper to convert Firestore timestamps
 const toISOStringSafe = (value: any, fieldName: string, bookingId: string): string => {
@@ -97,6 +115,10 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     paymentReceived: data.paymentReceived as boolean | undefined,
     amountSettled: data.amountSettled as boolean | undefined,
     refundDetails: data.refundDetails as RefundDetails | undefined,
+    cancellations: Array.isArray(data.cancellations) && data.cancellations.length > 0
+      ? (data.cancellations as BookingCancellation[])
+      : undefined,
+    groupId: data.groupId as string | undefined,
   };
 };
 
@@ -236,9 +258,43 @@ export async function updateBookingById(id: string, formData: BookingFormData): 
 
   try {
     const docRef = doc(db, "bookings", id);
+
+    // Cancellations point at passengers by their stable `pid`. Keep those ids
+    // through the edit (the form may have been opened before they were
+    // assigned) and refuse an edit that would drop a cancelled passenger.
+    const existingSnap = await getDoc(docRef);
+    const existingData = existingSnap.exists() ? existingSnap.data() : undefined;
+    const existingPassengers: Passenger[] = Array.isArray(existingData?.passengers) ? existingData!.passengers : [];
+    const takenPids = new Set(formData.passengers.map(p => p.pid).filter(Boolean));
+    const passengers = formData.passengers.map((p, index) => {
+      const next: Passenger = { ...p, age: Number(p.age) };
+      const previous = existingPassengers[index];
+      if (!next.pid && previous?.pid && previous.name === next.name && !takenPids.has(previous.pid)) {
+        next.pid = previous.pid;
+        takenPids.add(previous.pid);
+      }
+      if (!next.pid) delete next.pid;
+      return next;
+    });
+
+    const cancelledPids = new Set<string>();
+    if (Array.isArray(existingData?.cancellations)) {
+      (existingData!.cancellations as BookingCancellation[]).forEach(c => {
+        if (c.kind === "cancellation") c.passengerPids.forEach(pid => cancelledPids.add(pid));
+      });
+    }
+    const keptPids = new Set(passengers.map(p => p.pid).filter(Boolean));
+    const droppedCancelled = [...cancelledPids].some(pid => !keptPids.has(pid));
+    if (droppedCancelled) {
+      return {
+        success: false,
+        error: "A cancelled passenger cannot be removed from the booking. Undo the cancellation first.",
+      };
+    }
+
     const bookingData: Record<string, any> = {
       ...formData,
-      passengers: formData.passengers.map(p => ({ ...p, age: Number(p.age) })),
+      passengers,
       updatedAt: serverTimestamp(),
     };
 
@@ -412,58 +468,469 @@ export async function updateBookingPaymentTracking(
     return { success: false, error: error.message || "Failed to update payment tracking" };
   }
 }
-export async function updateBookingRefundDetails(
-  id: string,
-  refundDetails: RefundDetails
-): Promise<{ success: boolean; error?: string; booking?: Booking }> {
+// ============= CANCELLATION & REFUND OPERATIONS =============
+//
+// A booking's `cancellations` array holds one entry per cancellation event
+// (full or partial), each with an IRCTC refund leg and a customer payback leg.
+// Every write below runs in a transaction over the booking doc — and the IRCTC
+// account doc when a wallet balance changes — so a refund can never be saved
+// without its wallet credit (or the reverse).
+
+/** Passengers picked from one booking for cancellation. */
+export interface CancellationSelection {
+  bookingId: string;
+  /** Indexes into the booking's stored `passengers` array. */
+  passengerIndexes: number[];
+  /** Names at those indexes, used to detect a booking edited in the meantime. */
+  expectedNames: string[];
+}
+
+/**
+ * Details captured when passengers are cancelled. Amounts are totals for the
+ * whole cancellation; when it spans several bookings (a group PNR) they are
+ * split by the number of passengers cancelled in each booking.
+ */
+export interface NewCancellationDetails {
+  cancelledOn: string;
+  cancelledBy?: string;
+  reason?: string;
+  fareCancelled?: number;
+  cancellationCharge?: number;
+  irctcRefund: {
+    status: "Pending" | "No Refund";
+    recipientType: RefundRecipientType;
+    recipientName?: string;
+    accountId?: string;
+    expectedAmount?: number;
+  };
+  customerRefund: {
+    status: "Pending" | "Not Applicable";
+    recipientName?: string;
+    amount?: number;
+  };
+}
+
+/** Changes to an existing cancellation. A leg, when given, replaces the stored leg. */
+export interface CancellationPatch {
+  cancelledOn?: string;
+  cancelledBy?: string;
+  reason?: string;
+  fareCancelled?: number | null;
+  cancellationCharge?: number | null;
+  irctcRefund?: Omit<IrctcRefundLeg, "walletCredited">;
+  customerRefund?: CustomerRefundLeg;
+}
+
+export interface CancellationResult {
+  success: boolean;
+  error?: string;
+  /** Set when the refund was saved but a wallet balance could not be adjusted. */
+  warning?: string;
+  /** Bookings left with no travelling passengers (now "CNF & Cancelled"). */
+  fullyCancelledBookingIds?: string[];
+}
+
+const isoOrNow = (value: any): string => {
+  if (value instanceof Timestamp) return value.toDate().toISOString();
+  if (typeof value === "string" && value) return value;
+  return new Date().toISOString();
+};
+
+const toCancellationSource = (data: DocumentData): CancellationSource => ({
+  status: data.status as BookingStatus,
+  passengers: Array.isArray(data.passengers) ? (data.passengers as Passenger[]) : [],
+  userName: data.userName as string | undefined,
+  statusReason: data.statusReason as string | undefined,
+  statusHandler: data.statusHandler as string | undefined,
+  createdAt: isoOrNow(data.createdAt),
+  updatedAt: isoOrNow(data.updatedAt),
+  refundDetails: data.refundDetails as RefundDetails | undefined,
+  cancellations: Array.isArray(data.cancellations) ? (data.cancellations as BookingCancellation[]) : undefined,
+});
+
+/**
+ * Stored cancellation entries for a booking doc. Bookings cancelled before this
+ * feature have none, so their single legacy entry is synthesised; `isLegacy`
+ * tells the caller to persist it (and drop `refundDetails`) on write.
+ */
+const loadCancellationEntries = (data: DocumentData): { entries: BookingCancellation[]; isLegacy: boolean } => {
+  if (Array.isArray(data.cancellations) && data.cancellations.length > 0) {
+    return { entries: data.cancellations as BookingCancellation[], isLegacy: false };
+  }
+  const legacy = buildLegacyCancellation(toCancellationSource(data));
+  return { entries: legacy ? [legacy] : [], isLegacy: !!legacy };
+};
+
+const MISSING_ACCOUNT_WARNING =
+  "The IRCTC account for this refund no longer exists, so no wallet balance was changed.";
+
+/**
+ * Cancel one or more passengers of booked ticket(s). The booking stays
+ * "Booked" while anyone is still travelling and becomes "CNF & Cancelled" once
+ * the last passenger is cancelled. Booking records are not touched: commission
+ * is kept and the fare stays attributed to the handler/account that booked it.
+ */
+export async function cancelBookingPassengers(input: {
+  selections: CancellationSelection[];
+  details: NewCancellationDetails;
+}): Promise<CancellationResult> {
   if (!db) {
     return { success: false, error: "Firestore database is not configured" };
   }
+  const database = db;
+  const { details } = input;
+  const selections = input.selections.filter(s => s.passengerIndexes.length > 0);
+  if (selections.length === 0) {
+    return { success: false, error: "Select at least one passenger to cancel" };
+  }
 
   try {
-    const docRef = doc(db, "bookings", id);
-    const updateData: Record<string, any> = {
-      refundDetails,
-      updatedAt: serverTimestamp(),
-    };
+    const fullyCancelledBookingIds = await runTransaction(database, async (tx) => {
+      const refs = selections.map(s => doc(database, "bookings", s.bookingId));
+      const snaps: DocumentSnapshot<DocumentData>[] = [];
+      for (const ref of refs) {
+        snaps.push(await tx.get(ref));
+      }
 
-    await updateDoc(docRef, updateData);
+      const counts = selections.map(s => new Set(s.passengerIndexes).size);
+      const split = (total?: number) =>
+        typeof total === "number" && !Number.isNaN(total) ? splitAmountByCounts(total, counts) : undefined;
+      const fareParts = split(details.fareCancelled);
+      const chargeParts = split(details.cancellationCharge);
+      const expectedParts = split(details.irctcRefund.expectedAmount);
+      const customerParts = split(details.customerRefund.amount);
 
-    const updatedDocSnap = await getDoc(docRef);
-    if (updatedDocSnap.exists()) {
-      return { success: true, booking: mapDocToBooking(updatedDocSnap, updatedDocSnap.id) };
-    }
-    return { success: false, error: "Failed to retrieve booking after update" };
+      const now = new Date().toISOString();
+      const linkId = selections.length > 1 ? generateLocalId("cg") : undefined;
+      const fullyCancelled: string[] = [];
+
+      selections.forEach((selection, i) => {
+        const snap = snaps[i];
+        if (!snap.exists()) {
+          throw new Error("Booking not found. It may have been deleted.");
+        }
+        const data = snap.data();
+        if (data.status !== "Booked") {
+          throw new Error(`Only booked tickets can be cancelled (the booking for ${data.userName} is "${data.status}").`);
+        }
+
+        const { passengers } = ensurePassengerPids(
+          Array.isArray(data.passengers) ? (data.passengers as Passenger[]) : []
+        );
+        const existing: BookingCancellation[] = Array.isArray(data.cancellations) ? data.cancellations : [];
+        const alreadyCancelled = new Set<string>();
+        existing.forEach(c => {
+          if (c.kind === "cancellation") c.passengerPids.forEach(pid => alreadyCancelled.add(pid));
+        });
+
+        const pickedPids: string[] = [];
+        const pickedNames: string[] = [];
+        selection.passengerIndexes.forEach((index, k) => {
+          const passenger = passengers[index];
+          if (!passenger || passenger.name !== selection.expectedNames[k]) {
+            throw new Error("This booking was changed on another device. Close the dialog and try again.");
+          }
+          const pid = passenger.pid as string;
+          if (alreadyCancelled.has(pid)) {
+            throw new Error(`${passenger.name} is already cancelled.`);
+          }
+          if (pickedPids.includes(pid)) return;
+          pickedPids.push(pid);
+          pickedNames.push(passenger.name);
+        });
+
+        const remaining = passengers.filter(
+          p => !alreadyCancelled.has(p.pid as string) && !pickedPids.includes(p.pid as string)
+        ).length;
+        const becomesFullyCancelled = remaining === 0;
+
+        const entry: BookingCancellation = stripUndefined({
+          id: generateLocalId("c"),
+          kind: "cancellation" as const,
+          passengerPids: pickedPids,
+          passengerNames: pickedNames,
+          cancelledOn: details.cancelledOn,
+          cancelledBy: details.cancelledBy?.trim(),
+          reason: details.reason?.trim(),
+          fareCancelled: fareParts?.[i],
+          cancellationCharge: chargeParts?.[i],
+          cancellationGroupId: linkId,
+          // Remembered so undoing this cancellation can restore who booked it.
+          previousStatusHandler: becomesFullyCancelled ? (data.statusHandler as string | undefined) : undefined,
+          irctcRefund: normalizeIrctcLeg({
+            status: details.irctcRefund.status,
+            recipientType: details.irctcRefund.recipientType,
+            recipientName: details.irctcRefund.recipientName?.trim(),
+            accountId: details.irctcRefund.accountId,
+            expectedAmount: expectedParts?.[i],
+          }),
+          customerRefund: normalizeCustomerLeg({
+            status: details.customerRefund.status,
+            recipientName: details.customerRefund.recipientName?.trim() || (data.userName as string | undefined),
+            amount: customerParts?.[i],
+          }),
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        const update: Record<string, any> = {
+          passengers,
+          cancellations: [...existing, entry],
+          updatedAt: serverTimestamp(),
+        };
+        if (becomesFullyCancelled) {
+          update.status = "CNF & Cancelled";
+          update.statusReason = details.reason?.trim() ? details.reason.trim() : deleteField();
+          if (details.cancelledBy?.trim()) {
+            update.statusHandler = details.cancelledBy.trim();
+          }
+          fullyCancelled.push(selection.bookingId);
+        }
+        tx.update(refs[i], update);
+      });
+
+      return fullyCancelled;
+    });
+
+    return { success: true, fullyCancelledBookingIds };
   } catch (error: any) {
-    console.error(`[Firestore Error] updateBookingRefundDetails (${id}):`, error);
-    return { success: false, error: error.message || "Failed to update refund details" };
+    console.error("[Firestore Error] cancelBookingPassengers:", error);
+    return { success: false, error: error.message || "Failed to cancel passengers" };
   }
 }
 
-export async function deleteBookingRefundDetails(
-  id: string
-): Promise<{ success: boolean; error?: string; booking?: Booking }> {
+/**
+ * Update a cancellation's details or either refund leg.
+ *
+ * Wallet rule: a refund of a real cancellation that is "Received" by an IRCTC
+ * wallet is added to that account's `walletAmount`. The amount applied is kept
+ * on the entry (`irctcRefund.walletCredited`), so any later change — amount,
+ * status, recipient — applies only the difference, and an undo reverses exactly
+ * what was credited.
+ */
+export async function updateBookingCancellation(
+  bookingId: string,
+  cancellationId: string,
+  patch: CancellationPatch
+): Promise<CancellationResult> {
   if (!db) {
     return { success: false, error: "Firestore database is not configured" };
   }
+  const database = db;
 
   try {
-    const docRef = doc(db, "bookings", id);
-    const updateData: Record<string, any> = {
-      refundDetails: deleteField(),
-      updatedAt: serverTimestamp(),
-    };
+    const warning = await runTransaction(database, async (tx) => {
+      const bookingRef = doc(database, "bookings", bookingId);
+      const bookingSnap = await tx.get(bookingRef);
+      if (!bookingSnap.exists()) {
+        throw new Error("Booking not found. It may have been deleted.");
+      }
+      const data = bookingSnap.data();
+      const { entries, isLegacy } = loadCancellationEntries(data);
+      const current = entries.find(e => e.id === cancellationId);
+      if (!current) {
+        throw new Error("This cancellation no longer exists. Refresh and try again.");
+      }
 
-    await updateDoc(docRef, updateData);
+      const { irctcRefund: irctcPatch, customerRefund: customerPatch, ...fields } = patch;
+      const next: BookingCancellation = {
+        ...current,
+        ...(fields.cancelledOn !== undefined ? { cancelledOn: fields.cancelledOn } : {}),
+        ...(fields.cancelledBy !== undefined ? { cancelledBy: fields.cancelledBy.trim() } : {}),
+        ...(fields.reason !== undefined ? { reason: fields.reason.trim() } : {}),
+        ...(fields.fareCancelled !== undefined ? { fareCancelled: fields.fareCancelled ?? undefined } : {}),
+        ...(fields.cancellationCharge !== undefined ? { cancellationCharge: fields.cancellationCharge ?? undefined } : {}),
+        irctcRefund: normalizeIrctcLeg({ ...(irctcPatch ?? current.irctcRefund) }),
+        customerRefund: normalizeCustomerLeg({ ...(customerPatch ?? current.customerRefund) }),
+        // A synthesised legacy entry gets a real id once it is stored.
+        id: current.id === LEGACY_CANCELLATION_ID ? generateLocalId("c") : current.id,
+        updatedAt: new Date().toISOString(),
+      };
 
-    const updatedDocSnap = await getDoc(docRef);
-    if (updatedDocSnap.exists()) {
-      return { success: true, booking: mapDocToBooking(updatedDocSnap, updatedDocSnap.id) };
-    }
-    return { success: false, error: "Failed to retrieve booking after delete" };
+      const previousCredit = Number(current.irctcRefund.walletCredited) || 0;
+      const previousAccountId = current.irctcRefund.accountId;
+      let nextCredit = computeWalletCredit(next);
+      const nextAccountId = next.irctcRefund.accountId;
+
+      const deltas = new Map<string, number>();
+      if (previousCredit > 0 && previousAccountId) {
+        deltas.set(previousAccountId, roundMoney((deltas.get(previousAccountId) || 0) - previousCredit));
+      }
+      if (nextCredit > 0 && nextAccountId) {
+        deltas.set(nextAccountId, roundMoney((deltas.get(nextAccountId) || 0) + nextCredit));
+      }
+
+      // Transactions need every read before the first write.
+      let missingAccount = false;
+      const accountWrites: Array<{ ref: ReturnType<typeof doc>; walletAmount: number }> = [];
+      for (const [accountId, delta] of deltas) {
+        const accountRef = doc(database, "irctcAccounts", accountId);
+        const accountSnap = await tx.get(accountRef);
+        if (!accountSnap.exists()) {
+          if (accountId === nextAccountId && nextCredit > 0) {
+            nextCredit = 0;
+            missingAccount = true;
+          }
+          continue;
+        }
+        if (delta === 0) continue;
+        const currentWallet = Number(accountSnap.data().walletAmount) || 0;
+        accountWrites.push({ ref: accountRef, walletAmount: roundMoney(currentWallet + delta) });
+      }
+
+      if (nextCredit > 0) {
+        next.irctcRefund.walletCredited = nextCredit;
+      } else {
+        delete next.irctcRefund.walletCredited;
+      }
+
+      accountWrites.forEach(({ ref, walletAmount }) => {
+        tx.update(ref, { walletAmount, updatedAt: serverTimestamp() });
+      });
+
+      const nextEntries = entries.map(e => (e.id === cancellationId ? stripUndefined(next) : e));
+      const bookingUpdate: Record<string, any> = {
+        cancellations: nextEntries,
+        updatedAt: serverTimestamp(),
+      };
+      if (isLegacy || data.refundDetails !== undefined) {
+        bookingUpdate.refundDetails = deleteField();
+      }
+      tx.update(bookingRef, bookingUpdate);
+
+      return missingAccount ? MISSING_ACCOUNT_WARNING : undefined;
+    });
+
+    return { success: true, warning };
   } catch (error: any) {
-    console.error(`[Firestore Error] deleteBookingRefundDetails (${id}):`, error);
-    return { success: false, error: error.message || "Failed to delete refund details" };
+    console.error(`[Firestore Error] updateBookingCancellation (${bookingId}):`, error);
+    return { success: false, error: error.message || "Failed to update refund" };
+  }
+}
+
+/**
+ * Reverse wallet credits for the given entries inside a transaction. Reads all
+ * affected accounts first (transaction rule) and returns the writes to apply.
+ */
+async function prepareWalletReversal(
+  tx: import("firebase/firestore").Transaction,
+  database: NonNullable<typeof db>,
+  entries: BookingCancellation[]
+): Promise<Array<{ ref: ReturnType<typeof doc>; walletAmount: number }>> {
+  const credits = new Map<string, number>();
+  entries.forEach(entry => {
+    const credited = Number(entry.irctcRefund.walletCredited) || 0;
+    const accountId = entry.irctcRefund.accountId;
+    if (credited > 0 && accountId) {
+      credits.set(accountId, roundMoney((credits.get(accountId) || 0) + credited));
+    }
+  });
+
+  const writes: Array<{ ref: ReturnType<typeof doc>; walletAmount: number }> = [];
+  for (const [accountId, credited] of credits) {
+    const accountRef = doc(database, "irctcAccounts", accountId);
+    const accountSnap = await tx.get(accountRef);
+    if (!accountSnap.exists()) continue; // account deleted — nothing left to reverse
+    const currentWallet = Number(accountSnap.data().walletAmount) || 0;
+    writes.push({ ref: accountRef, walletAmount: roundMoney(currentWallet - credited) });
+  }
+  return writes;
+}
+
+/**
+ * Undo a cancellation: its passengers travel again, any wallet credit from its
+ * refund is reversed, and a booking that had become "CNF & Cancelled" goes
+ * back to "Booked".
+ */
+export async function deleteBookingCancellation(
+  bookingId: string,
+  cancellationId: string
+): Promise<CancellationResult> {
+  if (!db) {
+    return { success: false, error: "Firestore database is not configured" };
+  }
+  const database = db;
+
+  try {
+    await runTransaction(database, async (tx) => {
+      const bookingRef = doc(database, "bookings", bookingId);
+      const bookingSnap = await tx.get(bookingRef);
+      if (!bookingSnap.exists()) {
+        throw new Error("Booking not found. It may have been deleted.");
+      }
+      const data = bookingSnap.data();
+      const { entries } = loadCancellationEntries(data);
+      const target = entries.find(e => e.id === cancellationId);
+      if (!target) {
+        throw new Error("This cancellation no longer exists. Refresh and try again.");
+      }
+      if (target.kind !== "cancellation") {
+        throw new Error("A failed payment cannot be undone here. Change the booking status instead.");
+      }
+
+      const walletWrites = await prepareWalletReversal(tx, database, [target]);
+      walletWrites.forEach(({ ref, walletAmount }) => {
+        tx.update(ref, { walletAmount, updatedAt: serverTimestamp() });
+      });
+
+      const remaining = entries.filter(e => e.id !== cancellationId);
+      const bookingUpdate: Record<string, any> = {
+        cancellations: remaining.length > 0 ? remaining : deleteField(),
+        refundDetails: deleteField(),
+        updatedAt: serverTimestamp(),
+      };
+      if (data.status === "CNF & Cancelled") {
+        bookingUpdate.status = "Booked";
+        bookingUpdate.statusReason = deleteField();
+        bookingUpdate.statusHandler = target.previousStatusHandler || deleteField();
+      }
+      tx.update(bookingRef, bookingUpdate);
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    console.error(`[Firestore Error] deleteBookingCancellation (${bookingId}):`, error);
+    return { success: false, error: error.message || "Failed to undo cancellation" };
+  }
+}
+
+/**
+ * Remove every cancellation (and the legacy `refundDetails`) from a booking,
+ * reversing all wallet credits. Used before a booking goes back to "Requested":
+ * deleting the booking record then returns the full fare to the wallet, so any
+ * refund already credited must be taken back first or it would be counted twice.
+ * Does not change the booking status.
+ */
+export async function clearBookingCancellations(bookingId: string): Promise<CancellationResult> {
+  if (!db) {
+    return { success: false, error: "Firestore database is not configured" };
+  }
+  const database = db;
+
+  try {
+    await runTransaction(database, async (tx) => {
+      const bookingRef = doc(database, "bookings", bookingId);
+      const bookingSnap = await tx.get(bookingRef);
+      if (!bookingSnap.exists()) return;
+      const data = bookingSnap.data();
+      const { entries } = loadCancellationEntries(data);
+      if (entries.length === 0 && data.refundDetails === undefined && data.cancellations === undefined) return;
+
+      const walletWrites = await prepareWalletReversal(tx, database, entries);
+      walletWrites.forEach(({ ref, walletAmount }) => {
+        tx.update(ref, { walletAmount, updatedAt: serverTimestamp() });
+      });
+      tx.update(bookingRef, {
+        cancellations: deleteField(),
+        refundDetails: deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    console.error(`[Firestore Error] clearBookingCancellations (${bookingId}):`, error);
+    return { success: false, error: error.message || "Failed to clear cancellations" };
   }
 }
 

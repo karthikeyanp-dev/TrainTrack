@@ -7,9 +7,9 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "./StatusBadge";
-import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X, CreditCard, Receipt, Loader2, ArrowRight, Sparkles } from "lucide-react";
+import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X, CreditCard, ArrowRight, Sparkles } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { updateBookingStatus, deleteBooking, getBookingRecordByBookingId, deleteBookingRefundDetails, deleteBookingRecord, updateBookingPaymentTracking, updateBookingRefundDetails } from "@/lib/firestoreClient";
+import { updateBookingStatus, deleteBooking, getBookingRecordByBookingId, deleteBookingRecord, updateBookingPaymentTracking, clearBookingCancellations } from "@/lib/firestoreClient";
 import type { BookingRecord } from "@/types/bookingRecord";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -45,10 +45,9 @@ import { cn } from "@/lib/utils";
 import { BookingRequirementsSheet } from "./BookingRequirementsSheet";
 import { BookingRecordForm } from "./BookingRecordForm";
 import { StatusReasonDialog } from "./StatusReasonDialog";
-import { getAccountByUsername, updateAccount } from "@/lib/accountsClient";
-
-import type { RefundDetails } from "@/types/booking";
-import { Input } from "@/components/ui/input";
+import { CancellationsPanel } from "./CancellationsPanel";
+import { CancelPassengersDialog } from "./CancelPassengersDialog";
+import { getActivePassengers, getCancellations, getCancelledPids, isPartiallyCancelled, isPassengerCancelled } from "@/lib/cancellations";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Switch } from "@/components/ui/switch";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
@@ -95,15 +94,15 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
   const [showRecordForm, setShowRecordForm] = useState(false);
   const [showBookedDetailsDialog, setShowBookedDetailsDialog] = useState(false);
   const [showReasonDialog, setShowReasonDialog] = useState(false);
-  const [showRefundDialog, setShowRefundDialog] = useState(false);
   const [bookingRecord, setBookingRecord] = useState<BookingRecord | null>(null);
 
-  // Refund state
-  const [refundAmount, setRefundAmount] = useState("");
-  const [refundDate, setRefundDate] = useState(new Date().toISOString().split('T')[0]);
-  const [isProcessingRefund, setIsProcessingRefund] = useState(false);
+  // Cancellation dialog: `all` pre-ticks every travelling passenger (full cancel).
+  const [cancelDialog, setCancelDialog] = useState<{ open: boolean; all: boolean }>({ open: false, all: false });
 
-  const [showRefundDeleteDialog, setShowRefundDeleteDialog] = useState(false);
+  const cancellations = getCancellations(booking);
+  const cancelledPids = getCancelledPids(booking);
+  const activePassengers = getActivePassengers(booking);
+  const partiallyCancelled = isPartiallyCancelled(booking);
 
   const fetchBookingRecord = useCallback(async () => {
     try {
@@ -277,6 +276,10 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
       // Show the booked details dialog
       setStatusToConfirm(newStatus as BookingStatus);
       setShowBookedDetailsDialog(true);
+    } else if (newStatus === "CNF & Cancelled" && booking.status === "Booked") {
+      // Cancelling a confirmed ticket goes through the cancellation dialog (all
+      // travelling passengers pre-ticked) so the refund is captured with it.
+      setCancelDialog({ open: true, all: true });
     } else if (newStatus === "Missed" || newStatus === "CNF & Cancelled" || newStatus === "User Cancelled") {
       // Show reason dialog for Missed and Cancelled statuses
       setStatusToConfirm(newStatus as BookingStatus);
@@ -313,6 +316,17 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
       // If reverting to "Requested", delete booking record and clear reason/handler
       if (statusToConfirm === "Requested" && booking.status !== "Requested") {
         try {
+          // Take back any refund already credited to a wallet before the booking
+          // record is deleted: that delete returns the full fare to the wallet,
+          // so leaving the refund in place would count the money twice.
+          if (cancellations.length > 0 || booking.refundDetails) {
+            const clearResult = await clearBookingCancellations(booking.id);
+            if (!clearResult.success) {
+              throw new Error(clearResult.error || "Could not clear the cancellation details");
+            }
+            queryClient.invalidateQueries({ queryKey: ["accounts"] });
+          }
+
           // Delete booking record if it exists
           if (bookingRecord) {
             const deleteResult = await deleteBookingRecord(bookingRecord.id);
@@ -361,143 +375,6 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
     router.push(`/bookings/edit?id=${booking.id}`);
   };
 
-  const handleRefundClick = () => {
-    if (bookingRecord) {
-      // Pre-fill amount if available (though usually partial refunds, so maybe empty is better or full amount)
-      // Let's leave amount empty for user to input
-      setRefundAmount("");
-      setRefundDate(new Date().toISOString().split('T')[0]);
-      setShowRefundDialog(true);
-    } else {
-      toast({
-        title: "Missing Details",
-        description: "No booking record found. Cannot process refund without payment details.",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleEditRefund = () => {
-    if (booking.refundDetails) {
-      setRefundAmount(booking.refundDetails.amount.toString());
-      setRefundDate(booking.refundDetails.date);
-      setShowRefundDialog(true);
-    }
-  };
-
-  const handleDeleteRefund = async () => {
-    setIsProcessingRefund(true);
-    try {
-      // 1. If original payment was Wallet, revert the amount (deduct from wallet)
-      if (booking.refundDetails?.method === "Wallet" && booking.refundDetails.accountId) {
-        const accountId = booking.refundDetails.accountId;
-        // We need to fetch the account first to get current balance
-        // Since we don't have getAccountById, we can try to find it via username if we have it, 
-        // OR we just use updateAccount which merges. But we need current balance to subtract.
-        // Wait, the accountId IS the document ID in Firestore.
-        // We can fetch the account by ID (if we had a method) or just rely on the fact that we have the account details in preparedAccounts or bookingRecord?
-        // Actually, we stored accountId in refundDetails. 
-        // We need a way to get account by ID to read balance.
-        // Let's assume we can fetch all accounts and find it, or add getAccountById.
-        // For now, let's use the accountsClient's updateAccount but we need the current balance.
-        // Let's fetch all accounts (cached usually) or add a helper. 
-        // Or better, let's just use the bookingRecord which has the username, and fetch by username.
-
-        // If we have bookingRecord loaded
-        if (bookingRecord) {
-          const account = await getAccountByUsername(bookingRecord.bookedAccountUsername);
-          if (account) {
-            const currentBalance = account.walletAmount;
-            const refundAmount = booking.refundDetails.amount;
-            const newBalance = currentBalance - refundAmount;
-
-            if (newBalance < 0) {
-              // Warning? But we must revert.
-              console.warn("Reverting refund results in negative balance.");
-            }
-
-            await updateAccount(account.id, { walletAmount: newBalance });
-          }
-        }
-      }
-
-      // 2. Delete refund details from booking
-      const result = await deleteBookingRefundDetails(booking.id);
-      if (!result.success) throw new Error(result.error);
-
-      toast({ title: "Refund Deleted", description: "Refund record removed and wallet balance reverted (if applicable)." });
-      setShowRefundDeleteDialog(false);
-      queryClient.invalidateQueries({ queryKey: ["bookings"] });
-      queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message || "Failed to delete refund", variant: "destructive" });
-    } finally {
-      setIsProcessingRefund(false);
-    }
-  };
-
-  const handleRefundConfirm = async () => {
-    if (!bookingRecord) return;
-
-    const amount = Number(refundAmount);
-    if (isNaN(amount) || amount <= 0) {
-      toast({ title: "Invalid Amount", description: "Please enter a valid refund amount", variant: "destructive" });
-      return;
-    }
-
-    setIsProcessingRefund(true);
-    try {
-      const account = await getAccountByUsername(bookingRecord.bookedAccountUsername);
-
-      // 1. If Wallet, update account balance
-      // Logic for EDIT vs NEW
-      if (bookingRecord.methodUsed === "Wallet" && account) {
-        let newWalletAmount = account.walletAmount;
-
-        if (booking.refundDetails) {
-          // EDIT MODE: 
-          // First, revert the OLD refund amount
-          newWalletAmount -= booking.refundDetails.amount;
-          // Then, add the NEW refund amount
-          newWalletAmount += amount;
-        } else {
-          // NEW MODE: Just add the refund amount
-          newWalletAmount += amount;
-        }
-
-        const accountResult = await updateAccount(account.id, { walletAmount: newWalletAmount });
-        if (!accountResult.success) throw new Error(accountResult.error);
-      }
-
-      // 2. Update Booking with refund details
-      const accountId = account ? account.id : "unknown_account";
-
-      const refundDetails: RefundDetails = {
-        amount,
-        date: refundDate,
-        method: bookingRecord.methodUsed,
-        accountId: accountId
-      };
-
-      const bookingResult = await updateBookingRefundDetails(booking.id, refundDetails);
-      if (!bookingResult.success) throw new Error(bookingResult.error);
-
-      toast({
-        title: "Refund Processed",
-        description: bookingRecord.methodUsed === "Wallet"
-          ? "Wallet balance updated and refund saved."
-          : "Refund details saved successfully."
-      });
-      setShowRefundDialog(false);
-      queryClient.invalidateQueries({ queryKey: ["bookings"] });
-      queryClient.invalidateQueries({ queryKey: ['booking', booking.id] });
-    } catch (error: any) {
-      toast({ title: "Error", description: error.message || "Failed to process refund", variant: "destructive" });
-    } finally {
-      setIsProcessingRefund(false);
-    }
-  };
-
   const handleCopy = () => {
     router.push(`/bookings/new?copyFrom=${booking.id}`);
   };
@@ -516,7 +393,8 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
     const passengerDetailsText = booking.passengers.map((p, index) => {
       const isChild = p.age >= 5 && p.age <= 11;
       const berthInfo = isChild ? (p.berthRequired ? ' [Berth Required]' : ' [No Berth]') : '';
-      return `${index + 1}. ${p.name} ${p.age} ${p.gender.toUpperCase()}${berthInfo}`;
+      const cancelledInfo = partiallyCancelled && isPassengerCancelled(booking, p, cancelledPids) ? ' [CANCELLED]' : '';
+      return `${index + 1}. ${p.name} ${p.age} ${p.gender.toUpperCase()}${berthInfo}${cancelledInfo}`;
     }).join('\n');
     const formattedJourney = formatDate(booking.journeyDate);
     const journeyDateFormatted = formattedJourney !== "N/A" ? formattedJourney : (booking.journeyDate || "N/A");
@@ -811,6 +689,15 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                       Grouped
                     </span>
                   )}
+                  {partiallyCancelled && (
+                    <span
+                      className="ml-1.5 inline-flex items-center gap-1 rounded-full border px-1.5 py-0.2 text-[10px] sm:text-xs font-semibold border-orange-500/30 bg-orange-500/15 text-orange-700 dark:text-orange-300 whitespace-nowrap"
+                      title={`${booking.passengers.length - activePassengers.length} of ${booking.passengers.length} passengers cancelled`}
+                    >
+                      <UserX className="h-3 w-3" />
+                      Partly cancelled
+                    </span>
+                  )}
                 </CardDescription>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   <span
@@ -908,16 +795,21 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                   <Users className="h-3.5 w-3.5" />
                 </div>
                 <div className="text-[11px] font-bold tracking-wider text-muted-foreground uppercase">
-                  PASSENGERS ({booking.passengers.length})
+                  {partiallyCancelled
+                    ? `PASSENGERS (${activePassengers.length} of ${booking.passengers.length} travelling)`
+                    : `PASSENGERS (${booking.passengers.length})`}
                 </div>
               </div>
               <div className="space-y-0.5 text-xs sm:text-sm font-semibold pl-7 pt-1">
                     {[...booking.passengers].sort((a, b) => a.name.localeCompare(b.name)).map((passenger, index) => {
                       const isChild = passenger.age >= 5 && passenger.age <= 11;
+                      // Only mark individual passengers while part of the ticket is still
+                      // valid; a fully cancelled booking already says so in its status.
+                      const isCancelled = partiallyCancelled && isPassengerCancelled(booking, passenger, cancelledPids);
                       return (
-                        <div key={index} className="flex items-center gap-1.5 flex-wrap">
+                        <div key={index} className={cn("flex items-center gap-1.5 flex-wrap", isCancelled && "opacity-70")}>
                           <span className="text-muted-foreground font-normal">{index + 1}.</span>
-                          <span className="text-foreground select-all">{passenger.name}</span>
+                          <span className={cn("text-foreground select-all", isCancelled && "line-through")}>{passenger.name}</span>
                           <span className="text-muted-foreground/40 select-none">•</span>
                           <span className="text-amber-500 dark:text-amber-400">{passenger.age}</span>
                           <span className="text-muted-foreground/40 select-none">•</span>
@@ -934,6 +826,12 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                                 No Berth
                               </span>
                             )
+                          )}
+                          {isCancelled && (
+                            <span className="inline-flex items-center gap-0.5 text-[10px] bg-orange-500/15 text-orange-700 dark:text-orange-300 px-1.5 py-0.5 rounded-full font-medium whitespace-nowrap">
+                              <UserX className="h-2.5 w-2.5" />
+                              Cancelled
+                            </span>
                           )}
                         </div>
                       );
@@ -957,39 +855,8 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             </div>
           )}
 
-          {booking.refundDetails && (
-            <div className="flex items-start gap-2 bg-green-50 dark:bg-green-900/20 rounded-md p-2 border border-green-200 dark:border-green-900 relative">
-              <Receipt className="h-4 w-4 text-green-600 dark:text-green-500 mt-0.5" />
-              <span className="flex-1">
-                <span className="font-semibold text-green-700 dark:text-green-500">Refund Received:</span>
-                <span className="block mt-0.5 text-sm">
-                  ₹{booking.refundDetails.amount} on {formatDate(booking.refundDetails.date)}
-                </span>
-                <span className="block text-xs text-muted-foreground">
-                  via {booking.refundDetails.method}
-                </span>
-              </span>
-              <div className="flex flex-col gap-1">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 text-muted-foreground hover:text-foreground"
-                  onClick={handleEditRefund}
-                  title="Edit Refund"
-                >
-                  <Edit3 className="h-3 w-3" />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-6 w-6 text-destructive hover:text-destructive hover:bg-destructive/10"
-                  onClick={() => setShowRefundDeleteDialog(true)}
-                  title="Delete Refund"
-                >
-                  <Trash2 className="h-3 w-3" />
-                </Button>
-              </div>
-            </div>
+          {cancellations.length > 0 && (
+            <CancellationsPanel booking={booking} record={bookingRecord} readOnly={selectionMode} />
           )}
 
           {/* Prepared Accounts Accordion */}
@@ -1195,16 +1062,16 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                     <Share2 className="h-4 w-4" />
                   </Button>
 
-                  {/* Show Refund Button if applicable */}
-                  {((booking.status === "Booking Failed (Paid)" || booking.status === "CNF & Cancelled") && !booking.refundDetails) && (
+                  {/* Cancel some or all passengers of a confirmed ticket */}
+                  {booking.status === "Booked" && activePassengers.length > 0 && (
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={handleRefundClick}
-                      className="flex-1 aspect-square p-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:hover:bg-blue-900/20"
-                      title="Process Refund"
+                      onClick={() => setCancelDialog({ open: true, all: false })}
+                      className="flex-1 aspect-square p-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                      title="Cancel passengers"
                     >
-                      <Receipt className="h-4 w-4" />
+                      <UserX className="h-4 w-4" />
                     </Button>
                   )}
 
@@ -1220,16 +1087,8 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                   </Button>
                 </div>
               ) : (
-                <div className="flex gap-1.5">
-                  <Button
-                    variant="default"
-                    size="sm"
-                    onClick={booking.refundDetails ? handleEditRefund : handleRefundClick}
-                    className="flex-1"
-                  >
-                    <Receipt className="mr-2 h-4 w-4" />
-                    {booking.refundDetails ? "Update Refund" : "Process Refund"}
-                  </Button>
+                // Refunds tab: the refund actions live in the cancellations panel above.
+                <div className="flex justify-end gap-1.5">
                   <Button
                     variant="outline"
                     size="sm"
@@ -1361,6 +1220,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                       from {booking.source.toUpperCase()} to {booking.destination.toUpperCase()} for {booking.userName}?
                       <span className="block mt-2 font-medium text-amber-600 dark:text-amber-500">
                         This will clear the status reason, handler, and booked details (if any), returning the booking to pending state.
+                        {cancellations.length > 0 && " Cancellation and refund details are removed too, and any refund added to a wallet balance is taken back."}
                       </span>
                     </>
                   ) : (
@@ -1407,95 +1267,13 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             </DialogContent>
           </Dialog>
 
-          <Dialog open={showRefundDialog} onOpenChange={setShowRefundDialog}>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Process Refund</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                {bookingRecord && (
-                  <div className="bg-muted/50 p-3 rounded-md text-sm space-y-2">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <span className="text-muted-foreground block text-xs">Payment Method</span>
-                        <span className="font-medium">{bookingRecord.methodUsed}</span>
-                      </div>
-                      <div>
-                        <span className="text-muted-foreground block text-xs">Account</span>
-                        <span className="font-medium">{bookingRecord.bookedAccountUsername}</span>
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground block text-xs">Original Amount</span>
-                      <span className="font-medium">₹{bookingRecord.amountCharged}</span>
-                    </div>
-                    {bookingRecord.methodUsed === "Wallet" && (
-                      <div className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-1 mt-1">
-                        <Info className="h-3 w-3" />
-                        Refund will be credited back to wallet
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <Label htmlFor="refund-amount">Refund Amount (₹)</Label>
-                  <Input
-                    id="refund-amount"
-                    type="number"
-                    placeholder="e.g. 1200"
-                    value={refundAmount}
-                    onChange={(e) => setRefundAmount(e.target.value)}
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="refund-date">Date Received</Label>
-                  <Input
-                    id="refund-date"
-                    type="date"
-                    value={refundDate}
-                    onChange={(e) => setRefundDate(e.target.value)}
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowRefundDialog(false)}>Cancel</Button>
-                <Button onClick={handleRefundConfirm} disabled={isProcessingRefund}>
-                  {isProcessingRefund ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Receipt className="mr-2 h-4 w-4" />}
-                  Confirm Refund
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
-
-          <AlertDialog open={showRefundDeleteDialog} onOpenChange={setShowRefundDeleteDialog}>
-            <AlertDialogContent>
-              <AlertDialogHeader>
-                <AlertDialogTitle>Delete Refund Details?</AlertDialogTitle>
-                <AlertDialogDescription>
-                  This will remove the refund record from this booking.
-                  {booking.refundDetails?.method === "Wallet" && (
-                    <span className="block mt-2 font-medium text-destructive">
-                      Note: This will also revert (deduct) the refunded amount of ₹{booking.refundDetails.amount} from the wallet.
-                    </span>
-                  )}
-                </AlertDialogDescription>
-              </AlertDialogHeader>
-              <AlertDialogFooter>
-                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                <AlertDialogAction
-                  onClick={handleDeleteRefund}
-                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                  disabled={isProcessingRefund}
-                >
-                  {isProcessingRefund ? "Deleting..." : "Delete Refund"}
-                </AlertDialogAction>
-              </AlertDialogFooter>
-            </AlertDialogContent>
-          </AlertDialog>
+          <CancelPassengersDialog
+            open={cancelDialog.open}
+            onOpenChange={(open) => setCancelDialog(prev => ({ ...prev, open }))}
+            bookings={[booking]}
+            record={bookingRecord}
+            preselectAll={cancelDialog.all}
+          />
 
           <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
             <AlertDialogContent>
