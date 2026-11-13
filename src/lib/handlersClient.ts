@@ -698,15 +698,38 @@ export interface HandlerBookingBreakdownItem {
   cost: number;
   commission: number;
   methodUsed: string;
+  /** True when a settlement was recorded after this booking record was created */
+  settled: boolean;
+  /** YYYY-MM-DD date of the settlement that covered this booking (when settled) */
+  settledOn?: string;
 }
 
 /**
- * The per-booking rows behind a handler's outstanding balance, limited to the
- * current and previous month — settlements happen weekly/bi-weekly, so older
- * bookings are not needed for reference. Within that window the rows are
- * exactly the booking records summed into `paymentTotals` by
- * getHandlerStatsForHandlers, joined with their source bookings for passenger
- * names.
+ * Settlements are full-balance repayments, so recording one settles every
+ * booking the handler had made up to that moment. A booking record is settled
+ * when some settlement payment was recorded (payment.createdAt) at or after the
+ * record's createdAt; bookings recorded later stay outstanding until the next
+ * settlement. Derived rather than stored, so deleting a settlement payment
+ * automatically returns its bookings to outstanding.
+ */
+function getSettlementCutoffs(handler: Handler): { at: number; date: string }[] {
+  return (handler.payments || [])
+    .filter(p => p.type === "settlement")
+    .map(p => {
+      const at = new Date(p.createdAt).getTime();
+      return { at, date: p.date || p.createdAt.split("T")[0] };
+    })
+    .filter(c => !isNaN(c.at))
+    .sort((a, b) => a.at - b.at);
+}
+
+/**
+ * The per-booking rows behind a handler's outstanding balance. Outstanding
+ * (unsettled) bookings are always included; settled ones only from the current
+ * and previous month — settlements happen weekly/bi-weekly, so older settled
+ * bookings are not needed for reference. The rows are exactly the booking
+ * records summed into `paymentTotals` by getHandlerStatsForHandlers, joined
+ * with their source bookings for passenger names.
  */
 export async function getHandlerBookingBreakdown(
   handler: Handler
@@ -723,10 +746,11 @@ export async function getHandlerBookingBreakdown(
       ? new Date(handler.trackingStartDate)
       : HANDLER_PAYMENT_TRACKING_START_DATE;
     const handlerName = handler.name.toLowerCase().trim();
+    const settlementCutoffs = getSettlementCutoffs(handler);
 
     // Settlement reference window: first day of the previous month, so the
-    // breakdown lists only recent bookings. Bucketed by the 'Book by' date
-    // (bookingDate, falling back to createdAt) like the rest of the app.
+    // breakdown lists only recent settled bookings. Bucketed by the 'Book by'
+    // date (bookingDate, falling back to createdAt) like the rest of the app.
     const now = new Date();
     const windowStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const windowStartStr = `${windowStart.getFullYear()}-${String(windowStart.getMonth() + 1).padStart(2, "0")}-01`;
@@ -745,6 +769,7 @@ export async function getHandlerBookingBreakdown(
       cost: number;
       commission: number;
       methodUsed: string;
+      settledOn?: string;
     };
     const rows: Row[] = [];
     const bookingIdSet = new Set<string>();
@@ -765,8 +790,13 @@ export async function getHandlerBookingBreakdown(
         typeof data.bookingDate === "string" && data.bookingDate
           ? data.bookingDate
           : createdAt.toISOString().split("T")[0];
-      // YYYY-MM-DD strings order correctly lexicographically.
-      if (bookingDate < windowStartStr) return;
+
+      // The earliest settlement recorded at/after this booking record covers it.
+      const settledBy = settlementCutoffs.find(c => c.at >= createdAt.getTime());
+
+      // Settled bookings older than the window are hidden; outstanding ones are
+      // always listed. YYYY-MM-DD strings order correctly lexicographically.
+      if (settledBy && bookingDate < windowStartStr) return;
 
       const bookingIds: string[] =
         Array.isArray(data.bookingIds) && data.bookingIds.length > 0
@@ -782,6 +812,7 @@ export async function getHandlerBookingBreakdown(
         cost,
         commission,
         methodUsed: typeof data.methodUsed === "string" ? data.methodUsed : "Others",
+        settledOn: settledBy?.date,
       });
       bookingIds.forEach(id => bookingIdSet.add(id));
     });
@@ -818,6 +849,8 @@ export async function getHandlerBookingBreakdown(
         cost: row.cost,
         commission: row.commission,
         methodUsed: row.methodUsed,
+        settled: !!row.settledOn,
+        settledOn: row.settledOn,
       }))
       .sort((a, b) => b.bookingDate.localeCompare(a.bookingDate));
   } catch (error) {
