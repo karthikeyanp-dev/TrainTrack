@@ -220,6 +220,14 @@ export function AccountCard({
                 />
               </span>
             )}
+            {account.isRailOneRegistered && (
+              <span title="RailOne registered">
+                <CheckCircle2
+                  className="h-4 w-4 shrink-0 fill-blue-500 text-white"
+                  aria-label="RailOne Registered"
+                />
+              </span>
+            )}
 
             <div className="ml-auto flex shrink-0 items-center gap-0.5">
               <Tooltip>

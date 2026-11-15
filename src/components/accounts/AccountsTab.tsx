@@ -52,6 +52,7 @@ interface AccountFormState {
   username: string;
   password: string;
   isVerified: boolean;
+  isRailOneRegistered: boolean;
   walletAmount: string;
   lastBookedDate: string;
 }
@@ -208,6 +209,7 @@ function AccountsManager({ searchQuery, takenFilter }: { searchQuery: string; ta
     username: "",
     password: "",
     isVerified: false,
+    isRailOneRegistered: false,
     walletAmount: "",
     lastBookedDate: "",
   });
@@ -216,6 +218,7 @@ function AccountsManager({ searchQuery, takenFilter }: { searchQuery: string; ta
     username: "",
     password: "",
     isVerified: false,
+    isRailOneRegistered: false,
     walletAmount: "",
     lastBookedDate: "",
   });
@@ -278,6 +281,7 @@ function AccountsManager({ searchQuery, takenFilter }: { searchQuery: string; ta
       username: form.username.trim(),
       password: form.password.trim(),
       isVerified: form.isVerified,
+      isRailOneRegistered: form.isRailOneRegistered,
       walletAmount: walletAmountNum,
       lastBookedDate: form.lastBookedDate || "",
     });
@@ -294,6 +298,7 @@ function AccountsManager({ searchQuery, takenFilter }: { searchQuery: string; ta
         username: "",
         password: "",
         isVerified: false,
+        isRailOneRegistered: false,
         walletAmount: "",
         lastBookedDate: "",
       });
@@ -396,6 +401,7 @@ function AccountsManager({ searchQuery, takenFilter }: { searchQuery: string; ta
       username: account.username,
       password: account.password,
       isVerified: account.isVerified ?? false,
+      isRailOneRegistered: account.isRailOneRegistered ?? false,
       walletAmount: account.walletAmount.toString(),
       lastBookedDate: account.lastBookedDate || "",
     });
@@ -436,6 +442,7 @@ function AccountsManager({ searchQuery, takenFilter }: { searchQuery: string; ta
       username: editForm.username.trim(),
       password: editForm.password.trim(),
       isVerified: editForm.isVerified,
+      isRailOneRegistered: editForm.isRailOneRegistered,
       walletAmount: walletAmountNum,
       lastBookedDate: editForm.lastBookedDate || "",
     });
@@ -446,6 +453,7 @@ function AccountsManager({ searchQuery, takenFilter }: { searchQuery: string; ta
         username: editForm.username.trim(),
         password: editForm.password.trim(),
         isVerified: editForm.isVerified,
+        isRailOneRegistered: editForm.isRailOneRegistered,
         walletAmount: walletAmountNum,
         lastBookedDate: editForm.lastBookedDate || "",
       };
@@ -577,14 +585,25 @@ function AccountsManager({ searchQuery, takenFilter }: { searchQuery: string; ta
                 />
               </div>
 
-              <div className="flex items-center gap-2">
-                <Checkbox
-                  id="isVerified"
-                  checked={form.isVerified}
-                  onCheckedChange={(checked) => setForm(prev => ({ ...prev, isVerified: checked === true }))}
-                  disabled={isSubmitting}
-                />
-                <Label htmlFor="isVerified" className="cursor-pointer">Verified</Label>
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="isVerified"
+                    checked={form.isVerified}
+                    onCheckedChange={(checked) => setForm(prev => ({ ...prev, isVerified: checked === true }))}
+                    disabled={isSubmitting}
+                  />
+                  <Label htmlFor="isVerified" className="cursor-pointer">Verified</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="isRailOneRegistered"
+                    checked={form.isRailOneRegistered}
+                    onCheckedChange={(checked) => setForm(prev => ({ ...prev, isRailOneRegistered: checked === true }))}
+                    disabled={isSubmitting}
+                  />
+                  <Label htmlFor="isRailOneRegistered" className="cursor-pointer">RailOne Registered</Label>
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -920,14 +939,25 @@ function AccountsManager({ searchQuery, takenFilter }: { searchQuery: string; ta
               />
             </div>
 
-            <div className="flex items-center gap-2">
-              <Checkbox
-                id="edit-isVerified"
-                checked={editForm.isVerified}
-                onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, isVerified: checked === true }))}
-                disabled={isSubmitting}
-              />
-              <Label htmlFor="edit-isVerified" className="cursor-pointer">Verified</Label>
+            <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="edit-isVerified"
+                  checked={editForm.isVerified}
+                  onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, isVerified: checked === true }))}
+                  disabled={isSubmitting}
+                />
+                <Label htmlFor="edit-isVerified" className="cursor-pointer">Verified</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Checkbox
+                  id="edit-isRailOneRegistered"
+                  checked={editForm.isRailOneRegistered}
+                  onCheckedChange={(checked) => setEditForm(prev => ({ ...prev, isRailOneRegistered: checked === true }))}
+                  disabled={isSubmitting}
+                />
+                <Label htmlFor="edit-isRailOneRegistered" className="cursor-pointer">RailOne Registered</Label>
+              </div>
             </div>
 
             <div className="space-y-2">
