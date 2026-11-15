@@ -26,10 +26,12 @@ import {
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { useHandlers } from "@/hooks/useHandlers";
+import { useBookings } from "@/hooks/useBookings";
 import { cn } from "@/lib/utils";
 import { getAccountByUsername } from "@/lib/accountsClient";
 import { cancelBookingPassengers, type CancellationSelection } from "@/lib/firestoreClient";
 import {
+  countTicketPassengers,
   formatRupees,
   getCancelledPids,
   getDefaultRecipient,
@@ -48,8 +50,12 @@ interface CancelPassengersDialogProps {
   onOpenChange: (open: boolean) => void;
   /** The booking to cancel from — or every booking of a group (one PNR). */
   bookings: Booking[];
-  /** Booked details covering these bookings; used to suggest the fare and the refund recipient. */
-  record: Pick<BookingRecord, "bookedBy" | "bookedAccountUsername" | "methodUsed" | "amountCharged" | "bookedAmount"> | null;
+  /**
+   * Booked details covering these bookings; used to suggest the fare and the
+   * refund recipient. A group record's `bookingIds` makes the fare share count
+   * every passenger on the ticket, not only those of the bookings passed in.
+   */
+  record: Pick<BookingRecord, "bookedBy" | "bookedAccountUsername" | "methodUsed" | "amountCharged" | "bookedAmount" | "bookingIds"> | null;
   /** Start with every travelling passenger ticked (cancelling the whole ticket). */
   preselectAll?: boolean;
 }
@@ -77,6 +83,7 @@ export function CancelPassengersDialog({ open, onOpenChange, bookings, record, p
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { data: handlers = [] } = useHandlers();
+  const { data: allBookings } = useBookings();
   const [isSaving, setIsSaving] = useState(false);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -119,7 +126,13 @@ export function CancelPassengersDialog({ open, onOpenChange, bookings, record, p
 
   const allRows = useMemo(() => rowsByBooking.flatMap(group => group.rows), [rowsByBooking]);
   const selectableRows = useMemo(() => allRows.filter(row => row.selectable), [allRows]);
-  const totalPassengers = allRows.length;
+  // Everyone the record's fare covers, including group members not passed in
+  // (e.g. one already fully cancelled and moved to Refunds).
+  const recordMemberIds = record?.bookingIds;
+  const ticketPassengers = useMemo(
+    () => countTicketPassengers(bookings, { bookingIds: recordMemberIds }, allBookings),
+    [bookings, recordMemberIds, allBookings]
+  );
 
   // Reset the form each time the dialog opens.
   useEffect(() => {
@@ -143,7 +156,7 @@ export function CancelPassengersDialog({ open, onOpenChange, bookings, record, p
   const selectedCount = selectableRows.filter(row => selected.has(row.key)).length;
   const allSelected = selectableRows.length > 0 && selectedCount === selectableRows.length;
 
-  const suggestedFare = suggestFareShare(record, totalPassengers, selectedCount);
+  const suggestedFare = suggestFareShare(record, ticketPassengers, selectedCount);
   const fareText = fareOverride ?? toAmountText(suggestedFare);
   const fare = parseAmountInput(fareText);
   const charge = parseAmountInput(chargeText);
@@ -418,7 +431,7 @@ export function CancelPassengersDialog({ open, onOpenChange, bookings, record, p
           </div>
           {suggestedFare > 0 && fareOverride === null && (
             <p className="-mt-2 text-[11px] text-muted-foreground">
-              Fare suggested as {selectedCount} of {totalPassengers} passengers&apos; share of the ticket fare. Commission is kept.
+              Fare suggested as {selectedCount} of {ticketPassengers} passengers&apos; share of the ticket fare. Commission is kept.
             </p>
           )}
 

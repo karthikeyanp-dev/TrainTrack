@@ -270,6 +270,30 @@ export function suggestFareShare(record: RecordAmounts | null | undefined, total
 }
 
 /**
+ * Passengers on the ticket a booking record pays for — the divisor for
+ * per-passenger fare shares. A group record's fare covers every booking in its
+ * `bookingIds`, including members not shown alongside `shown` (a fully
+ * cancelled member moves to the Refunds tab, a search can match only some
+ * members), so those are counted from `allBookings`. Without `bookingIds` the
+ * record covers just the bookings shown.
+ */
+export function countTicketPassengers(
+  shown: readonly Booking[],
+  record: { bookingIds?: string[] } | null | undefined,
+  allBookings: readonly Booking[]
+): number {
+  const shownIds = new Set(shown.map(b => b.id));
+  let total = shown.reduce((sum, b) => sum + b.passengers.length, 0);
+  const missing = new Set((record?.bookingIds ?? []).filter(id => !shownIds.has(id)));
+  if (missing.size > 0) {
+    allBookings.forEach(b => {
+      if (missing.has(b.id)) total += b.passengers.length;
+    });
+  }
+  return total;
+}
+
+/**
  * Split a total across parts in proportion to `counts`, rounded to paise. The
  * last non-zero part absorbs the rounding remainder so the parts always sum to
  * the total.

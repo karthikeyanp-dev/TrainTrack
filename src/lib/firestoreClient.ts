@@ -230,58 +230,70 @@ export async function updateBookingById(id: string, formData: BookingFormData): 
   }
 
   try {
-    const docRef = doc(db, "bookings", id);
+    const database = db;
+    const docRef = doc(database, "bookings", id);
 
     // Cancellations point at passengers by their stable `pid`. Keep those ids
     // through the edit (the form may have been opened before they were
     // assigned) and refuse an edit that would drop a cancelled passenger.
-    const existingSnap = await getDoc(docRef);
-    const existingData = existingSnap.exists() ? existingSnap.data() : undefined;
-    const existingPassengers: Passenger[] = Array.isArray(existingData?.passengers) ? existingData!.passengers : [];
-    const takenPids = new Set(formData.passengers.map(p => p.pid).filter(Boolean));
-    const passengers = formData.passengers.map((p, index) => {
-      const next: Passenger = { ...p, age: Number(p.age) };
-      const previous = existingPassengers[index];
-      if (!next.pid && previous?.pid && previous.name === next.name && !takenPids.has(previous.pid)) {
-        next.pid = previous.pid;
-        takenPids.add(previous.pid);
+    // Read, check and write in one transaction: `cancelBookingPassengers()`
+    // assigns pids inside its own transaction, and a plain read-then-update
+    // here could overwrite pids it assigned in between, leaving its
+    // cancellation pointing at nobody (the passenger would show as travelling).
+    const refusal = await runTransaction(database, async (tx) => {
+      const existingSnap = await tx.get(docRef);
+      if (!existingSnap.exists()) {
+        return "Booking not found. It may have been deleted.";
       }
-      if (!next.pid) delete next.pid;
-      return next;
+      const existingData = existingSnap.data();
+      const existingPassengers: Passenger[] = Array.isArray(existingData.passengers) ? existingData.passengers : [];
+      const takenPids = new Set(formData.passengers.map(p => p.pid).filter(Boolean));
+      const passengers = formData.passengers.map((p, index) => {
+        const next: Passenger = { ...p, age: Number(p.age) };
+        const previous = existingPassengers[index];
+        if (!next.pid && previous?.pid && previous.name === next.name && !takenPids.has(previous.pid)) {
+          next.pid = previous.pid;
+          takenPids.add(previous.pid);
+        }
+        if (!next.pid) delete next.pid;
+        return next;
+      });
+
+      const cancelledPids = new Set<string>();
+      if (Array.isArray(existingData.cancellations)) {
+        (existingData.cancellations as BookingCancellation[]).forEach(c => {
+          if (c.kind === "cancellation") c.passengerPids.forEach(pid => cancelledPids.add(pid));
+        });
+      }
+      const keptPids = new Set(passengers.map(p => p.pid).filter(Boolean));
+      const droppedCancelled = [...cancelledPids].some(pid => !keptPids.has(pid));
+      if (droppedCancelled) {
+        return "A cancelled passenger cannot be removed from the booking. Undo the cancellation first.";
+      }
+
+      const bookingData: Record<string, any> = {
+        ...formData,
+        passengers,
+        updatedAt: serverTimestamp(),
+      };
+
+      if (!formData.trainPreference) {
+        bookingData.trainPreference = deleteField();
+      }
+      if (!formData.upgradePreferred) {
+        bookingData.upgradePreferred = deleteField();
+      }
+      if (!formData.remarks) {
+        bookingData.remarks = deleteField();
+      }
+
+      tx.update(docRef, bookingData);
+      return null;
     });
 
-    const cancelledPids = new Set<string>();
-    if (Array.isArray(existingData?.cancellations)) {
-      (existingData!.cancellations as BookingCancellation[]).forEach(c => {
-        if (c.kind === "cancellation") c.passengerPids.forEach(pid => cancelledPids.add(pid));
-      });
+    if (refusal) {
+      return { success: false, error: refusal };
     }
-    const keptPids = new Set(passengers.map(p => p.pid).filter(Boolean));
-    const droppedCancelled = [...cancelledPids].some(pid => !keptPids.has(pid));
-    if (droppedCancelled) {
-      return {
-        success: false,
-        error: "A cancelled passenger cannot be removed from the booking. Undo the cancellation first.",
-      };
-    }
-
-    const bookingData: Record<string, any> = {
-      ...formData,
-      passengers,
-      updatedAt: serverTimestamp(),
-    };
-
-    if (!formData.trainPreference) {
-      bookingData.trainPreference = deleteField();
-    }
-    if (!formData.upgradePreferred) {
-      bookingData.upgradePreferred = deleteField();
-    }
-    if (!formData.remarks) {
-      bookingData.remarks = deleteField();
-    }
-
-    await updateDoc(docRef, bookingData);
 
     const updatedDocSnap = await getDoc(docRef);
     if (!updatedDocSnap.exists()) {
@@ -1340,6 +1352,21 @@ export async function saveGroupBookingRecords(data: {
       previousRecord = existingDoc.data();
     }
 
+    // Never shrink an existing group record's coverage. A group card can show
+    // only some members (one fully cancelled moves to the Refunds tab; a search
+    // can match only some), and saving from it must not drop the hidden ones —
+    // they would be left with no booked details. The caller's ids come first so
+    // the primary `bookingId` and the "Book by" date source are unchanged.
+    // Members kept this way were cleared of stray records when they were first
+    // saved, so the stray cleanup above still only needs the caller's ids.
+    const previousIds: string[] = Array.isArray(previousRecord?.bookingIds)
+      ? previousRecord.bookingIds.filter((id: unknown): id is string => typeof id === "string" && !!id)
+      : [];
+    const coveredBookingIds = [
+      ...data.bookingIds,
+      ...previousIds.filter(id => !data.bookingIds.includes(id)),
+    ];
+
     // Detect cross-account edit: the record now points to a different account.
     // The old account's revert is composed into the same writeBatch as the
     // new-record and new-account writes (see below) so all three land
@@ -1431,7 +1458,7 @@ export async function saveGroupBookingRecords(data: {
     // Create single record for the entire group
     const recordData: Record<string, any> = {
       bookingId: data.bookingIds[0], // Primary booking ID (first one)
-      bookingIds: data.bookingIds,   // All booking IDs in the group
+      bookingIds: coveredBookingIds, // All booking IDs the record covers
       groupId: data.groupId,         // Reference to the group
       bookedBy: data.bookedBy,
       bookedAccountUsername: data.bookedAccountUsername,
@@ -1727,18 +1754,34 @@ export async function getBookingGroupById(id: string): Promise<BookingGroup | nu
   }
 }
 
-export async function ungroupBookings(groupId: string, bookings?: any[]): Promise<{ success: boolean; error?: string }> {
+export async function ungroupBookings(groupId: string, bookings?: Booking[]): Promise<{ success: boolean; error?: string }> {
    if (!db) return { success: false, error: "Database not initialized" };
    const firestore = db;
    try {
      const group = await getBookingGroupById(groupId);
      if (!group) return { success: false, error: "Group not found" };
 
-     // Fetch bookings data if not provided (need passenger counts for amount split)
-     let bookingsData = bookings || [];
+     // Work on every member of the group, not only the bookings passed in. A
+     // group card can show just some members (a fully cancelled one moves to the
+     // Refunds tab; a search can match only some), and splitting the group's
+     // amount across that subset would give the hidden members' share to the
+     // shown ones and leave the hidden ones with no booked details at all.
+     // Passed-in bookings are used as-is (saves reads); the rest are read here.
+     // Reads are not swallowed: a failed read aborts the ungroup rather than
+     // splitting across too few members. A member whose booking document no
+     // longer exists (deleted) is skipped.
+     const provided: Booking[] = (bookings || []).filter(Boolean);
+     const providedIds = new Set(provided.map(b => b.id));
+     const missingIds = Array.from(new Set(group.bookingIds)).filter(bid => !providedIds.has(bid));
+     const fetched = await Promise.all(
+       missingIds.map(async (bid) => {
+         const snap = await getDoc(doc(firestore, "bookings", bid));
+         return snap.exists() ? mapDocToBooking(snap, snap.id) : null;
+       })
+     );
+     const bookingsData: Booking[] = [...provided, ...fetched.filter((b): b is Booking => b !== null)];
      if (bookingsData.length === 0) {
-       const bookingPromises = group.bookingIds.map(bid => getBookingById(bid));
-       bookingsData = await Promise.all(bookingPromises);
+       return { success: false, error: "None of this group's bookings could be found" };
      }
 
      // Fetch the group booking record to get the total amount
@@ -1923,9 +1966,10 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
        (b: any) => b.preparedAccounts && b.preparedAccounts.length > 0
      )?.preparedAccounts;
 
-     // Remove groupId from all bookings and propagate preparedAccounts to those missing them
-     const promises = group.bookingIds.map((bid) => {
-       const booking = bookingsData.find((b: any) => b.id === bid);
+     // Remove groupId from all bookings and propagate preparedAccounts to those missing them.
+     // Only members that still exist: updateDoc on a deleted booking would throw
+     // and leave the group half dissolved.
+     const promises = bookingsData.map((booking) => {
        const updateData: Record<string, any> = {
          groupId: deleteField(),
          updatedAt: serverTimestamp(),
@@ -1935,12 +1979,12 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
        if (
          sharedPreparedAccounts &&
          sharedPreparedAccounts.length > 0 &&
-         (!booking?.preparedAccounts || booking.preparedAccounts.length === 0)
+         (!booking.preparedAccounts || booking.preparedAccounts.length === 0)
        ) {
          updateData.preparedAccounts = sharedPreparedAccounts;
        }
 
-       return updateDoc(doc(firestore, "bookings", bid), updateData);
+       return updateDoc(doc(firestore, "bookings", booking.id), updateData);
      });
      await Promise.all(promises);
 
