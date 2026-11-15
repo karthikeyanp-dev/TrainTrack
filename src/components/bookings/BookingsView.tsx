@@ -57,9 +57,13 @@ const toDateKey = (value: string): string => {
   return match ? match[1] : value;
 };
 
+// A fully cancelled or failed-but-paid booking with a refund leg still open
+// lives in the Refunds tab instead of Completed. A partially cancelled booking
+// is still "Booked", so it stays in Completed/Upcoming and is listed in Refunds
+// as well while a leg is open.
 const isRefundPending = (booking: Booking): boolean =>
   (booking.status === "Booking Failed (Paid)" || booking.status === "CNF & Cancelled") &&
-  !booking.refundDetails;
+  hasOpenRefund(booking);
 
 // Payment filter types
 export type PaymentFilterType = 'all' | 'payment-pending' | 'settlement-pending';
@@ -137,6 +141,7 @@ interface BookingsViewProps {
 }
 
 import { RefundsManager } from "@/components/accounts/RefundsManager";
+import { hasOpenRefund } from "@/lib/cancellations";
 
 const DATES_PER_PAGE = 10;
 
@@ -274,7 +279,7 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
 
 
   const hasRefunds = useMemo(
-    () => rawAllBookings.some(isRefundPending),
+    () => rawAllBookings.some(hasOpenRefund),
     [rawAllBookings]
   );
 
@@ -300,7 +305,7 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
       : sourceBookings.filter(b => {
         const visibleDateSet = new Set(visibleDates);
         // Completed bookings exclude Requested
-        // Exclude Booking Failed (Paid) and CNF & Cancelled IF they don't have refundDetails (those go to Refunds tab)
+        // Exclude Booking Failed (Paid) and CNF & Cancelled while a refund is still open (those go to Refunds tab)
         if (isRefundPending(b)) return false;
 
         return b.status !== 'Requested' && visibleDateSet.has(b.bookingDate);

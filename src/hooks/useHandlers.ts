@@ -1,39 +1,20 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { getHandlers, getHandlerStats, type HandlerStats } from "@/lib/handlersClient";
+import { useSyncExternalStore } from "react";
+import { handlersStore } from "@/lib/dataStores";
 import type { Handler } from "@/types/handler";
 
 /**
- * Hook to fetch all handlers with client-side caching
+ * All handlers, by name, updated in real time.
+ * Backed by the app-wide handlers listener, so it adds no Firestore reads.
  */
 export function useHandlers() {
-  return useQuery<Handler[], Error>({
-    queryKey: ["handlers"],
-    queryFn: async () => {
-      const handlers = await getHandlers();
-      return handlers;
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    gcTime: 10 * 60 * 1000, // 10 minutes
-    refetchOnWindowFocus: false,
-    refetchOnMount: true,
-  });
-}
+  const handlers = useSyncExternalStore(handlersStore.subscribe, handlersStore.getItems, handlersStore.getServerItems);
+  const status = useSyncExternalStore(handlersStore.subscribe, handlersStore.getStatus, handlersStore.getServerStatus);
 
-/**
- * Hook to fetch handler statistics (booking counts, etc.)
- */
-export function useHandlerStats() {
-  return useQuery<HandlerStats[], Error>({
-    queryKey: ["handlers", "stats"],
-    queryFn: async () => {
-      const stats = await getHandlerStats();
-      return stats;
-    },
-    staleTime: 5 * 60 * 1000,
-    gcTime: 10 * 60 * 1000,
-    refetchOnWindowFocus: false,
-    refetchOnMount: true,
-  });
+  return {
+    data: handlers as Handler[],
+    isLoading: !status.ready && !status.error,
+    error: status.error,
+  };
 }

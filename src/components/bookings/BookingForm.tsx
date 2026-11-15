@@ -41,6 +41,10 @@ const passengerSchema = z.object({
   ]).optional(),
   gender: z.enum(ALL_PASSENGER_GENDERS, { errorMap: () => ({ message: "Gender is required." }) }).optional().or(z.literal(undefined)),
   berthRequired: z.boolean().optional(),
+  // Stable passenger id (set once a passenger of the booking has been cancelled).
+  // Carried through the form untouched so cancellations keep pointing at the
+  // right passenger after an edit.
+  pid: z.string().optional(),
 });
 
 const bookingFormSchema = z.object({
@@ -65,9 +69,11 @@ type FormValues = z.infer<typeof bookingFormSchema>;
 interface BookingFormProps {
   initialData?: BookingFormData & { journeyDateObj?: Date; bookingDateObj?: Date; passengers?: Partial<Passenger>[] };
   bookingId?: string;
+  /** `pid`s of passengers already cancelled on this ticket; their rows cannot be removed. */
+  cancelledPassengerPids?: string[];
 }
 
-export function BookingForm({ initialData, bookingId }: BookingFormProps) {
+export function BookingForm({ initialData, bookingId, cancelledPassengerPids = [] }: BookingFormProps) {
   const { toast } = useToast();
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -90,6 +96,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             age: p.age !== undefined ? String(p.age) : undefined as any,
             gender: p.gender,
             berthRequired: p.berthRequired || false,
+            ...(p.pid ? { pid: p.pid } : {}),
           })),
         }
       : {
@@ -135,6 +142,7 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
           age: Number(p.age!),
           gender: p.gender!,
           ...(p.berthRequired && { berthRequired: p.berthRequired }),
+          ...(p.pid && { pid: p.pid }),
       })) as Passenger[],
        ...(values.trainPreference && values.trainPreference.trim() !== "" && { trainPreference: values.trainPreference }),
        upgradePreferred: !!values.upgradePreferred,
@@ -449,9 +457,19 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
             <Users className="h-5 w-5 text-primary" /> 
             Passenger Details
           </FormLabel>
-          {fields.map((item, index) => (
+          {fields.map((item, index) => {
+            const isCancelledPassenger = !!item.pid && cancelledPassengerPids.includes(item.pid);
+            return (
             <div key={item.id} className="space-y-4 p-4 mb-4 border rounded-md relative shadow-sm bg-card">
-              {fields.length > 1 && (
+              {isCancelledPassenger && (
+                <span
+                  className="absolute top-2 right-2 md:top-3 md:right-3 inline-flex items-center rounded-full border border-orange-500/30 bg-orange-500/15 px-2 py-0.5 text-[11px] font-semibold text-orange-700 dark:text-orange-300"
+                  title="This passenger was cancelled. Undo the cancellation on the booking to remove them."
+                >
+                  Cancelled
+                </span>
+              )}
+              {fields.length > 1 && !isCancelledPassenger && (
                 <Button
                   type="button"
                   variant="ghost"
@@ -568,7 +586,8 @@ export function BookingForm({ initialData, bookingId }: BookingFormProps) {
                 ) : null;
               })()}
             </div>
-          ))}
+            );
+          })}
           <Button
             type="button"
             variant="outline"

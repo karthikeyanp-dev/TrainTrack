@@ -1,12 +1,14 @@
-import { useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { Booking } from "@/types/booking";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Layers, Link2Off, CheckCircle2, CreditCard, Loader2, Share2, Check, X, Edit3 } from "lucide-react";
+import { Layers, Link2Off, CheckCircle2, CreditCard, Loader2, Share2, Check, X, Edit3, UserX } from "lucide-react";
 import { BookingCard } from "./BookingCard";
 import { BookingRequirementsSheet } from "./BookingRequirementsSheet";
-import { ungroupBookings, updateBookingRequirements, saveBookingRecord, getBookingRecordByBookingId } from "@/lib/firestoreClient";
+import { ungroupBookings, updateBookingRequirements, saveBookingRecord } from "@/lib/firestoreClient";
+import { useBookingRecordLookup } from "@/hooks/useBookingRecords";
+import { useBookings } from "@/hooks/useBookings";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -25,7 +27,7 @@ import { format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ALL_BOOKING_STATUSES, type BookingStatus } from "@/types/booking";
-import { updateGroupBookingStatus } from "@/lib/firestoreClient";
+import { updateGroupBookingStatus, clearBookingCancellations } from "@/lib/firestoreClient";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { StatusReasonDialog } from "./StatusReasonDialog";
 import {
@@ -35,6 +37,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { BookingRecordForm } from "./BookingRecordForm";
+import { CancelPassengersDialog } from "./CancelPassengersDialog";
+import { countTicketPassengers, getActivePassengers, getCancellations, isPassengerCancelled } from "@/lib/cancellations";
 
 interface BookingGroupCardProps {
   groupId: string;
@@ -50,10 +54,17 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
   const [showUngroupDialog, setShowUngroupDialog] = useState(false);
   const [isUngrouping, setIsUngrouping] = useState(false);
   const [showEditRecordForm, setShowEditRecordForm] = useState(false);
+  // Cancellation dialog: `all` pre-ticks every travelling passenger (full cancel).
+  const [cancelDialog, setCancelDialog] = useState<{ open: boolean; all: boolean }>({ open: false, all: false });
   const { toast } = useToast();
   const router = useRouter();
 
   const totalPassengers = bookings.reduce((sum, b) => sum + b.passengers.length, 0);
+  // Passengers of booked tickets who can still be cancelled.
+  const cancellablePassengers = bookings.reduce(
+    (sum, b) => sum + (b.status === "Booked" ? getActivePassengers(b).length : 0),
+    0
+  );
   const uniqueSources = Array.from(new Set(bookings.map(b => b.source)));
   const uniqueDestinations = Array.from(new Set(bookings.map(b => b.destination)));
   const classes = Array.from(new Set(bookings.map(b => b.classType)));
@@ -64,101 +75,107 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
   const hasSharedPreparedAccounts = bookings.some(b => b.preparedAccounts && b.preparedAccounts.length > 0);
   const firstBookingWithAccounts = bookings.find(b => b.preparedAccounts && b.preparedAccounts.length > 0) || bookings[0];
   
-  const [groupBookingDetails, setGroupBookingDetails] = useState<{
+  // Booked details come from the shared booking-records store, so they update
+  // in real time and cost no Firestore reads (this used to query Firestore for
+  // every booking of every group card on each bookings update).
+  const { getRecord, isLoading: isLoadingGroupBookingDetails } = useBookingRecordLookup();
+  // Every booking, so a group record's fare is shared across all of its
+  // members — `bookings` holds only the ones shown on this tab.
+  const { data: allBookings } = useBookings();
+  // Every member of the group, including any hidden from this tab. `bookings`
+  // is filtered from the same store, so it is always a subset of this.
+  const allGroupMembers = useMemo(
+    () => allBookings.filter(b => b.groupId === groupId),
+    [allBookings, groupId]
+  );
+
+  const groupBookingDetails = useMemo<{
     bookedBy: string;
     bookedAccountUsername: string;
     totalAmount: number;
     bookedAmount?: number;
     commission?: number;
     methodUsed: string;
+    /** Bookings the group record's fare covers (absent for combined individual records). */
+    bookingIds?: string[];
     splitByBooking: { bookingId: string; bookingFor: string; passengers: number; amountCharged: number }[];
-  } | null>(null);
-  const [isLoadingGroupBookingDetails, setIsLoadingGroupBookingDetails] = useState(false);
+  } | null>(() => {
+    if (bookings.length === 0) return null;
 
-  const fetchGroupDetails = async () => {
-    try {
-      setIsLoadingGroupBookingDetails(true);
-      
-      // Try to fetch a single group record first (by checking first booking)
-      const firstRecord = await getBookingRecordByBookingId(bookings[0].id);
-      
-      if (firstRecord && firstRecord.groupId === groupId) {
-        // We have a group record!
-        
-        // Calculate split based on passenger counts
-        const splitByBooking = bookings.map(booking => ({
+    // Try a single group record first (by checking first booking)
+    const firstRecord = getRecord(bookings[0].id);
+
+    if (firstRecord && firstRecord.groupId === groupId) {
+      // We have a group record!
+
+      // Calculate ticket fare per passenger for proportional split display.
+      // Only the ticket fare (bookedAmount) is shared per passenger — the commission
+      // charged to each customer differs, so it is intentionally excluded here.
+      // Older records without bookedAmount fall back to amountCharged.
+      // The fare covers every member in the record's bookingIds, including ones
+      // not shown here (e.g. fully cancelled and moved to the Refunds tab).
+      const totalPassengers = countTicketPassengers(bookings, firstRecord, allBookings);
+      const splitBaseAmount = typeof firstRecord.bookedAmount === "number" ? firstRecord.bookedAmount : firstRecord.amountCharged;
+      const amountPerPassenger = totalPassengers > 0 ? splitBaseAmount / totalPassengers : 0;
+
+      return {
+        bookedBy: firstRecord.bookedBy,
+        bookedAccountUsername: firstRecord.bookedAccountUsername,
+        totalAmount: Number(firstRecord.amountCharged.toFixed(2)),
+        bookedAmount: typeof firstRecord.bookedAmount === "number" ? Number(firstRecord.bookedAmount.toFixed(2)) : undefined,
+        commission: typeof firstRecord.commission === "number" ? Number(firstRecord.commission.toFixed(2)) : undefined,
+        methodUsed: firstRecord.methodUsed,
+        bookingIds: firstRecord.bookingIds,
+        splitByBooking: bookings.map(booking => ({
           bookingId: booking.id,
           bookingFor: booking.userName,
           passengers: booking.passengers.length,
-          amountCharged: 0, // Will be calculated below
-        }));
-        
-        // Calculate ticket fare per passenger for proportional split display.
-        // Only the ticket fare (bookedAmount) is shared per passenger — the commission
-        // charged to each customer differs, so it is intentionally excluded here.
-        // Older records without bookedAmount fall back to amountCharged.
-        const totalPassengers = bookings.reduce((sum, b) => sum + b.passengers.length, 0);
-        const splitBaseAmount = typeof firstRecord.bookedAmount === "number" ? firstRecord.bookedAmount : firstRecord.amountCharged;
-        const amountPerPassenger = totalPassengers > 0 ? splitBaseAmount / totalPassengers : 0;
-        
-        splitByBooking.forEach(item => {
-          item.amountCharged = Number((amountPerPassenger * item.passengers).toFixed(2));
-        });
-
-        setGroupBookingDetails({
-          bookedBy: firstRecord.bookedBy,
-          bookedAccountUsername: firstRecord.bookedAccountUsername,
-          totalAmount: Number(firstRecord.amountCharged.toFixed(2)),
-          bookedAmount: typeof firstRecord.bookedAmount === "number" ? Number(firstRecord.bookedAmount.toFixed(2)) : undefined,
-          commission: typeof firstRecord.commission === "number" ? Number(firstRecord.commission.toFixed(2)) : undefined,
-          methodUsed: firstRecord.methodUsed,
-          splitByBooking,
-        });
-      } else {
-        // Legacy individual records - fetch all and combine
-        const records = await Promise.all(
-          bookings.map(b => getBookingRecordByBookingId(b.id))
-        );
-
-        const valid = records
-          .map((record, idx) => ({ record, booking: bookings[idx] }))
-          .filter(x => x.record !== null) as { record: any; booking: Booking }[];
-
-        if (valid.length === 0) {
-          setGroupBookingDetails(null);
-          return;
-        }
-
-        const totalAmount = valid.reduce((sum, x) => sum + (x.record.amountCharged || 0), 0);
-        const legacyFirstRecord = valid[0].record;
-        const splitByBooking = valid.map(x => ({
-          bookingId: x.booking.id,
-          bookingFor: x.booking.userName,
-          passengers: x.booking.passengers.length,
-          // Show only the ticket fare share (exclude commission) when available
-          amountCharged: Number(((typeof x.record.bookedAmount === "number" ? x.record.bookedAmount : x.record.amountCharged) || 0).toFixed(2)),
-        }));
-
-        setGroupBookingDetails({
-          bookedBy: legacyFirstRecord.bookedBy,
-          bookedAccountUsername: legacyFirstRecord.bookedAccountUsername,
-          totalAmount: Number(totalAmount.toFixed(2)),
-          methodUsed: legacyFirstRecord.methodUsed,
-          splitByBooking,
-        });
-      }
-    } catch (error) {
-      console.error("Failed to fetch group booking details", error);
-    } finally {
-      setIsLoadingGroupBookingDetails(false);
+          amountCharged: Number((amountPerPassenger * booking.passengers.length).toFixed(2)),
+        })),
+      };
     }
-  };
 
-  useEffect(() => {
-    fetchGroupDetails();
-  }, [bookings]);
+    // Legacy individual records - combine them
+    const valid = bookings
+      .map(booking => ({ record: getRecord(booking.id), booking }))
+      .filter((x): x is { record: NonNullable<ReturnType<typeof getRecord>>; booking: Booking } => x.record !== null);
+
+    if (valid.length === 0) return null;
+
+    const totalAmount = valid.reduce((sum, x) => sum + (x.record.amountCharged || 0), 0);
+    const legacyFirstRecord = valid[0].record;
+
+    return {
+      bookedBy: legacyFirstRecord.bookedBy,
+      bookedAccountUsername: legacyFirstRecord.bookedAccountUsername,
+      totalAmount: Number(totalAmount.toFixed(2)),
+      methodUsed: legacyFirstRecord.methodUsed,
+      splitByBooking: valid.map(x => ({
+        bookingId: x.booking.id,
+        bookingFor: x.booking.userName,
+        passengers: x.booking.passengers.length,
+        // Show only the ticket fare share (exclude commission) when available
+        amountCharged: Number(((typeof x.record.bookedAmount === "number" ? x.record.bookedAmount : x.record.amountCharged) || 0).toFixed(2)),
+      })),
+    };
+  }, [bookings, groupId, getRecord, allBookings]);
 
   const hasGroupBookedDetails = !!groupBookingDetails;
+
+  // Bookings the group's booked details cover: the ones shown plus any member
+  // the group record lists but this tab hides (e.g. one fully cancelled and
+  // moved to Refunds). Editing must save the record for all of them — passing
+  // only the shown ones would drop the hidden members from the record (leaving
+  // them with no booked details), understate its passenger count, and skip
+  // their cancellations in the delete guard. Combined individual records (no
+  // group record) cover only what is shown, so nothing is added for them.
+  const recordMembers = useMemo(() => {
+    const coveredIds = new Set(groupBookingDetails?.bookingIds ?? []);
+    if (coveredIds.size === 0) return bookings;
+    const shownIds = new Set(bookings.map(b => b.id));
+    const hidden = allGroupMembers.filter(b => coveredIds.has(b.id) && !shownIds.has(b.id));
+    return hidden.length > 0 ? [...bookings, ...hidden] : bookings;
+  }, [bookings, allGroupMembers, groupBookingDetails]);
 
   const formatDate = (dateString: string) => {
     try {
@@ -214,11 +231,16 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
       Array.from(new Set(values.filter(Boolean))).join(", ") || "N/A";
 
     const passengerDetailsText = bookings
-      .flatMap(booking => booking.passengers)
-      .map((passenger, index) => {
+      .flatMap(booking =>
+        booking.passengers.map(passenger => ({
+          passenger,
+          cancelled: booking.status === "Booked" && isPassengerCancelled(booking, passenger),
+        }))
+      )
+      .map(({ passenger, cancelled }, index) => {
         const isChild = passenger.age >= 5 && passenger.age <= 11;
         const berthInfo = isChild ? (passenger.berthRequired ? " [Berth Required]" : " [No Berth]") : "";
-        return `${index + 1}. ${passenger.name} ${passenger.age} ${passenger.gender.toUpperCase()}${berthInfo}`;
+        return `${index + 1}. ${passenger.name} ${passenger.age} ${passenger.gender.toUpperCase()}${berthInfo}${cancelled ? " [CANCELLED]" : ""}`;
       })
       .join("\n");
 
@@ -284,8 +306,10 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
   const handleUngroup = async () => {
     setIsUngrouping(true);
     try {
-      // Pass bookings data so ungroupBookings can calculate proportional amounts
-      const result = await ungroupBookings(groupId, bookings);
+      // Pass every member (not just those shown on this tab) so the group's
+      // amount is split across all of them; ungroupBookings reads any member
+      // still missing from the group document itself.
+      const result = await ungroupBookings(groupId, allGroupMembers.length > 0 ? allGroupMembers : bookings);
       if (result.success) {
         toast({ title: "Group Dissolved", description: "Bookings have been ungrouped." });
         router.refresh();
@@ -356,6 +380,17 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                 onSaveGroup={handleSaveGroupRequirements}
                 className="flex-none aspect-auto h-8 w-8 p-0 border-0 bg-white hover:bg-white/90 text-primary hover:text-primary"
               />
+            )}
+            {!selectionMode && cancellablePassengers > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setCancelDialog({ open: true, all: false })}
+                className="h-8 w-8 px-0 justify-center bg-white hover:bg-white/90 text-orange-600 hover:text-orange-700"
+                title="Cancel passengers"
+              >
+                <UserX className="h-5 w-5" />
+              </Button>
             )}
             {!selectionMode && allowUngroup && (
                 <Button
@@ -570,8 +605,32 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
 
       {/* Group Status Update Section */}
       <CardContent className="p-4 border-t bg-muted/5">
-        <GroupStatusUpdate bookings={bookings} groupId={groupId} />
+        <GroupStatusUpdate
+          bookings={bookings}
+          groupId={groupId}
+          onCancelAll={() => setCancelDialog({ open: true, all: true })}
+        />
       </CardContent>
+
+      {/* Cancel passengers across the group's bookings (one PNR) */}
+      <CancelPassengersDialog
+        open={cancelDialog.open}
+        onOpenChange={(open) => setCancelDialog(prev => ({ ...prev, open }))}
+        bookings={bookings}
+        record={
+          groupBookingDetails
+            ? {
+                bookedBy: groupBookingDetails.bookedBy,
+                bookedAccountUsername: groupBookingDetails.bookedAccountUsername,
+                methodUsed: groupBookingDetails.methodUsed as any,
+                amountCharged: groupBookingDetails.totalAmount,
+                bookedAmount: groupBookingDetails.bookedAmount,
+                bookingIds: groupBookingDetails.bookingIds,
+              }
+            : null
+        }
+        preselectAll={cancelDialog.all}
+      />
 
       {/* Ungroup Dialog */}
       <AlertDialog open={showUngroupDialog} onOpenChange={setShowUngroupDialog}>
@@ -579,7 +638,7 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
           <AlertDialogHeader>
             <AlertDialogTitle>Ungroup Bookings?</AlertDialogTitle>
             <AlertDialogDescription>
-              This will remove the grouping and return all {bookings.length} bookings to individual cards. Original booking data is preserved.
+              This will remove the grouping and return all {Math.max(allGroupMembers.length, bookings.length)} bookings to individual cards. Original booking data is preserved.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -599,17 +658,11 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
           </DialogHeader>
           <BookingRecordForm 
             bookingId={bookings[0].id} 
-            onClose={() => {
-              setShowEditRecordForm(false);
-              fetchGroupDetails();
-            }}
-            onSave={() => {
-              setShowEditRecordForm(false);
-              fetchGroupDetails();
-            }}
+            onClose={() => setShowEditRecordForm(false)}
+            onSave={() => setShowEditRecordForm(false)}
             hideWrapper={true}
             isGroupMode={true}
-            groupBookings={bookings}
+            groupBookings={recordMembers}
             groupId={groupId}
           />
         </DialogContent>
@@ -622,9 +675,11 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
 interface GroupStatusUpdateProps {
   bookings: Booking[];
   groupId: string;
+  /** Open the cancellation dialog with every travelling passenger ticked. */
+  onCancelAll: () => void;
 }
 
-function GroupStatusUpdate({ bookings, groupId }: GroupStatusUpdateProps) {
+function GroupStatusUpdate({ bookings, groupId, onCancelAll }: GroupStatusUpdateProps) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const [showStatusConfirmDialog, setShowStatusConfirmDialog] = useState(false);
@@ -647,6 +702,18 @@ function GroupStatusUpdate({ bookings, groupId }: GroupStatusUpdateProps) {
       handler?: string;
     }) => {
       const bookingIds = bookings.map(b => b.id);
+      if (status === "Requested") {
+        // Going back to pending drops cancellation/refund details and takes back
+        // any refund that was added to a wallet balance for them.
+        for (const booking of bookings) {
+          if (getCancellations(booking).length === 0 && !booking.refundDetails) continue;
+          const cleared = await clearBookingCancellations(booking.id);
+          if (!cleared.success) {
+            return { success: false, error: cleared.error };
+          }
+        }
+        queryClient.invalidateQueries({ queryKey: ["accounts"] });
+      }
       return await updateGroupBookingStatus(bookingIds, status, reason, handler);
     },
     onSuccess: (result) => {
@@ -683,6 +750,10 @@ function GroupStatusUpdate({ bookings, groupId }: GroupStatusUpdateProps) {
       // Show the booked details dialog
       setStatusToConfirm(newStatus as BookingStatus);
       setShowBookedDetailsDialog(true);
+    } else if (newStatus === "CNF & Cancelled" && currentStatus === "Booked") {
+      // Cancelling confirmed tickets goes through the cancellation dialog so
+      // the refund is captured along with it.
+      onCancelAll();
     } else if (newStatus === "Missed" || newStatus === "CNF & Cancelled" || newStatus === "User Cancelled") {
       // Show reason dialog for Missed and Cancelled statuses
       setStatusToConfirm(newStatus as BookingStatus);

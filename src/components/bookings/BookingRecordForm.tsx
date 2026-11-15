@@ -29,6 +29,7 @@ import {
   getBookingById,
 } from "@/lib/firestoreClient";
 import { getHandlers } from "@/lib/handlersClient";
+import { getCancellations } from "@/lib/cancellations";
 import type { Handler } from "@/types/handler";
 import {
   calculateBookingCommission,
@@ -194,12 +195,29 @@ export function BookingRecordForm({
     setForm((prev) => ({ ...prev, methodUsed: value }));
   };
 
+  // Deleting booked details hands the whole fare back to the wallet. Once
+  // passengers were cancelled (and possibly refunded) that would double-count,
+  // so the delete is blocked until the cancellations are undone.
+  const hasCancellations = [booking, ...(groupBookings || [])].some(
+    b => !!b && getCancellations(b).length > 0
+  );
+
   const bookedAmountNum = Number(form.bookedAmount || 0);
   const commissionNum = Number(form.commission || 0);
   const totalAmountNum = Number((bookedAmountNum + commissionNum).toFixed(2));
 
   const handleDelete = async () => {
     if (!existingRecord) return;
+
+    if (hasCancellations) {
+      toast({
+        title: "Undo the cancellation first",
+        description:
+          "Passengers on this ticket were cancelled. Deleting the booked details would return the full fare to the wallet on top of any refund already recorded.",
+        variant: "destructive",
+      });
+      return;
+    }
 
     if (
       !confirm(
@@ -544,8 +562,8 @@ export function BookingRecordForm({
             size="icon"
             onClick={handleDelete}
             disabled={isSubmitting || isDeleting}
-            className="shrink-0"
-            title="Delete Record"
+            className={hasCancellations ? "shrink-0 opacity-50" : "shrink-0"}
+            title={hasCancellations ? "Undo the cancellation before deleting booked details" : "Delete Record"}
           >
             {isDeleting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
           </Button>

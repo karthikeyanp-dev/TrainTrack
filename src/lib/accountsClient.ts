@@ -3,20 +3,17 @@
  */
 
 import { db } from "@/lib/firebase";
-import { 
-  collection, 
-  addDoc, 
-  getDocs, 
-  doc, 
-  getDoc, 
-  updateDoc, 
-  deleteDoc, 
-  serverTimestamp, 
-  query, 
-  orderBy,
+import {
+  collection,
+  addDoc,
+  doc,
+  updateDoc,
+  deleteDoc,
+  serverTimestamp,
   Timestamp,
-  where
 } from "firebase/firestore";
+import { accountsStore, bookingRecordsStore } from "@/lib/dataStores";
+import { describeFirestoreError } from "@/lib/firestoreErrors";
 import type { IrctcAccount } from "@/types/account";
 
 export interface AccountStats {
@@ -27,80 +24,29 @@ export interface AccountStats {
   lastUsedDate?: string;
 }
 
-// Helper to convert Firestore timestamps
-const toDateString = (value: any): string => {
-  if (value instanceof Timestamp) {
-    return value.toDate().toISOString().split('T')[0];
+const toDate = (value: unknown): Date | null => {
+  if (value instanceof Timestamp) return value.toDate();
+  if (typeof value === "string" || typeof value === "number") {
+    const date = new Date(value);
+    return isNaN(date.getTime()) ? null : date;
   }
-  if (typeof value === 'string') {
-    return value;
-  }
-  return "";
+  return null;
 };
 
+/**
+ * Accounts are read from the app-wide accounts listener (`accountsStore`), so
+ * these lookups cost no Firestore reads after the first load of the session.
+ */
 export async function getAccountByUsername(username: string): Promise<IrctcAccount | null> {
-  if (!db) {
-    console.error("[Firestore Error] Database not initialized");
-    return null;
-  }
-
-  try {
-    const accountsCollection = collection(db, "irctcAccounts");
-    const q = query(accountsCollection, where("username", "==", username));
-    const querySnapshot = await getDocs(q);
-
-    if (querySnapshot.empty) {
-      return null;
-    }
-
-    const doc = querySnapshot.docs[0];
-    const data = doc.data();
-    return {
-      id: doc.id,
-      username: data.username as string,
-      password: data.password as string,
-      isVerified: data.isVerified ?? false,
-      isRailOneRegistered: data.isRailOneRegistered ?? false,
-      walletAmount: data.walletAmount as number || 0,
-      lastBookedDate: toDateString(data.lastBookedDate),
-      previousLastBookedDate: data.previousLastBookedDate,
-      createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-      updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-    };
-  } catch (error) {
-    console.error(`[Firestore Error] getAccountByUsername (${username}):`, error);
-    return null;
-  }
+  const accounts = await getAccounts();
+  return accounts.find(account => account.username === username) ?? null;
 }
 
+/** Every IRCTC account, highest wallet balance first. */
 export async function getAccounts(): Promise<IrctcAccount[]> {
-  if (!db) {
-    console.error("[Firestore Error] Database not initialized");
-    return [];
-  }
-
   try {
-    const accountsCollection = collection(db, "irctcAccounts");
-    const q = query(accountsCollection, orderBy("walletAmount", "desc"));
-    const querySnapshot = await getDocs(q);
-
-    const accounts = querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        username: data.username as string,
-        password: data.password as string,
-        isVerified: data.isVerified ?? false,
-        isRailOneRegistered: data.isRailOneRegistered ?? false,
-        walletAmount: data.walletAmount as number || 0,
-        lastBookedDate: toDateString(data.lastBookedDate),
-        previousLastBookedDate: data.previousLastBookedDate,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-      };
-    });
-
-    return accounts;
+    const accounts = await accountsStore.whenReady();
+    return [...accounts];
   } catch (error) {
     console.error("[Firestore Error] getAccounts:", error);
     return [];
@@ -130,7 +76,7 @@ export async function addAccount(accountData: Omit<IrctcAccount, "id" | "created
     return { success: true, account: newAccount };
   } catch (error: any) {
     console.error("[Firestore Error] addAccount:", error);
-    return { success: false, error: error.message || "Failed to add account" };
+    return { success: false, error: describeFirestoreError(error, "Failed to add account") };
   }
 }
 
@@ -149,7 +95,7 @@ export async function updateAccount(id: string, accountData: Partial<IrctcAccoun
     return { success: true };
   } catch (error: any) {
     console.error(`[Firestore Error] updateAccount (${id}):`, error);
-    return { success: false, error: error.message || "Failed to update account" };
+    return { success: false, error: describeFirestoreError(error, "Failed to update account") };
   }
 }
 
@@ -164,7 +110,7 @@ export async function deleteAccount(id: string): Promise<{ success: boolean; err
     return { success: true };
   } catch (error: any) {
     console.error(`[Firestore Error] deleteAccount (${id}):`, error);
-    return { success: false, error: error.message || "Failed to delete account" };
+    return { success: false, error: describeFirestoreError(error, "Failed to delete account") };
   }
 }
 
@@ -178,13 +124,14 @@ export async function getAccountStats(): Promise<AccountStats[]> {
     // Get all accounts
     const accounts = await getAccounts();
     
-    // Get booking records (we'll bucket by current vs previous month in code)
-    const bookingRecordsCollection = collection(db, "bookingRecords");
+    // Booking records come from the shared store (cached on the device), not a
+    // read of the whole collection. Bucketed by current vs previous month below.
     const now = new Date();
     const startOfCurrentMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const startOfPreviousMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     
-    const bookingRecordsSnapshot = await getDocs(bookingRecordsCollection);
+    await bookingRecordsStore.whenReady();
+    const bookingRecords = bookingRecordsStore.getDocs();
     
     // Count unique booking transactions per account per bucket (current / previous month)
     const currentMonthUsage = new Map<string, { count: number; lastDate?: string }>();
@@ -198,10 +145,10 @@ export async function getAccountStats(): Promise<AccountStats[]> {
     const previousProcessedGroupIds = new Set<string>();
     const previousProcessedDocIds = new Set<string>();
     
-    bookingRecordsSnapshot.docs.forEach(doc => {
-      const data = doc.data();
+    bookingRecords.forEach(doc => {
+      const data = doc.data;
       const username = data.bookedAccountUsername;
-      const createdAt = data.createdAt?.toDate?.();
+      const createdAt = toDate(data.createdAt);
       const bookingDateStr = data.bookingDate as string | undefined; // "YYYY-MM-DD" stored in record
       const transactionId = data.bookingTransactionId;
       const groupId = data.groupId;

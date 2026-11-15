@@ -2,6 +2,12 @@
  * Client-side Firestore operations
  * Replaces Server Actions with direct Firestore calls from browser
  * This eliminates Cloud Run costs - only Firebase Hosting (free) + Firestore reads/writes
+ *
+ * Reads of whole collections go through the shared stores in `dataStores.ts`
+ * (cached on the device, only changes are fetched) so the app stays inside the
+ * Spark plan's daily read quota. Two rules keep that cache correct:
+ *  - every write to `bookings` / `bookingRecords` sets `updatedAt: serverTimestamp()`
+ *  - documents in those collections are deleted with `deleteSyncedDoc()`, never `deleteDoc()`
  */
 
 import { db } from "@/lib/firebase";
@@ -19,6 +25,7 @@ import {
   where,
   Timestamp,
   writeBatch,
+  runTransaction,
   type DocumentSnapshot,
   type DocumentData,
   deleteField
@@ -31,9 +38,36 @@ import type {
   PreparedAccount,
   TrainClass,
   RefundDetails,
-  BookingGroup
+  BookingGroup,
+  BookingCancellation,
+  IrctcRefundLeg,
+  CustomerRefundLeg,
+  RefundRecipientType,
 } from "@/types/booking";
 import { LEGACY_CLASS_MAP } from "@/types/booking";
+import type { BookingRecord } from "@/types/bookingRecord";
+import {
+  LEGACY_CANCELLATION_ID,
+  buildLegacyCancellation,
+  computeWalletCredit,
+  ensurePassengerPids,
+  generateLocalId,
+  normalizeCustomerLeg,
+  normalizeIrctcLeg,
+  roundMoney,
+  splitAmountByCounts,
+  stripUndefined,
+  type CancellationSource,
+} from "@/lib/cancellations";
+import {
+  bookingRecordsStore,
+  bookingsStore,
+  findBookingRecord,
+  getBookingRecordIndex,
+  getBookingsSnapshot,
+} from "@/lib/dataStores";
+import { describeFirestoreError } from "@/lib/firestoreErrors";
+import { deleteSyncedDoc } from "@/lib/sync/tombstones";
 
 // Helper to convert Firestore timestamps
 const toISOStringSafe = (value: any, fieldName: string, bookingId: string): string => {
@@ -97,34 +131,20 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
     paymentReceived: data.paymentReceived as boolean | undefined,
     amountSettled: data.amountSettled as boolean | undefined,
     refundDetails: data.refundDetails as RefundDetails | undefined,
+    cancellations: Array.isArray(data.cancellations) && data.cancellations.length > 0
+      ? (data.cancellations as BookingCancellation[])
+      : undefined,
+    groupId: data.groupId as string | undefined,
   };
 };
 
 // ============= BOOKING OPERATIONS =============
 
+/** Every booking, newest first, from the shared bookings store (no collection read). */
 export async function getBookings(): Promise<Booking[]> {
-  if (!db) {
-    console.error("[Firestore Error] Database not initialized");
-    return [];
-  }
-
   try {
-    const bookingsCollection = collection(db, "bookings");
-    const q = query(bookingsCollection, orderBy("createdAt", "desc"));
-    const querySnapshot = await getDocs(q);
-
-    const bookings = querySnapshot.docs
-      .map(doc => {
-        try {
-          return mapDocToBooking(doc, doc.id);
-        } catch (error) {
-          console.error(`Failed to map document ${doc.id}:`, error);
-          return null;
-        }
-      })
-      .filter(booking => booking !== null) as Booking[];
-
-    return bookings;
+    await bookingsStore.whenReady();
+    return getBookingsSnapshot();
   } catch (error) {
     console.error("[Firestore Error] getBookings:", error);
     return [];
@@ -132,35 +152,10 @@ export async function getBookings(): Promise<Booking[]> {
 }
 
 export async function getPendingBookings(): Promise<Booking[]> {
-  if (!db) {
-    console.error("[Firestore Error] Database not initialized");
-    return [];
-  }
-
-  try {
-    const bookingsCollection = collection(db, "bookings");
-    const q = query(bookingsCollection, where("status", "==", "Requested"));
-    const querySnapshot = await getDocs(q);
-
-    const bookings = querySnapshot.docs
-      .map(doc => {
-        try {
-          return mapDocToBooking(doc, doc.id);
-        } catch (error) {
-          console.error(`Failed to map document ${doc.id}:`, error);
-          return null;
-        }
-      })
-      .filter(booking => booking !== null) as Booking[];
-
-    // Sort by journey date
-    bookings.sort((a, b) => new Date(a.journeyDate).getTime() - new Date(b.journeyDate).getTime());
-
-    return bookings;
-  } catch (error) {
-    console.error("[Firestore Error] getPendingBookings:", error);
-    return [];
-  }
+  const bookings = await getBookings();
+  return bookings
+    .filter(booking => booking.status === "Requested")
+    .sort((a, b) => new Date(a.journeyDate).getTime() - new Date(b.journeyDate).getTime());
 }
 
 export async function getBookingById(id: string): Promise<Booking | null> {
@@ -225,7 +220,7 @@ export async function addBooking(formData: BookingFormData): Promise<{ success: 
     return { success: true, booking: newBooking };
   } catch (error: any) {
     console.error("[Firestore Error] addBooking:", error);
-    return { success: false, error: error.message || "Failed to add booking" };
+    return { success: false, error: describeFirestoreError(error, "Failed to add booking") };
   }
 }
 
@@ -235,24 +230,70 @@ export async function updateBookingById(id: string, formData: BookingFormData): 
   }
 
   try {
-    const docRef = doc(db, "bookings", id);
-    const bookingData: Record<string, any> = {
-      ...formData,
-      passengers: formData.passengers.map(p => ({ ...p, age: Number(p.age) })),
-      updatedAt: serverTimestamp(),
-    };
+    const database = db;
+    const docRef = doc(database, "bookings", id);
 
-    if (!formData.trainPreference) {
-      bookingData.trainPreference = deleteField();
-    }
-    if (!formData.upgradePreferred) {
-      bookingData.upgradePreferred = deleteField();
-    }
-    if (!formData.remarks) {
-      bookingData.remarks = deleteField();
-    }
+    // Cancellations point at passengers by their stable `pid`. Keep those ids
+    // through the edit (the form may have been opened before they were
+    // assigned) and refuse an edit that would drop a cancelled passenger.
+    // Read, check and write in one transaction: `cancelBookingPassengers()`
+    // assigns pids inside its own transaction, and a plain read-then-update
+    // here could overwrite pids it assigned in between, leaving its
+    // cancellation pointing at nobody (the passenger would show as travelling).
+    const refusal = await runTransaction(database, async (tx) => {
+      const existingSnap = await tx.get(docRef);
+      if (!existingSnap.exists()) {
+        return "Booking not found. It may have been deleted.";
+      }
+      const existingData = existingSnap.data();
+      const existingPassengers: Passenger[] = Array.isArray(existingData.passengers) ? existingData.passengers : [];
+      const takenPids = new Set(formData.passengers.map(p => p.pid).filter(Boolean));
+      const passengers = formData.passengers.map((p, index) => {
+        const next: Passenger = { ...p, age: Number(p.age) };
+        const previous = existingPassengers[index];
+        if (!next.pid && previous?.pid && previous.name === next.name && !takenPids.has(previous.pid)) {
+          next.pid = previous.pid;
+          takenPids.add(previous.pid);
+        }
+        if (!next.pid) delete next.pid;
+        return next;
+      });
 
-    await updateDoc(docRef, bookingData);
+      const cancelledPids = new Set<string>();
+      if (Array.isArray(existingData.cancellations)) {
+        (existingData.cancellations as BookingCancellation[]).forEach(c => {
+          if (c.kind === "cancellation") c.passengerPids.forEach(pid => cancelledPids.add(pid));
+        });
+      }
+      const keptPids = new Set(passengers.map(p => p.pid).filter(Boolean));
+      const droppedCancelled = [...cancelledPids].some(pid => !keptPids.has(pid));
+      if (droppedCancelled) {
+        return "A cancelled passenger cannot be removed from the booking. Undo the cancellation first.";
+      }
+
+      const bookingData: Record<string, any> = {
+        ...formData,
+        passengers,
+        updatedAt: serverTimestamp(),
+      };
+
+      if (!formData.trainPreference) {
+        bookingData.trainPreference = deleteField();
+      }
+      if (!formData.upgradePreferred) {
+        bookingData.upgradePreferred = deleteField();
+      }
+      if (!formData.remarks) {
+        bookingData.remarks = deleteField();
+      }
+
+      tx.update(docRef, bookingData);
+      return null;
+    });
+
+    if (refusal) {
+      return { success: false, error: refusal };
+    }
 
     const updatedDocSnap = await getDoc(docRef);
     if (!updatedDocSnap.exists()) {
@@ -263,7 +304,7 @@ export async function updateBookingById(id: string, formData: BookingFormData): 
     return { success: true, booking: updatedBooking };
   } catch (error: any) {
     console.error(`[Firestore Error] updateBookingById (${id}):`, error);
-    return { success: false, error: error.message || "Failed to update booking" };
+    return { success: false, error: describeFirestoreError(error, "Failed to update booking") };
   }
 }
 
@@ -273,12 +314,12 @@ export async function deleteBooking(id: string): Promise<{ success: boolean; err
   }
 
   try {
-    const docRef = doc(db, "bookings", id);
-    await deleteDoc(docRef);
+    // Leaves a tombstone so other devices drop the booking from their cache.
+    await deleteSyncedDoc(db, "bookings", id);
     return { success: true };
   } catch (error: any) {
     console.error(`[Firestore Error] deleteBooking (${id}):`, error);
-    return { success: false, error: error.message || "Failed to delete booking" };
+    return { success: false, error: describeFirestoreError(error, "Failed to delete booking") };
   }
 }
 
@@ -345,7 +386,7 @@ export async function updateGroupBookingStatus(
     return { success: true };
   } catch (error: any) {
     console.error("[Firestore Error] updateGroupBookingStatus:", error);
-    return { success: false, error: error.message || "Failed to update group status" };
+    return { success: false, error: describeFirestoreError(error, "Failed to update group status") };
   }
 }
 
@@ -381,7 +422,7 @@ export async function updateBookingRequirements(
     return { success: false, error: "Failed to retrieve booking after update" };
   } catch (error: any) {
     console.error(`[Firestore Error] updateBookingRequirements (${id}):`, error);
-    return { success: false, error: error.message || "Failed to update booking requirements" };
+    return { success: false, error: describeFirestoreError(error, "Failed to update booking requirements") };
   }
 }
 
@@ -409,61 +450,472 @@ export async function updateBookingPaymentTracking(
     return { success: false, error: "Failed to retrieve booking after update" };
   } catch (error: any) {
     console.error(`[Firestore Error] updateBookingPaymentTracking (${id}):`, error);
-    return { success: false, error: error.message || "Failed to update payment tracking" };
+    return { success: false, error: describeFirestoreError(error, "Failed to update payment tracking") };
   }
 }
-export async function updateBookingRefundDetails(
-  id: string,
-  refundDetails: RefundDetails
-): Promise<{ success: boolean; error?: string; booking?: Booking }> {
+// ============= CANCELLATION & REFUND OPERATIONS =============
+//
+// A booking's `cancellations` array holds one entry per cancellation event
+// (full or partial), each with an IRCTC refund leg and a customer payback leg.
+// Every write below runs in a transaction over the booking doc — and the IRCTC
+// account doc when a wallet balance changes — so a refund can never be saved
+// without its wallet credit (or the reverse).
+
+/** Passengers picked from one booking for cancellation. */
+export interface CancellationSelection {
+  bookingId: string;
+  /** Indexes into the booking's stored `passengers` array. */
+  passengerIndexes: number[];
+  /** Names at those indexes, used to detect a booking edited in the meantime. */
+  expectedNames: string[];
+}
+
+/**
+ * Details captured when passengers are cancelled. Amounts are totals for the
+ * whole cancellation; when it spans several bookings (a group PNR) they are
+ * split by the number of passengers cancelled in each booking.
+ */
+export interface NewCancellationDetails {
+  cancelledOn: string;
+  cancelledBy?: string;
+  reason?: string;
+  fareCancelled?: number;
+  cancellationCharge?: number;
+  irctcRefund: {
+    status: "Pending" | "No Refund";
+    recipientType: RefundRecipientType;
+    recipientName?: string;
+    accountId?: string;
+    expectedAmount?: number;
+  };
+  customerRefund: {
+    status: "Pending" | "Not Applicable";
+    recipientName?: string;
+    amount?: number;
+  };
+}
+
+/** Changes to an existing cancellation. A leg, when given, replaces the stored leg. */
+export interface CancellationPatch {
+  cancelledOn?: string;
+  cancelledBy?: string;
+  reason?: string;
+  fareCancelled?: number | null;
+  cancellationCharge?: number | null;
+  irctcRefund?: Omit<IrctcRefundLeg, "walletCredited">;
+  customerRefund?: CustomerRefundLeg;
+}
+
+export interface CancellationResult {
+  success: boolean;
+  error?: string;
+  /** Set when the refund was saved but a wallet balance could not be adjusted. */
+  warning?: string;
+  /** Bookings left with no travelling passengers (now "CNF & Cancelled"). */
+  fullyCancelledBookingIds?: string[];
+}
+
+const isoOrNow = (value: any): string => {
+  if (value instanceof Timestamp) return value.toDate().toISOString();
+  if (typeof value === "string" && value) return value;
+  return new Date().toISOString();
+};
+
+const toCancellationSource = (data: DocumentData): CancellationSource => ({
+  status: data.status as BookingStatus,
+  passengers: Array.isArray(data.passengers) ? (data.passengers as Passenger[]) : [],
+  userName: data.userName as string | undefined,
+  statusReason: data.statusReason as string | undefined,
+  statusHandler: data.statusHandler as string | undefined,
+  createdAt: isoOrNow(data.createdAt),
+  updatedAt: isoOrNow(data.updatedAt),
+  refundDetails: data.refundDetails as RefundDetails | undefined,
+  cancellations: Array.isArray(data.cancellations) ? (data.cancellations as BookingCancellation[]) : undefined,
+});
+
+/**
+ * Stored cancellation entries for a booking doc. Bookings cancelled before this
+ * feature have none, so their single legacy entry is synthesised; `isLegacy`
+ * tells the caller to persist it (and drop `refundDetails`) on write.
+ */
+const loadCancellationEntries = (data: DocumentData): { entries: BookingCancellation[]; isLegacy: boolean } => {
+  if (Array.isArray(data.cancellations) && data.cancellations.length > 0) {
+    return { entries: data.cancellations as BookingCancellation[], isLegacy: false };
+  }
+  const legacy = buildLegacyCancellation(toCancellationSource(data));
+  return { entries: legacy ? [legacy] : [], isLegacy: !!legacy };
+};
+
+const MISSING_ACCOUNT_WARNING =
+  "The IRCTC account for this refund no longer exists, so no wallet balance was changed.";
+
+/**
+ * Cancel one or more passengers of booked ticket(s). The booking stays
+ * "Booked" while anyone is still travelling and becomes "CNF & Cancelled" once
+ * the last passenger is cancelled. Booking records are not touched: commission
+ * is kept and the fare stays attributed to the handler/account that booked it.
+ */
+export async function cancelBookingPassengers(input: {
+  selections: CancellationSelection[];
+  details: NewCancellationDetails;
+}): Promise<CancellationResult> {
   if (!db) {
     return { success: false, error: "Firestore database is not configured" };
   }
+  const database = db;
+  const { details } = input;
+  const selections = input.selections.filter(s => s.passengerIndexes.length > 0);
+  if (selections.length === 0) {
+    return { success: false, error: "Select at least one passenger to cancel" };
+  }
 
   try {
-    const docRef = doc(db, "bookings", id);
-    const updateData: Record<string, any> = {
-      refundDetails,
-      updatedAt: serverTimestamp(),
-    };
+    const fullyCancelledBookingIds = await runTransaction(database, async (tx) => {
+      const refs = selections.map(s => doc(database, "bookings", s.bookingId));
+      const snaps: DocumentSnapshot<DocumentData>[] = [];
+      for (const ref of refs) {
+        snaps.push(await tx.get(ref));
+      }
 
-    await updateDoc(docRef, updateData);
+      const counts = selections.map(s => new Set(s.passengerIndexes).size);
+      const split = (total?: number) =>
+        typeof total === "number" && !Number.isNaN(total) ? splitAmountByCounts(total, counts) : undefined;
+      const fareParts = split(details.fareCancelled);
+      const chargeParts = split(details.cancellationCharge);
+      const expectedParts = split(details.irctcRefund.expectedAmount);
+      const customerParts = split(details.customerRefund.amount);
 
-    const updatedDocSnap = await getDoc(docRef);
-    if (updatedDocSnap.exists()) {
-      return { success: true, booking: mapDocToBooking(updatedDocSnap, updatedDocSnap.id) };
-    }
-    return { success: false, error: "Failed to retrieve booking after update" };
+      const now = new Date().toISOString();
+      const linkId = selections.length > 1 ? generateLocalId("cg") : undefined;
+      const fullyCancelled: string[] = [];
+
+      selections.forEach((selection, i) => {
+        const snap = snaps[i];
+        if (!snap.exists()) {
+          throw new Error("Booking not found. It may have been deleted.");
+        }
+        const data = snap.data();
+        if (data.status !== "Booked") {
+          throw new Error(`Only booked tickets can be cancelled (the booking for ${data.userName} is "${data.status}").`);
+        }
+
+        const { passengers } = ensurePassengerPids(
+          Array.isArray(data.passengers) ? (data.passengers as Passenger[]) : []
+        );
+        const existing: BookingCancellation[] = Array.isArray(data.cancellations) ? data.cancellations : [];
+        const alreadyCancelled = new Set<string>();
+        existing.forEach(c => {
+          if (c.kind === "cancellation") c.passengerPids.forEach(pid => alreadyCancelled.add(pid));
+        });
+
+        const pickedPids: string[] = [];
+        const pickedNames: string[] = [];
+        selection.passengerIndexes.forEach((index, k) => {
+          const passenger = passengers[index];
+          if (!passenger || passenger.name !== selection.expectedNames[k]) {
+            throw new Error("This booking was changed on another device. Close the dialog and try again.");
+          }
+          const pid = passenger.pid as string;
+          if (alreadyCancelled.has(pid)) {
+            throw new Error(`${passenger.name} is already cancelled.`);
+          }
+          if (pickedPids.includes(pid)) return;
+          pickedPids.push(pid);
+          pickedNames.push(passenger.name);
+        });
+
+        const remaining = passengers.filter(
+          p => !alreadyCancelled.has(p.pid as string) && !pickedPids.includes(p.pid as string)
+        ).length;
+        const becomesFullyCancelled = remaining === 0;
+
+        const entry: BookingCancellation = stripUndefined({
+          id: generateLocalId("c"),
+          kind: "cancellation" as const,
+          passengerPids: pickedPids,
+          passengerNames: pickedNames,
+          cancelledOn: details.cancelledOn,
+          cancelledBy: details.cancelledBy?.trim(),
+          reason: details.reason?.trim(),
+          fareCancelled: fareParts?.[i],
+          cancellationCharge: chargeParts?.[i],
+          cancellationGroupId: linkId,
+          // Remembered so undoing this cancellation can restore who booked it.
+          previousStatusHandler: becomesFullyCancelled ? (data.statusHandler as string | undefined) : undefined,
+          irctcRefund: normalizeIrctcLeg({
+            status: details.irctcRefund.status,
+            recipientType: details.irctcRefund.recipientType,
+            recipientName: details.irctcRefund.recipientName?.trim(),
+            accountId: details.irctcRefund.accountId,
+            expectedAmount: expectedParts?.[i],
+          }),
+          customerRefund: normalizeCustomerLeg({
+            status: details.customerRefund.status,
+            recipientName: details.customerRefund.recipientName?.trim() || (data.userName as string | undefined),
+            amount: customerParts?.[i],
+          }),
+          createdAt: now,
+          updatedAt: now,
+        });
+
+        const update: Record<string, any> = {
+          passengers,
+          cancellations: [...existing, entry],
+          updatedAt: serverTimestamp(),
+        };
+        if (becomesFullyCancelled) {
+          update.status = "CNF & Cancelled";
+          update.statusReason = details.reason?.trim() ? details.reason.trim() : deleteField();
+          if (details.cancelledBy?.trim()) {
+            update.statusHandler = details.cancelledBy.trim();
+          }
+          fullyCancelled.push(selection.bookingId);
+        }
+        tx.update(refs[i], update);
+      });
+
+      return fullyCancelled;
+    });
+
+    return { success: true, fullyCancelledBookingIds };
   } catch (error: any) {
-    console.error(`[Firestore Error] updateBookingRefundDetails (${id}):`, error);
-    return { success: false, error: error.message || "Failed to update refund details" };
+    console.error("[Firestore Error] cancelBookingPassengers:", error);
+    return { success: false, error: describeFirestoreError(error, "Failed to cancel passengers") };
   }
 }
 
-export async function deleteBookingRefundDetails(
-  id: string
-): Promise<{ success: boolean; error?: string; booking?: Booking }> {
+/**
+ * Update a cancellation's details or either refund leg.
+ *
+ * Wallet rule: a refund of a real cancellation that is "Received" by an IRCTC
+ * wallet is added to that account's `walletAmount`. The amount applied is kept
+ * on the entry (`irctcRefund.walletCredited`), so any later change — amount,
+ * status, recipient — applies only the difference, and an undo reverses exactly
+ * what was credited.
+ */
+export async function updateBookingCancellation(
+  bookingId: string,
+  cancellationId: string,
+  patch: CancellationPatch
+): Promise<CancellationResult> {
   if (!db) {
     return { success: false, error: "Firestore database is not configured" };
   }
+  const database = db;
 
   try {
-    const docRef = doc(db, "bookings", id);
-    const updateData: Record<string, any> = {
-      refundDetails: deleteField(),
-      updatedAt: serverTimestamp(),
-    };
+    const warning = await runTransaction(database, async (tx) => {
+      const bookingRef = doc(database, "bookings", bookingId);
+      const bookingSnap = await tx.get(bookingRef);
+      if (!bookingSnap.exists()) {
+        throw new Error("Booking not found. It may have been deleted.");
+      }
+      const data = bookingSnap.data();
+      const { entries, isLegacy } = loadCancellationEntries(data);
+      const current = entries.find(e => e.id === cancellationId);
+      if (!current) {
+        throw new Error("This cancellation no longer exists. Refresh and try again.");
+      }
 
-    await updateDoc(docRef, updateData);
+      const { irctcRefund: irctcPatch, customerRefund: customerPatch, ...fields } = patch;
+      const next: BookingCancellation = {
+        ...current,
+        ...(fields.cancelledOn !== undefined ? { cancelledOn: fields.cancelledOn } : {}),
+        ...(fields.cancelledBy !== undefined ? { cancelledBy: fields.cancelledBy.trim() } : {}),
+        ...(fields.reason !== undefined ? { reason: fields.reason.trim() } : {}),
+        ...(fields.fareCancelled !== undefined ? { fareCancelled: fields.fareCancelled ?? undefined } : {}),
+        ...(fields.cancellationCharge !== undefined ? { cancellationCharge: fields.cancellationCharge ?? undefined } : {}),
+        irctcRefund: normalizeIrctcLeg({ ...(irctcPatch ?? current.irctcRefund) }),
+        customerRefund: normalizeCustomerLeg({ ...(customerPatch ?? current.customerRefund) }),
+        // A synthesised legacy entry gets a real id once it is stored.
+        id: current.id === LEGACY_CANCELLATION_ID ? generateLocalId("c") : current.id,
+        updatedAt: new Date().toISOString(),
+      };
 
-    const updatedDocSnap = await getDoc(docRef);
-    if (updatedDocSnap.exists()) {
-      return { success: true, booking: mapDocToBooking(updatedDocSnap, updatedDocSnap.id) };
-    }
-    return { success: false, error: "Failed to retrieve booking after delete" };
+      const previousCredit = Number(current.irctcRefund.walletCredited) || 0;
+      const previousAccountId = current.irctcRefund.accountId;
+      let nextCredit = computeWalletCredit(next);
+      const nextAccountId = next.irctcRefund.accountId;
+
+      const deltas = new Map<string, number>();
+      if (previousCredit > 0 && previousAccountId) {
+        deltas.set(previousAccountId, roundMoney((deltas.get(previousAccountId) || 0) - previousCredit));
+      }
+      if (nextCredit > 0 && nextAccountId) {
+        deltas.set(nextAccountId, roundMoney((deltas.get(nextAccountId) || 0) + nextCredit));
+      }
+
+      // Transactions need every read before the first write.
+      let missingAccount = false;
+      const accountWrites: Array<{ ref: ReturnType<typeof doc>; walletAmount: number }> = [];
+      for (const [accountId, delta] of deltas) {
+        const accountRef = doc(database, "irctcAccounts", accountId);
+        const accountSnap = await tx.get(accountRef);
+        if (!accountSnap.exists()) {
+          if (accountId === nextAccountId && nextCredit > 0) {
+            nextCredit = 0;
+            missingAccount = true;
+          }
+          continue;
+        }
+        if (delta === 0) continue;
+        const currentWallet = Number(accountSnap.data().walletAmount) || 0;
+        accountWrites.push({ ref: accountRef, walletAmount: roundMoney(currentWallet + delta) });
+      }
+
+      if (nextCredit > 0) {
+        next.irctcRefund.walletCredited = nextCredit;
+      } else {
+        delete next.irctcRefund.walletCredited;
+      }
+
+      accountWrites.forEach(({ ref, walletAmount }) => {
+        tx.update(ref, { walletAmount, updatedAt: serverTimestamp() });
+      });
+
+      const nextEntries = entries.map(e => (e.id === cancellationId ? stripUndefined(next) : e));
+      const bookingUpdate: Record<string, any> = {
+        cancellations: nextEntries,
+        updatedAt: serverTimestamp(),
+      };
+      if (isLegacy || data.refundDetails !== undefined) {
+        bookingUpdate.refundDetails = deleteField();
+      }
+      tx.update(bookingRef, bookingUpdate);
+
+      return missingAccount ? MISSING_ACCOUNT_WARNING : undefined;
+    });
+
+    return { success: true, warning };
   } catch (error: any) {
-    console.error(`[Firestore Error] deleteBookingRefundDetails (${id}):`, error);
-    return { success: false, error: error.message || "Failed to delete refund details" };
+    console.error(`[Firestore Error] updateBookingCancellation (${bookingId}):`, error);
+    return { success: false, error: describeFirestoreError(error, "Failed to update refund") };
+  }
+}
+
+/**
+ * Reverse wallet credits for the given entries inside a transaction. Reads all
+ * affected accounts first (transaction rule) and returns the writes to apply.
+ */
+async function prepareWalletReversal(
+  tx: import("firebase/firestore").Transaction,
+  database: NonNullable<typeof db>,
+  entries: BookingCancellation[]
+): Promise<Array<{ ref: ReturnType<typeof doc>; walletAmount: number }>> {
+  const credits = new Map<string, number>();
+  entries.forEach(entry => {
+    const credited = Number(entry.irctcRefund.walletCredited) || 0;
+    const accountId = entry.irctcRefund.accountId;
+    if (credited > 0 && accountId) {
+      credits.set(accountId, roundMoney((credits.get(accountId) || 0) + credited));
+    }
+  });
+
+  const writes: Array<{ ref: ReturnType<typeof doc>; walletAmount: number }> = [];
+  for (const [accountId, credited] of credits) {
+    const accountRef = doc(database, "irctcAccounts", accountId);
+    const accountSnap = await tx.get(accountRef);
+    if (!accountSnap.exists()) continue; // account deleted — nothing left to reverse
+    const currentWallet = Number(accountSnap.data().walletAmount) || 0;
+    writes.push({ ref: accountRef, walletAmount: roundMoney(currentWallet - credited) });
+  }
+  return writes;
+}
+
+/**
+ * Undo a cancellation: its passengers travel again, any wallet credit from its
+ * refund is reversed, and a booking that had become "CNF & Cancelled" goes
+ * back to "Booked".
+ */
+export async function deleteBookingCancellation(
+  bookingId: string,
+  cancellationId: string
+): Promise<CancellationResult> {
+  if (!db) {
+    return { success: false, error: "Firestore database is not configured" };
+  }
+  const database = db;
+
+  try {
+    await runTransaction(database, async (tx) => {
+      const bookingRef = doc(database, "bookings", bookingId);
+      const bookingSnap = await tx.get(bookingRef);
+      if (!bookingSnap.exists()) {
+        throw new Error("Booking not found. It may have been deleted.");
+      }
+      const data = bookingSnap.data();
+      const { entries } = loadCancellationEntries(data);
+      const target = entries.find(e => e.id === cancellationId);
+      if (!target) {
+        throw new Error("This cancellation no longer exists. Refresh and try again.");
+      }
+      if (target.kind !== "cancellation") {
+        throw new Error("A failed payment cannot be undone here. Change the booking status instead.");
+      }
+
+      const walletWrites = await prepareWalletReversal(tx, database, [target]);
+      walletWrites.forEach(({ ref, walletAmount }) => {
+        tx.update(ref, { walletAmount, updatedAt: serverTimestamp() });
+      });
+
+      const remaining = entries.filter(e => e.id !== cancellationId);
+      const bookingUpdate: Record<string, any> = {
+        cancellations: remaining.length > 0 ? remaining : deleteField(),
+        refundDetails: deleteField(),
+        updatedAt: serverTimestamp(),
+      };
+      if (data.status === "CNF & Cancelled") {
+        bookingUpdate.status = "Booked";
+        bookingUpdate.statusReason = deleteField();
+        bookingUpdate.statusHandler = target.previousStatusHandler || deleteField();
+      }
+      tx.update(bookingRef, bookingUpdate);
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    console.error(`[Firestore Error] deleteBookingCancellation (${bookingId}):`, error);
+    return { success: false, error: describeFirestoreError(error, "Failed to undo cancellation") };
+  }
+}
+
+/**
+ * Remove every cancellation (and the legacy `refundDetails`) from a booking,
+ * reversing all wallet credits. Used before a booking goes back to "Requested":
+ * deleting the booking record then returns the full fare to the wallet, so any
+ * refund already credited must be taken back first or it would be counted twice.
+ * Does not change the booking status.
+ */
+export async function clearBookingCancellations(bookingId: string): Promise<CancellationResult> {
+  if (!db) {
+    return { success: false, error: "Firestore database is not configured" };
+  }
+  const database = db;
+
+  try {
+    await runTransaction(database, async (tx) => {
+      const bookingRef = doc(database, "bookings", bookingId);
+      const bookingSnap = await tx.get(bookingRef);
+      if (!bookingSnap.exists()) return;
+      const data = bookingSnap.data();
+      const { entries } = loadCancellationEntries(data);
+      if (entries.length === 0 && data.refundDetails === undefined && data.cancellations === undefined) return;
+
+      const walletWrites = await prepareWalletReversal(tx, database, entries);
+      walletWrites.forEach(({ ref, walletAmount }) => {
+        tx.update(ref, { walletAmount, updatedAt: serverTimestamp() });
+      });
+      tx.update(bookingRef, {
+        cancellations: deleteField(),
+        refundDetails: deleteField(),
+        updatedAt: serverTimestamp(),
+      });
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    console.error(`[Firestore Error] clearBookingCancellations (${bookingId}):`, error);
+    return { success: false, error: describeFirestoreError(error, "Failed to clear cancellations") };
   }
 }
 
@@ -490,74 +942,16 @@ export async function getAllBookingsAsJsonString(): Promise<string> {
 
 // ============= BOOKING RECORD OPERATIONS =============
 
-export async function getBookingRecordByBookingId(bookingId: string): Promise<any | null> {
-  if (!db) {
-    console.error("[Firestore Error] Database not initialized");
-    return null;
-  }
-
+/**
+ * The booked details covering a booking: its own record, else the group record
+ * that lists it. Served from the shared booking-records store, so it costs no
+ * Firestore reads. Components should prefer `useBookingRecord()`, which also
+ * updates in real time.
+ */
+export async function getBookingRecordByBookingId(bookingId: string): Promise<BookingRecord | null> {
   try {
-    const recordsCollection = collection(db, "bookingRecords");
-    
-    // First, check for direct bookingId match (individual bookings)
-    const directQuery = query(recordsCollection, where("bookingId", "==", bookingId));
-    const directSnapshot = await getDocs(directQuery);
-
-    if (!directSnapshot.empty) {
-      const docSnap = directSnapshot.docs[0];
-      const data = docSnap.data();
-      
-      return {
-        id: docSnap.id,
-        bookingId: data.bookingId,
-        bookingIds: data.bookingIds,
-        groupId: data.groupId,
-        bookedBy: data.bookedBy,
-        bookedAccountUsername: data.bookedAccountUsername,
-        amountCharged: data.amountCharged,
-        bookedAmount: data.bookedAmount,
-        commission: data.commission,
-        commissionRate: data.commissionRate,
-        passengerCount: data.passengerCount,
-        bookingTransactionId: data.bookingTransactionId,
-        bookingDate: data.bookingDate,
-        methodUsed: data.methodUsed,
-        trainName: data.trainName as string | undefined,
-        createdAt: toISOStringSafe(data.createdAt, "createdAt", docSnap.id),
-        updatedAt: toISOStringSafe(data.updatedAt, "updatedAt", docSnap.id),
-      };
-    }
-
-    // If not found, check if bookingId exists in any record's bookingIds array (group bookings)
-    const allRecordsQuery = query(recordsCollection, where("bookingIds", "array-contains", bookingId));
-    const groupSnapshot = await getDocs(allRecordsQuery);
-
-    if (!groupSnapshot.empty) {
-      const docSnap = groupSnapshot.docs[0];
-      const data = docSnap.data();
-
-      return {
-        id: docSnap.id,
-        bookingId: data.bookingId,
-        bookingIds: data.bookingIds,
-        groupId: data.groupId,
-        bookedBy: data.bookedBy,
-        bookedAccountUsername: data.bookedAccountUsername,
-        amountCharged: data.amountCharged,
-        bookedAmount: data.bookedAmount,
-        commission: data.commission,
-        commissionRate: data.commissionRate,
-        passengerCount: data.passengerCount,
-        bookingTransactionId: data.bookingTransactionId,
-        bookingDate: data.bookingDate,
-        methodUsed: data.methodUsed,
-        trainName: data.trainName as string | undefined,
-        createdAt: toISOStringSafe(data.createdAt, "createdAt", docSnap.id),
-        updatedAt: toISOStringSafe(data.updatedAt, "updatedAt", docSnap.id),
-      };
-    }
-
-    return null;
+    await bookingRecordsStore.whenReady();
+    return findBookingRecord(getBookingRecordIndex(), bookingId);
   } catch (error) {
     console.error(`[Firestore Error] getBookingRecordByBookingId (${bookingId}):`, error);
     return null;
@@ -888,7 +1282,7 @@ export async function saveBookingRecord(data: {
     return { success: true, record };
   } catch (error: any) {
     console.error("[Firestore Error] saveBookingRecord:", error);
-    return { success: false, error: error.message || "Failed to save booking record" };
+    return { success: false, error: describeFirestoreError(error, "Failed to save booking record") };
   }
 }
 
@@ -957,6 +1351,21 @@ export async function saveGroupBookingRecords(data: {
       const existingDoc = groupSnapshot.docs[0];
       previousRecord = existingDoc.data();
     }
+
+    // Never shrink an existing group record's coverage. A group card can show
+    // only some members (one fully cancelled moves to the Refunds tab; a search
+    // can match only some), and saving from it must not drop the hidden ones —
+    // they would be left with no booked details. The caller's ids come first so
+    // the primary `bookingId` and the "Book by" date source are unchanged.
+    // Members kept this way were cleared of stray records when they were first
+    // saved, so the stray cleanup above still only needs the caller's ids.
+    const previousIds: string[] = Array.isArray(previousRecord?.bookingIds)
+      ? previousRecord.bookingIds.filter((id: unknown): id is string => typeof id === "string" && !!id)
+      : [];
+    const coveredBookingIds = [
+      ...data.bookingIds,
+      ...previousIds.filter(id => !data.bookingIds.includes(id)),
+    ];
 
     // Detect cross-account edit: the record now points to a different account.
     // The old account's revert is composed into the same writeBatch as the
@@ -1049,7 +1458,7 @@ export async function saveGroupBookingRecords(data: {
     // Create single record for the entire group
     const recordData: Record<string, any> = {
       bookingId: data.bookingIds[0], // Primary booking ID (first one)
-      bookingIds: data.bookingIds,   // All booking IDs in the group
+      bookingIds: coveredBookingIds, // All booking IDs the record covers
       groupId: data.groupId,         // Reference to the group
       bookedBy: data.bookedBy,
       bookedAccountUsername: data.bookedAccountUsername,
@@ -1172,7 +1581,7 @@ export async function saveGroupBookingRecords(data: {
     return { success: true, record };
   } catch (error: any) {
     console.error("[Firestore Error] saveGroupBookingRecords:", error);
-    return { success: false, error: error.message || "Failed to save group booking records" };
+    return { success: false, error: describeFirestoreError(error, "Failed to save group booking records") };
   }
 }
 
@@ -1255,12 +1664,12 @@ export async function deleteBookingRecord(id: string): Promise<{ success: boolea
       }
     }
 
-    // Delete the booking record
-    await deleteDoc(docRef);
+    // Delete the booking record (with a tombstone so other devices drop it too)
+    await deleteSyncedDoc(db, "bookingRecords", id);
     return { success: true };
   } catch (error: any) {
     console.error(`[Firestore Error] deleteBookingRecord (${id}):`, error);
-    return { success: false, error: error.message || "Failed to delete booking record" };
+    return { success: false, error: describeFirestoreError(error, "Failed to delete booking record") };
   }
 }
 
@@ -1315,7 +1724,7 @@ export async function createBookingGroup(bookingIds: string[], name?: string): P
 
   } catch (error: any) {
     console.error("[Firestore Error] createBookingGroup:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: describeFirestoreError(error, "Something went wrong") };
   }
 }
 
@@ -1345,18 +1754,34 @@ export async function getBookingGroupById(id: string): Promise<BookingGroup | nu
   }
 }
 
-export async function ungroupBookings(groupId: string, bookings?: any[]): Promise<{ success: boolean; error?: string }> {
+export async function ungroupBookings(groupId: string, bookings?: Booking[]): Promise<{ success: boolean; error?: string }> {
    if (!db) return { success: false, error: "Database not initialized" };
    const firestore = db;
    try {
      const group = await getBookingGroupById(groupId);
      if (!group) return { success: false, error: "Group not found" };
 
-     // Fetch bookings data if not provided (need passenger counts for amount split)
-     let bookingsData = bookings || [];
+     // Work on every member of the group, not only the bookings passed in. A
+     // group card can show just some members (a fully cancelled one moves to the
+     // Refunds tab; a search can match only some), and splitting the group's
+     // amount across that subset would give the hidden members' share to the
+     // shown ones and leave the hidden ones with no booked details at all.
+     // Passed-in bookings are used as-is (saves reads); the rest are read here.
+     // Reads are not swallowed: a failed read aborts the ungroup rather than
+     // splitting across too few members. A member whose booking document no
+     // longer exists (deleted) is skipped.
+     const provided: Booking[] = (bookings || []).filter(Boolean);
+     const providedIds = new Set(provided.map(b => b.id));
+     const missingIds = Array.from(new Set(group.bookingIds)).filter(bid => !providedIds.has(bid));
+     const fetched = await Promise.all(
+       missingIds.map(async (bid) => {
+         const snap = await getDoc(doc(firestore, "bookings", bid));
+         return snap.exists() ? mapDocToBooking(snap, snap.id) : null;
+       })
+     );
+     const bookingsData: Booking[] = [...provided, ...fetched.filter((b): b is Booking => b !== null)];
      if (bookingsData.length === 0) {
-       const bookingPromises = group.bookingIds.map(bid => getBookingById(bid));
-       bookingsData = await Promise.all(bookingPromises);
+       return { success: false, error: "None of this group's bookings could be found" };
      }
 
      // Fetch the group booking record to get the total amount
@@ -1458,8 +1883,8 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
        // Wait for all individual records to be created/updated
        await Promise.all(individualRecordPromises);
 
-       // Delete the group booking record
-       await deleteDoc(doc(firestore, "bookingRecords", groupRecordDoc.id));
+       // Delete the group booking record (with a tombstone so other devices drop it too)
+       await deleteSyncedDoc(firestore, "bookingRecords", groupRecordDoc.id);
      } else {
        // No group record exists. This happens when booked details were saved
        // against a single individual booking (e.g. booked via the booking card
@@ -1541,9 +1966,10 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
        (b: any) => b.preparedAccounts && b.preparedAccounts.length > 0
      )?.preparedAccounts;
 
-     // Remove groupId from all bookings and propagate preparedAccounts to those missing them
-     const promises = group.bookingIds.map((bid) => {
-       const booking = bookingsData.find((b: any) => b.id === bid);
+     // Remove groupId from all bookings and propagate preparedAccounts to those missing them.
+     // Only members that still exist: updateDoc on a deleted booking would throw
+     // and leave the group half dissolved.
+     const promises = bookingsData.map((booking) => {
        const updateData: Record<string, any> = {
          groupId: deleteField(),
          updatedAt: serverTimestamp(),
@@ -1553,12 +1979,12 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
        if (
          sharedPreparedAccounts &&
          sharedPreparedAccounts.length > 0 &&
-         (!booking?.preparedAccounts || booking.preparedAccounts.length === 0)
+         (!booking.preparedAccounts || booking.preparedAccounts.length === 0)
        ) {
          updateData.preparedAccounts = sharedPreparedAccounts;
        }
 
-       return updateDoc(doc(firestore, "bookings", bid), updateData);
+       return updateDoc(doc(firestore, "bookings", booking.id), updateData);
      });
      await Promise.all(promises);
 
@@ -1568,7 +1994,7 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
      return { success: true };
    } catch (error: any) {
      console.error("[Firestore Error] ungroupBookings:", error);
-     return { success: false, error: error.message };
+     return { success: false, error: describeFirestoreError(error, "Something went wrong") };
    }
 }
 
@@ -1595,7 +2021,7 @@ export async function addToBookingGroup(groupId: string, bookingId: string): Pro
         return { success: true };
     } catch (error: any) {
         console.error("[Firestore Error] addToBookingGroup:", error);
-        return { success: false, error: error.message };
+        return { success: false, error: describeFirestoreError(error, "Something went wrong") };
     }
 }
 

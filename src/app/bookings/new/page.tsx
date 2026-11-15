@@ -34,7 +34,13 @@ function NewBookingPageContent() {
             bookingDate: bookingToCopy.bookingDate,
             bookingDateObj: new Date(bookingToCopy.bookingDate + 'T00:00:00'),
             userName: bookingToCopy.userName,
-            passengers: bookingToCopy.passengers.map(p => ({ ...p })),
+            // A copy is a brand-new request: drop the stable passenger ids so it
+            // can never be mistaken for the (possibly cancelled) originals.
+            passengers: bookingToCopy.passengers.map(p => {
+              const copy = { ...p };
+              delete copy.pid;
+              return copy;
+            }),
             classType: bookingToCopy.classType,
             bookingType: bookingToCopy.bookingType,
             trainPreference: "", // Cleared: clients usually have a different train preference

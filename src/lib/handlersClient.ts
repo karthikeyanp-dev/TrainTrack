@@ -13,13 +13,13 @@ import {
   deleteDoc, 
   serverTimestamp, 
   query, 
-  orderBy,
   where,
-  documentId,
   Timestamp,
   deleteField,
   writeBatch,
 } from "firebase/firestore";
+import { bookingRecordsStore, bookingsStore, handlersStore } from "@/lib/dataStores";
+import { describeFirestoreError } from "@/lib/firestoreErrors";
 import type { Handler, HandlerPaymentRecord, HandlerPaymentType } from "@/types/handler";
 
 /**
@@ -96,34 +96,15 @@ export function getHandlerOutstanding(
   return (initialPendingAmount || 0) + totalBookings - (settledAmount || 0) - (naAmount || 0);
 }
 
+/**
+ * Every handler, by name. Read from the app-wide handlers listener
+ * (`handlersStore`), so it costs no Firestore reads after the first load of
+ * the session.
+ */
 export async function getHandlers(): Promise<Handler[]> {
-  if (!db) {
-    console.error("[Firestore Error] Database not initialized");
-    return [];
-  }
-
   try {
-    const handlersCollection = collection(db, "handlers");
-    const q = query(handlersCollection, orderBy("name", "asc"));
-    const querySnapshot = await getDocs(q);
-
-    const handlers = querySnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        id: doc.id,
-        name: data.name as string,
-        initialPendingAmount: (data.initialPendingAmount as number) || 0,
-        settledAmount: (data.settledAmount as number) || 0,
-        naAmount: (data.naAmount as number) || 0,
-        payments: (data.payments as HandlerPaymentRecord[]) || [],
-        trackingStartDate: data.trackingStartDate as string | undefined,
-        lastSettledDate: data.lastSettledDate as string | undefined,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        updatedAt: data.updatedAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-      };
-    });
-
-    return handlers;
+    const handlers = await handlersStore.whenReady();
+    return [...handlers];
   } catch (error) {
     console.error("[Firestore Error] getHandlers:", error);
     return [];
@@ -176,7 +157,7 @@ export async function addHandler(handlerData: Omit<Handler, "id" | "createdAt" |
     return { success: true, handler: newHandler };
   } catch (error: any) {
     console.error("[Firestore Error] addHandler:", error);
-    return { success: false, error: error.message || "Failed to add handler" };
+    return { success: false, error: describeFirestoreError(error, "Failed to add handler") };
   }
 }
 
@@ -195,7 +176,7 @@ export async function updateHandler(id: string, handlerData: Partial<Handler>): 
     return { success: true };
   } catch (error: any) {
     console.error(`[Firestore Error] updateHandler (${id}):`, error);
-    return { success: false, error: error.message || "Failed to update handler" };
+    return { success: false, error: describeFirestoreError(error, "Failed to update handler") };
   }
 }
 
@@ -250,7 +231,7 @@ export async function renameHandlerAndMigrateRecords(
     return { success: true, updatedRecordsCount: snapshot.docs.length };
   } catch (error: any) {
     console.error(`[Firestore Error] renameHandlerAndMigrateRecords (${id}):`, error);
-    return { success: false, error: error.message || "Failed to rename handler and migrate records" };
+    return { success: false, error: describeFirestoreError(error, "Failed to rename handler and migrate records") };
   }
 }
 
@@ -291,7 +272,7 @@ export async function recordHandlerSettlement(
     return { success: true, settledAmount: newSettledAmount, lastSettledDate };
   } catch (error: any) {
     console.error(`[Firestore Error] recordHandlerSettlement (${id}):`, error);
-    return { success: false, error: error.message || "Failed to record settlement" };
+    return { success: false, error: describeFirestoreError(error, "Failed to record settlement") };
   }
 }
 
@@ -366,7 +347,7 @@ export async function recordHandlerPayment(
     return { success: true, payment: newPayment, settledAmount: newSettled, naAmount: newNa };
   } catch (error: any) {
     console.error(`[Firestore Error] recordHandlerPayment (${id}):`, error);
-    return { success: false, error: error.message || "Failed to record payment" };
+    return { success: false, error: describeFirestoreError(error, "Failed to record payment") };
   }
 }
 
@@ -424,7 +405,7 @@ export async function deleteHandlerPayment(
     return { success: true, settledAmount: newSettled, naAmount: newNa };
   } catch (error: any) {
     console.error(`[Firestore Error] deleteHandlerPayment (${handlerId}, ${paymentId}):`, error);
-    return { success: false, error: error.message || "Failed to delete payment" };
+    return { success: false, error: describeFirestoreError(error, "Failed to delete payment") };
   }
 }
 
@@ -452,7 +433,7 @@ export async function clearHandlerSettlement(
     return { success: true };
   } catch (error: any) {
     console.error(`[Firestore Error] clearHandlerSettlement (${id}):`, error);
-    return { success: false, error: error.message || "Failed to clear settlement" };
+    return { success: false, error: describeFirestoreError(error, "Failed to clear settlement") };
   }
 }
 
@@ -494,7 +475,7 @@ export async function setHandlerPendingAmount(
     return { success: true, trackingStartDate };
   } catch (error: any) {
     console.error(`[Firestore Error] setHandlerPendingAmount (${id}):`, error);
-    return { success: false, error: error.message || "Failed to set pending amount" };
+    return { success: false, error: describeFirestoreError(error, "Failed to set pending amount") };
   }
 }
 
@@ -528,7 +509,7 @@ export async function resetAllHandlersBalance(): Promise<{ success: boolean; err
     return { success: true, updatedCount: snapshot.docs.length };
   } catch (error: any) {
     console.error("[Firestore Error] resetAllHandlersBalance:", error);
-    return { success: false, error: error.message || "Failed to reset all handlers" };
+    return { success: false, error: describeFirestoreError(error, "Failed to reset all handlers") };
   }
 }
 
@@ -543,7 +524,7 @@ export async function deleteHandler(id: string): Promise<{ success: boolean; err
     return { success: true };
   } catch (error: any) {
     console.error(`[Firestore Error] deleteHandler (${id}):`, error);
-    return { success: false, error: error.message || "Failed to delete handler" };
+    return { success: false, error: describeFirestoreError(error, "Failed to delete handler") };
   }
 }
 
@@ -575,13 +556,10 @@ export async function getHandlerStatsForHandlers(
     // Consider only bookings made from Jan 1st 2026 (default)
     const fromDate = options?.fromDate ?? new Date(Date.UTC(2026, 0, 1, 0, 0, 0));
     
-    // Get all booking records to calculate stats
-    const bookingRecordsCollection = collection(db, "bookingRecords");
-    const recordsQuery = query(
-      bookingRecordsCollection,
-      where("createdAt", ">=", Timestamp.fromDate(fromDate))
-    );
-    const bookingRecordsSnapshot = await getDocs(recordsQuery);
+    // Booking records come from the shared store (cached on the device), not
+    // a Firestore query; the fromDate cut-off is applied in the loop below.
+    await bookingRecordsStore.whenReady();
+    const bookingRecords = bookingRecordsStore.getDocs();
     
     // Count unique bookings per handler
     const handlerUsage = new Map<string, { count: number; lastDate?: string }>();
@@ -600,8 +578,8 @@ export async function getHandlerStatsForHandlers(
       handlerLookup.set(h.name.toLowerCase().trim(), h);
     });
 
-    bookingRecordsSnapshot.docs.forEach(doc => {
-      const data = doc.data();
+    bookingRecords.forEach(doc => {
+      const data = doc.data;
       const bookedBy = data.bookedBy;
       const createdAt = toDateSafe(data.createdAt);
       const transactionId = data.bookingTransactionId;
@@ -738,7 +716,6 @@ export async function getHandlerBookingBreakdown(
     console.error("[Firestore Error] Database not initialized");
     return [];
   }
-  const database = db;
 
   try {
     const fromDate = new Date(Date.UTC(2026, 0, 1, 0, 0, 0));
@@ -755,12 +732,10 @@ export async function getHandlerBookingBreakdown(
     const windowStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const windowStartStr = `${windowStart.getFullYear()}-${String(windowStart.getMonth() + 1).padStart(2, "0")}-01`;
 
-    const recordsSnapshot = await getDocs(
-      query(
-        collection(database, "bookingRecords"),
-        where("createdAt", ">=", Timestamp.fromDate(fromDate))
-      )
-    );
+    // Both lookups below read the shared stores (cached on the device)
+    // instead of querying Firestore.
+    await Promise.all([bookingRecordsStore.whenReady(), bookingsStore.whenReady()]);
+    const records = bookingRecordsStore.getDocs();
 
     type Row = {
       id: string;
@@ -774,8 +749,8 @@ export async function getHandlerBookingBreakdown(
     const rows: Row[] = [];
     const bookingIdSet = new Set<string>();
 
-    recordsSnapshot.docs.forEach(d => {
-      const data = d.data();
+    records.forEach(d => {
+      const data = d.data;
       const bookedBy = typeof data.bookedBy === "string" ? data.bookedBy.toLowerCase().trim() : "";
       if (bookedBy !== handlerName) return;
 
@@ -817,28 +792,17 @@ export async function getHandlerBookingBreakdown(
       bookingIds.forEach(id => bookingIdSet.add(id));
     });
 
-    // Resolve passenger names from the source bookings, chunked for the `in` filter limit.
+    // Resolve passenger names from the source bookings.
     const bookedForById = new Map<string, string[]>();
-    const allIds = [...bookingIdSet];
-    const chunks: string[][] = [];
-    for (let i = 0; i < allIds.length; i += 30) {
-      chunks.push(allIds.slice(i, i + 30));
-    }
-    const bookingSnapshots = await Promise.all(
-      chunks.map(chunk =>
-        getDocs(query(collection(database, "bookings"), where(documentId(), "in", chunk)))
-      )
-    );
-    bookingSnapshots.forEach(snap => {
-      snap.docs.forEach(bd => {
-        const bdata = bd.data();
-        const passengers: { name?: unknown }[] = Array.isArray(bdata.passengers) ? bdata.passengers : [];
-        const names = passengers
-          .map(p => (typeof p?.name === "string" ? p.name.trim() : ""))
-          .filter(n => n !== "");
-        const fallback = typeof bdata.userName === "string" ? bdata.userName : "";
-        bookedForById.set(bd.id, names.length > 0 ? names : fallback ? [fallback] : []);
-      });
+    bookingsStore.getDocs().forEach(bd => {
+      if (!bookingIdSet.has(bd.id)) return;
+      const bdata = bd.data;
+      const passengers: { name?: unknown }[] = Array.isArray(bdata.passengers) ? bdata.passengers : [];
+      const names = passengers
+        .map(p => (typeof p?.name === "string" ? p.name.trim() : ""))
+        .filter(n => n !== "");
+      const fallback = typeof bdata.userName === "string" ? bdata.userName : "";
+      bookedForById.set(bd.id, names.length > 0 ? names : fallback ? [fallback] : []);
     });
 
     return rows
