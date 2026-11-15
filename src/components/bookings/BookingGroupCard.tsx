@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useMemo, useState } from "react";
 import { Booking } from "@/types/booking";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,7 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Layers, Link2Off, CheckCircle2, CreditCard, Loader2, Share2, Check, X, Edit3, UserX } from "lucide-react";
 import { BookingCard } from "./BookingCard";
 import { BookingRequirementsSheet } from "./BookingRequirementsSheet";
-import { ungroupBookings, updateBookingRequirements, saveBookingRecord, getBookingRecordByBookingId } from "@/lib/firestoreClient";
+import { ungroupBookings, updateBookingRequirements, saveBookingRecord } from "@/lib/firestoreClient";
+import { useBookingRecordLookup } from "@/hooks/useBookingRecords";
 import { useToast } from "@/hooks/use-toast";
 import {
   AlertDialog,
@@ -73,7 +74,12 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
   const hasSharedPreparedAccounts = bookings.some(b => b.preparedAccounts && b.preparedAccounts.length > 0);
   const firstBookingWithAccounts = bookings.find(b => b.preparedAccounts && b.preparedAccounts.length > 0) || bookings[0];
   
-  const [groupBookingDetails, setGroupBookingDetails] = useState<{
+  // Booked details come from the shared booking-records store, so they update
+  // in real time and cost no Firestore reads (this used to query Firestore for
+  // every booking of every group card on each bookings update).
+  const { getRecord, isLoading: isLoadingGroupBookingDetails } = useBookingRecordLookup();
+
+  const groupBookingDetails = useMemo<{
     bookedBy: string;
     bookedAccountUsername: string;
     totalAmount: number;
@@ -81,91 +87,63 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
     commission?: number;
     methodUsed: string;
     splitByBooking: { bookingId: string; bookingFor: string; passengers: number; amountCharged: number }[];
-  } | null>(null);
-  const [isLoadingGroupBookingDetails, setIsLoadingGroupBookingDetails] = useState(false);
+  } | null>(() => {
+    if (bookings.length === 0) return null;
 
-  const fetchGroupDetails = async () => {
-    try {
-      setIsLoadingGroupBookingDetails(true);
-      
-      // Try to fetch a single group record first (by checking first booking)
-      const firstRecord = await getBookingRecordByBookingId(bookings[0].id);
-      
-      if (firstRecord && firstRecord.groupId === groupId) {
-        // We have a group record!
-        
-        // Calculate split based on passenger counts
-        const splitByBooking = bookings.map(booking => ({
+    // Try a single group record first (by checking first booking)
+    const firstRecord = getRecord(bookings[0].id);
+
+    if (firstRecord && firstRecord.groupId === groupId) {
+      // We have a group record!
+
+      // Calculate ticket fare per passenger for proportional split display.
+      // Only the ticket fare (bookedAmount) is shared per passenger — the commission
+      // charged to each customer differs, so it is intentionally excluded here.
+      // Older records without bookedAmount fall back to amountCharged.
+      const totalPassengers = bookings.reduce((sum, b) => sum + b.passengers.length, 0);
+      const splitBaseAmount = typeof firstRecord.bookedAmount === "number" ? firstRecord.bookedAmount : firstRecord.amountCharged;
+      const amountPerPassenger = totalPassengers > 0 ? splitBaseAmount / totalPassengers : 0;
+
+      return {
+        bookedBy: firstRecord.bookedBy,
+        bookedAccountUsername: firstRecord.bookedAccountUsername,
+        totalAmount: Number(firstRecord.amountCharged.toFixed(2)),
+        bookedAmount: typeof firstRecord.bookedAmount === "number" ? Number(firstRecord.bookedAmount.toFixed(2)) : undefined,
+        commission: typeof firstRecord.commission === "number" ? Number(firstRecord.commission.toFixed(2)) : undefined,
+        methodUsed: firstRecord.methodUsed,
+        splitByBooking: bookings.map(booking => ({
           bookingId: booking.id,
           bookingFor: booking.userName,
           passengers: booking.passengers.length,
-          amountCharged: 0, // Will be calculated below
-        }));
-        
-        // Calculate ticket fare per passenger for proportional split display.
-        // Only the ticket fare (bookedAmount) is shared per passenger — the commission
-        // charged to each customer differs, so it is intentionally excluded here.
-        // Older records without bookedAmount fall back to amountCharged.
-        const totalPassengers = bookings.reduce((sum, b) => sum + b.passengers.length, 0);
-        const splitBaseAmount = typeof firstRecord.bookedAmount === "number" ? firstRecord.bookedAmount : firstRecord.amountCharged;
-        const amountPerPassenger = totalPassengers > 0 ? splitBaseAmount / totalPassengers : 0;
-        
-        splitByBooking.forEach(item => {
-          item.amountCharged = Number((amountPerPassenger * item.passengers).toFixed(2));
-        });
-
-        setGroupBookingDetails({
-          bookedBy: firstRecord.bookedBy,
-          bookedAccountUsername: firstRecord.bookedAccountUsername,
-          totalAmount: Number(firstRecord.amountCharged.toFixed(2)),
-          bookedAmount: typeof firstRecord.bookedAmount === "number" ? Number(firstRecord.bookedAmount.toFixed(2)) : undefined,
-          commission: typeof firstRecord.commission === "number" ? Number(firstRecord.commission.toFixed(2)) : undefined,
-          methodUsed: firstRecord.methodUsed,
-          splitByBooking,
-        });
-      } else {
-        // Legacy individual records - fetch all and combine
-        const records = await Promise.all(
-          bookings.map(b => getBookingRecordByBookingId(b.id))
-        );
-
-        const valid = records
-          .map((record, idx) => ({ record, booking: bookings[idx] }))
-          .filter(x => x.record !== null) as { record: any; booking: Booking }[];
-
-        if (valid.length === 0) {
-          setGroupBookingDetails(null);
-          return;
-        }
-
-        const totalAmount = valid.reduce((sum, x) => sum + (x.record.amountCharged || 0), 0);
-        const legacyFirstRecord = valid[0].record;
-        const splitByBooking = valid.map(x => ({
-          bookingId: x.booking.id,
-          bookingFor: x.booking.userName,
-          passengers: x.booking.passengers.length,
-          // Show only the ticket fare share (exclude commission) when available
-          amountCharged: Number(((typeof x.record.bookedAmount === "number" ? x.record.bookedAmount : x.record.amountCharged) || 0).toFixed(2)),
-        }));
-
-        setGroupBookingDetails({
-          bookedBy: legacyFirstRecord.bookedBy,
-          bookedAccountUsername: legacyFirstRecord.bookedAccountUsername,
-          totalAmount: Number(totalAmount.toFixed(2)),
-          methodUsed: legacyFirstRecord.methodUsed,
-          splitByBooking,
-        });
-      }
-    } catch (error) {
-      console.error("Failed to fetch group booking details", error);
-    } finally {
-      setIsLoadingGroupBookingDetails(false);
+          amountCharged: Number((amountPerPassenger * booking.passengers.length).toFixed(2)),
+        })),
+      };
     }
-  };
 
-  useEffect(() => {
-    fetchGroupDetails();
-  }, [bookings]);
+    // Legacy individual records - combine them
+    const valid = bookings
+      .map(booking => ({ record: getRecord(booking.id), booking }))
+      .filter((x): x is { record: NonNullable<ReturnType<typeof getRecord>>; booking: Booking } => x.record !== null);
+
+    if (valid.length === 0) return null;
+
+    const totalAmount = valid.reduce((sum, x) => sum + (x.record.amountCharged || 0), 0);
+    const legacyFirstRecord = valid[0].record;
+
+    return {
+      bookedBy: legacyFirstRecord.bookedBy,
+      bookedAccountUsername: legacyFirstRecord.bookedAccountUsername,
+      totalAmount: Number(totalAmount.toFixed(2)),
+      methodUsed: legacyFirstRecord.methodUsed,
+      splitByBooking: valid.map(x => ({
+        bookingId: x.booking.id,
+        bookingFor: x.booking.userName,
+        passengers: x.booking.passengers.length,
+        // Show only the ticket fare share (exclude commission) when available
+        amountCharged: Number(((typeof x.record.bookedAmount === "number" ? x.record.bookedAmount : x.record.amountCharged) || 0).toFixed(2)),
+      })),
+    };
+  }, [bookings, groupId, getRecord]);
 
   const hasGroupBookedDetails = !!groupBookingDetails;
 
@@ -647,14 +625,8 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
           </DialogHeader>
           <BookingRecordForm 
             bookingId={bookings[0].id} 
-            onClose={() => {
-              setShowEditRecordForm(false);
-              fetchGroupDetails();
-            }}
-            onSave={() => {
-              setShowEditRecordForm(false);
-              fetchGroupDetails();
-            }}
+            onClose={() => setShowEditRecordForm(false)}
+            onSave={() => setShowEditRecordForm(false)}
             hideWrapper={true}
             isGroupMode={true}
             groupBookings={bookings}

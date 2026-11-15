@@ -40,22 +40,36 @@ npm run typecheck
 
 ### Data Fetching Pattern
 
-All data operations use Firestore client SDK with React Query hooks:
+The project is on the Firebase **Spark (free) plan and cannot be upgraded**: 50,000 document reads/day. All reads of whole collections therefore go through shared stores in `src/lib/dataStores.ts`, never through ad-hoc `getDocs()`/`onSnapshot()` calls in components or hooks.
+
+**Shared stores (`src/lib/dataStores.ts`, engines in `src/lib/sync/`):**
+- `bookingsStore`, `bookingRecordsStore` — `SyncedCollection`: the collection is read in full **once per device**, mirrored in IndexedDB, and afterwards a single listener on `where("updatedAt", ">", lastSync)` fetches only changed documents. A return visit costs a handful of reads instead of one per document.
+- `accountsStore`, `handlersStore` — `LiveCollection`: one real-time listener per collection, started on first use and kept for the session (small collections).
+- Stores are module singletons that outlive page navigation; every hook/component shares them.
+
+**Rules that keep the device cache correct (must hold for every change to `bookings` / `bookingRecords`):**
+1. Every write sets `updatedAt: serverTimestamp()` — a write without it never reaches other devices.
+2. Delete with `deleteSyncedDoc()` (`src/lib/sync/tombstones.ts`), never `deleteDoc()`. It deletes the document and writes a `tombstone_<id>` document (`{ deleted: true, deletedId, updatedAt }`) into the same collection so other devices drop it. Tombstones are permanent and are filtered out by the stores; anything reading these collections raw must skip `deleted === true`.
+3. Do not add `getDocs(collection(...))` or per-card queries; read from the stores (`getBookings()`, `getBookingRecordByBookingId()`, `getAccounts()`, `getHandlers()` and the stats functions already do).
+
+**Safety nets:** on each app start the local document count is compared with a server `count()` (1 read per 1,000 docs) and the collection is re-read in full on a mismatch (catches documents deleted in the Firebase console). Documents *edited* in the console are not noticed — use "Re-download all data" (sidebar footer / mobile menu), which calls `resyncAllData()`. `SyncStatusBanner` in `AppShell` shows when live sync is down (e.g. quota exhausted) while the app keeps showing cached data.
 
 **Custom hooks in `src/hooks/`:**
-- `useBookings.ts` - Real-time bookings via `onSnapshot()` listener; also exports `usePendingBookings()`, `useBookingDates()`. `usePendingBookings()` is also used by `BookingRequirementsSheet` to compute account assignment conflicts.
-- `useAccounts.ts` - IRCTC account management via React Query (polling, not real-time); also exports `useAccountStats()`
-- `useHandlers.ts` - Handler/agent management; also exports `useHandlerStats()`
+- `useBookings.ts` - Real-time bookings from `bookingsStore`; also exports `usePendingBookings()`, `useBookingDates()` (both derived, no extra listener). `usePendingBookings()` is also used by `BookingRequirementsSheet` to compute account assignment conflicts.
+- `useBookingRecords.ts` - `useBookingRecord(bookingId)` and `useBookingRecordLookup()`: booked details for cards, from `bookingRecordsStore` (no per-card queries).
+- `useAccounts.ts` / `useHandlers.ts` - Real-time accounts / handlers from the live stores.
+- `useDataSync.ts` - Sync error state, retry, and manual re-download.
 
 **Firestore operations in `src/lib/`** (all raw Firestore calls live here, not in hooks):
 - `firestoreClient.ts` - All booking CRUD, status updates, group operations, booking records, cancellations/refunds
 - `cancellations.ts` - Pure (no Firestore) helpers for cancellations, refund state and legacy normalisation
 - `accountsClient.ts` - Account CRUD, wallet tracking, monthly stats
 - `handlersClient.ts` - Handler CRUD, booking assignment stats, and per-handler payment totals
+- `firestoreErrors.ts` - `describeFirestoreError()` explains the daily-quota error to the user
 
 **Important patterns:**
-- Firestore client methods: `collection()`, `doc()`, `getDocs()`, `addDoc()`, `updateDoc()`, `deleteDoc()`
-- React Query for caching; `useBookings` uses `onSnapshot()`, accounts/handlers use polling
+- Firestore client methods: `collection()`, `doc()`, `addDoc()`, `updateDoc()`; point reads/queries only inside write paths (e.g. `saveBookingRecord`, transactions) where an authoritative server value is needed
+- React Query is only used for mutations; `queryClient.invalidateQueries(...)` calls are harmless leftovers (the stores update themselves)
 - Optional fields cleaned up with `deleteField()` on update (not set to `null`). **Never use `deleteField()` inside `addDoc()` calls** — Firestore only allows it in `updateDoc()` or `set()` with merge.
 - Firestore Timestamp conversion to ISO strings for client compatibility
 - **Payment tracking**: Booking records include `paymentReceived` and `amountSettled` fields; filter by eligibility date using helper function
@@ -248,7 +262,8 @@ Current Firestore rules (`firestore.rules`) allow unrestricted read/write. In pr
 
 - Development server runs on port 9020 with Turbopack (`next dev --turbopack -p 9020`)
 - Date conversion required for all Firestore Timestamp fields
-- React Query stale time set to 60 seconds; accounts hook has no refetch-on-focus
+- Data freshness comes from the shared stores (real-time), not React Query polling
+- A device's first load after the device cache was introduced (or after clearing site data) reads `bookings` and `bookingRecords` in full once; bumping `DB_VERSION` in `src/lib/sync/localCache.ts` forces that on every device
 - All components must use `"use client"` directive for CSR
 - Firebase Hosting serves all routes to `/index.html` (SPA mode)
 - `TOAST_LIMIT = 1` — only one toast notification visible at a time

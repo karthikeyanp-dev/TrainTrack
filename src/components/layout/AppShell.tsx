@@ -16,13 +16,17 @@ import {
   X,
   ChevronRight,
   Lock,
-  KeyRound
+  KeyRound,
+  CloudDownload,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { SearchBarClient } from "./SearchBarClient";
 import { CommandPalette } from "@/components/command-palette/CommandPalette";
 import { PinGate, usePinLock } from "@/components/auth/PinGate";
+import { SyncStatusBanner } from "./SyncStatusBanner";
+import { useResyncData } from "@/hooks/useDataSync";
 import { cn } from "@/lib/utils";
 import { fadeIn, slideUp, staggerContainer, staggerItem } from "@/lib/animations";
 
@@ -41,6 +45,7 @@ const navItems = [
 function Sidebar({ activeTab, onClose }: { activeTab?: string; onClose?: () => void }) {
   const pathname = usePathname();
   const { lock, startChangePin } = usePinLock();
+  const { resync, isResyncing } = useResyncData();
 
   return (
     <motion.aside
@@ -119,6 +124,16 @@ function Sidebar({ activeTab, onClose }: { activeTab?: string; onClose?: () => v
             >
               <KeyRound className="h-4 w-4" />
             </Button>
+            <Button
+              variant="outline"
+              size="icon-sm"
+              title="Re-download all data from the server (only needed if something looks out of date)"
+              aria-label="Re-download all data from the server"
+              onClick={resync}
+              disabled={isResyncing}
+            >
+              {isResyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />}
+            </Button>
           </div>
           <p className="text-xs text-muted-foreground text-center">
             © {new Date().getFullYear()} TrainTrack
@@ -133,6 +148,7 @@ function MobileNav({ activeTab }: { activeTab?: string }) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const { lock } = usePinLock();
+  const { resync, isResyncing } = useResyncData();
 
   return (
     <>
@@ -237,6 +253,18 @@ function MobileNav({ activeTab }: { activeTab?: string }) {
                     </motion.div>
                   );
                 })}
+                <button
+                  type="button"
+                  onClick={resync}
+                  disabled={isResyncing}
+                  className="mt-4 flex w-full items-center gap-3 rounded-xl border-t px-4 pt-4 pb-3 text-left text-xs font-medium text-muted-foreground hover:text-foreground disabled:opacity-60"
+                >
+                  {isResyncing ? <Loader2 className="h-4 w-4 animate-spin" /> : <CloudDownload className="h-4 w-4" />}
+                  <span>
+                    Re-download all data
+                    <span className="block font-normal">Only needed if something looks out of date</span>
+                  </span>
+                </button>
               </nav>
             </motion.div>
           </>
@@ -334,6 +362,7 @@ export function AppShell({ children, showAddButton = false, activeTab }: AppShel
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
             className="p-4 lg:p-6 w-full"
           >
+            <SyncStatusBanner />
             {children}
           </motion.div>
         </main>

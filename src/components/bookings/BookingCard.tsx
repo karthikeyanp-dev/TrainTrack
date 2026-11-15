@@ -10,7 +10,7 @@ import { StatusBadge } from "./StatusBadge";
 import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X, CreditCard, ArrowRight, Sparkles } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateBookingStatus, deleteBooking, getBookingRecordByBookingId, deleteBookingRecord, updateBookingPaymentTracking, clearBookingCancellations } from "@/lib/firestoreClient";
-import type { BookingRecord } from "@/types/bookingRecord";
+import { useBookingRecord } from "@/hooks/useBookingRecords";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { format } from "date-fns";
@@ -94,7 +94,9 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
   const [showRecordForm, setShowRecordForm] = useState(false);
   const [showBookedDetailsDialog, setShowBookedDetailsDialog] = useState(false);
   const [showReasonDialog, setShowReasonDialog] = useState(false);
-  const [bookingRecord, setBookingRecord] = useState<BookingRecord | null>(null);
+  // Booked details come from the shared booking-records store: real-time, and
+  // no Firestore query per card.
+  const bookingRecord = useBookingRecord(booking.id);
 
   // Cancellation dialog: `all` pre-ticks every travelling passenger (full cancel).
   const [cancelDialog, setCancelDialog] = useState<{ open: boolean; all: boolean }>({ open: false, all: false });
@@ -103,19 +105,6 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
   const cancelledPids = getCancelledPids(booking);
   const activePassengers = getActivePassengers(booking);
   const partiallyCancelled = isPartiallyCancelled(booking);
-
-  const fetchBookingRecord = useCallback(async () => {
-    try {
-      const record = await getBookingRecordByBookingId(booking.id);
-      setBookingRecord(record);
-    } catch (error) {
-      console.error("Failed to fetch booking record:", error);
-    }
-  }, [booking.id]);
-
-  useEffect(() => {
-    fetchBookingRecord();
-  }, [fetchBookingRecord]);
 
   const formatDate = useCallback((dateString: string | any): string => {
     if (!dateString) return "N/A";
@@ -299,7 +288,6 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
     const status = statusToConfirm || "Booked";
     statusUpdateMutation.mutate({ id: booking.id, status: status, handler: savedHandler });
     setShowBookedDetailsDialog(false);
-    fetchBookingRecord();
     setStatusToConfirm(null);
   };
 
@@ -327,9 +315,11 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
             queryClient.invalidateQueries({ queryKey: ["accounts"] });
           }
 
-          // Delete booking record if it exists
-          if (bookingRecord) {
-            const deleteResult = await deleteBookingRecord(bookingRecord.id);
+          // Delete booking record if it exists. Looked up here rather than taken
+          // from the card so it is found even while the records are still loading.
+          const recordToDelete = await getBookingRecordByBookingId(booking.id);
+          if (recordToDelete) {
+            const deleteResult = await deleteBookingRecord(recordToDelete.id);
             if (!deleteResult.success) {
               toast({
                 title: "Warning",
@@ -1004,10 +994,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
             <BookingRecordForm
               bookingId={booking.id}
               booking={booking}
-              onClose={() => {
-                setShowRecordForm(false);
-                fetchBookingRecord();
-              }}
+              onClose={() => setShowRecordForm(false)}
             />
           </div>
         )}

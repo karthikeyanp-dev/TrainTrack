@@ -2,6 +2,12 @@
  * Client-side Firestore operations
  * Replaces Server Actions with direct Firestore calls from browser
  * This eliminates Cloud Run costs - only Firebase Hosting (free) + Firestore reads/writes
+ *
+ * Reads of whole collections go through the shared stores in `dataStores.ts`
+ * (cached on the device, only changes are fetched) so the app stays inside the
+ * Spark plan's daily read quota. Two rules keep that cache correct:
+ *  - every write to `bookings` / `bookingRecords` sets `updatedAt: serverTimestamp()`
+ *  - documents in those collections are deleted with `deleteSyncedDoc()`, never `deleteDoc()`
  */
 
 import { db } from "@/lib/firebase";
@@ -39,6 +45,7 @@ import type {
   RefundRecipientType,
 } from "@/types/booking";
 import { LEGACY_CLASS_MAP } from "@/types/booking";
+import type { BookingRecord } from "@/types/bookingRecord";
 import {
   LEGACY_CANCELLATION_ID,
   buildLegacyCancellation,
@@ -52,6 +59,15 @@ import {
   stripUndefined,
   type CancellationSource,
 } from "@/lib/cancellations";
+import {
+  bookingRecordsStore,
+  bookingsStore,
+  findBookingRecord,
+  getBookingRecordIndex,
+  getBookingsSnapshot,
+} from "@/lib/dataStores";
+import { describeFirestoreError } from "@/lib/firestoreErrors";
+import { deleteSyncedDoc } from "@/lib/sync/tombstones";
 
 // Helper to convert Firestore timestamps
 const toISOStringSafe = (value: any, fieldName: string, bookingId: string): string => {
@@ -124,29 +140,11 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
 
 // ============= BOOKING OPERATIONS =============
 
+/** Every booking, newest first, from the shared bookings store (no collection read). */
 export async function getBookings(): Promise<Booking[]> {
-  if (!db) {
-    console.error("[Firestore Error] Database not initialized");
-    return [];
-  }
-
   try {
-    const bookingsCollection = collection(db, "bookings");
-    const q = query(bookingsCollection, orderBy("createdAt", "desc"));
-    const querySnapshot = await getDocs(q);
-
-    const bookings = querySnapshot.docs
-      .map(doc => {
-        try {
-          return mapDocToBooking(doc, doc.id);
-        } catch (error) {
-          console.error(`Failed to map document ${doc.id}:`, error);
-          return null;
-        }
-      })
-      .filter(booking => booking !== null) as Booking[];
-
-    return bookings;
+    await bookingsStore.whenReady();
+    return getBookingsSnapshot();
   } catch (error) {
     console.error("[Firestore Error] getBookings:", error);
     return [];
@@ -154,35 +152,10 @@ export async function getBookings(): Promise<Booking[]> {
 }
 
 export async function getPendingBookings(): Promise<Booking[]> {
-  if (!db) {
-    console.error("[Firestore Error] Database not initialized");
-    return [];
-  }
-
-  try {
-    const bookingsCollection = collection(db, "bookings");
-    const q = query(bookingsCollection, where("status", "==", "Requested"));
-    const querySnapshot = await getDocs(q);
-
-    const bookings = querySnapshot.docs
-      .map(doc => {
-        try {
-          return mapDocToBooking(doc, doc.id);
-        } catch (error) {
-          console.error(`Failed to map document ${doc.id}:`, error);
-          return null;
-        }
-      })
-      .filter(booking => booking !== null) as Booking[];
-
-    // Sort by journey date
-    bookings.sort((a, b) => new Date(a.journeyDate).getTime() - new Date(b.journeyDate).getTime());
-
-    return bookings;
-  } catch (error) {
-    console.error("[Firestore Error] getPendingBookings:", error);
-    return [];
-  }
+  const bookings = await getBookings();
+  return bookings
+    .filter(booking => booking.status === "Requested")
+    .sort((a, b) => new Date(a.journeyDate).getTime() - new Date(b.journeyDate).getTime());
 }
 
 export async function getBookingById(id: string): Promise<Booking | null> {
@@ -247,7 +220,7 @@ export async function addBooking(formData: BookingFormData): Promise<{ success: 
     return { success: true, booking: newBooking };
   } catch (error: any) {
     console.error("[Firestore Error] addBooking:", error);
-    return { success: false, error: error.message || "Failed to add booking" };
+    return { success: false, error: describeFirestoreError(error, "Failed to add booking") };
   }
 }
 
@@ -319,7 +292,7 @@ export async function updateBookingById(id: string, formData: BookingFormData): 
     return { success: true, booking: updatedBooking };
   } catch (error: any) {
     console.error(`[Firestore Error] updateBookingById (${id}):`, error);
-    return { success: false, error: error.message || "Failed to update booking" };
+    return { success: false, error: describeFirestoreError(error, "Failed to update booking") };
   }
 }
 
@@ -329,12 +302,12 @@ export async function deleteBooking(id: string): Promise<{ success: boolean; err
   }
 
   try {
-    const docRef = doc(db, "bookings", id);
-    await deleteDoc(docRef);
+    // Leaves a tombstone so other devices drop the booking from their cache.
+    await deleteSyncedDoc(db, "bookings", id);
     return { success: true };
   } catch (error: any) {
     console.error(`[Firestore Error] deleteBooking (${id}):`, error);
-    return { success: false, error: error.message || "Failed to delete booking" };
+    return { success: false, error: describeFirestoreError(error, "Failed to delete booking") };
   }
 }
 
@@ -401,7 +374,7 @@ export async function updateGroupBookingStatus(
     return { success: true };
   } catch (error: any) {
     console.error("[Firestore Error] updateGroupBookingStatus:", error);
-    return { success: false, error: error.message || "Failed to update group status" };
+    return { success: false, error: describeFirestoreError(error, "Failed to update group status") };
   }
 }
 
@@ -437,7 +410,7 @@ export async function updateBookingRequirements(
     return { success: false, error: "Failed to retrieve booking after update" };
   } catch (error: any) {
     console.error(`[Firestore Error] updateBookingRequirements (${id}):`, error);
-    return { success: false, error: error.message || "Failed to update booking requirements" };
+    return { success: false, error: describeFirestoreError(error, "Failed to update booking requirements") };
   }
 }
 
@@ -465,7 +438,7 @@ export async function updateBookingPaymentTracking(
     return { success: false, error: "Failed to retrieve booking after update" };
   } catch (error: any) {
     console.error(`[Firestore Error] updateBookingPaymentTracking (${id}):`, error);
-    return { success: false, error: error.message || "Failed to update payment tracking" };
+    return { success: false, error: describeFirestoreError(error, "Failed to update payment tracking") };
   }
 }
 // ============= CANCELLATION & REFUND OPERATIONS =============
@@ -695,7 +668,7 @@ export async function cancelBookingPassengers(input: {
     return { success: true, fullyCancelledBookingIds };
   } catch (error: any) {
     console.error("[Firestore Error] cancelBookingPassengers:", error);
-    return { success: false, error: error.message || "Failed to cancel passengers" };
+    return { success: false, error: describeFirestoreError(error, "Failed to cancel passengers") };
   }
 }
 
@@ -804,7 +777,7 @@ export async function updateBookingCancellation(
     return { success: true, warning };
   } catch (error: any) {
     console.error(`[Firestore Error] updateBookingCancellation (${bookingId}):`, error);
-    return { success: false, error: error.message || "Failed to update refund" };
+    return { success: false, error: describeFirestoreError(error, "Failed to update refund") };
   }
 }
 
@@ -890,7 +863,7 @@ export async function deleteBookingCancellation(
     return { success: true };
   } catch (error: any) {
     console.error(`[Firestore Error] deleteBookingCancellation (${bookingId}):`, error);
-    return { success: false, error: error.message || "Failed to undo cancellation" };
+    return { success: false, error: describeFirestoreError(error, "Failed to undo cancellation") };
   }
 }
 
@@ -930,7 +903,7 @@ export async function clearBookingCancellations(bookingId: string): Promise<Canc
     return { success: true };
   } catch (error: any) {
     console.error(`[Firestore Error] clearBookingCancellations (${bookingId}):`, error);
-    return { success: false, error: error.message || "Failed to clear cancellations" };
+    return { success: false, error: describeFirestoreError(error, "Failed to clear cancellations") };
   }
 }
 
@@ -957,74 +930,16 @@ export async function getAllBookingsAsJsonString(): Promise<string> {
 
 // ============= BOOKING RECORD OPERATIONS =============
 
-export async function getBookingRecordByBookingId(bookingId: string): Promise<any | null> {
-  if (!db) {
-    console.error("[Firestore Error] Database not initialized");
-    return null;
-  }
-
+/**
+ * The booked details covering a booking: its own record, else the group record
+ * that lists it. Served from the shared booking-records store, so it costs no
+ * Firestore reads. Components should prefer `useBookingRecord()`, which also
+ * updates in real time.
+ */
+export async function getBookingRecordByBookingId(bookingId: string): Promise<BookingRecord | null> {
   try {
-    const recordsCollection = collection(db, "bookingRecords");
-    
-    // First, check for direct bookingId match (individual bookings)
-    const directQuery = query(recordsCollection, where("bookingId", "==", bookingId));
-    const directSnapshot = await getDocs(directQuery);
-
-    if (!directSnapshot.empty) {
-      const docSnap = directSnapshot.docs[0];
-      const data = docSnap.data();
-      
-      return {
-        id: docSnap.id,
-        bookingId: data.bookingId,
-        bookingIds: data.bookingIds,
-        groupId: data.groupId,
-        bookedBy: data.bookedBy,
-        bookedAccountUsername: data.bookedAccountUsername,
-        amountCharged: data.amountCharged,
-        bookedAmount: data.bookedAmount,
-        commission: data.commission,
-        commissionRate: data.commissionRate,
-        passengerCount: data.passengerCount,
-        bookingTransactionId: data.bookingTransactionId,
-        bookingDate: data.bookingDate,
-        methodUsed: data.methodUsed,
-        trainName: data.trainName as string | undefined,
-        createdAt: toISOStringSafe(data.createdAt, "createdAt", docSnap.id),
-        updatedAt: toISOStringSafe(data.updatedAt, "updatedAt", docSnap.id),
-      };
-    }
-
-    // If not found, check if bookingId exists in any record's bookingIds array (group bookings)
-    const allRecordsQuery = query(recordsCollection, where("bookingIds", "array-contains", bookingId));
-    const groupSnapshot = await getDocs(allRecordsQuery);
-
-    if (!groupSnapshot.empty) {
-      const docSnap = groupSnapshot.docs[0];
-      const data = docSnap.data();
-
-      return {
-        id: docSnap.id,
-        bookingId: data.bookingId,
-        bookingIds: data.bookingIds,
-        groupId: data.groupId,
-        bookedBy: data.bookedBy,
-        bookedAccountUsername: data.bookedAccountUsername,
-        amountCharged: data.amountCharged,
-        bookedAmount: data.bookedAmount,
-        commission: data.commission,
-        commissionRate: data.commissionRate,
-        passengerCount: data.passengerCount,
-        bookingTransactionId: data.bookingTransactionId,
-        bookingDate: data.bookingDate,
-        methodUsed: data.methodUsed,
-        trainName: data.trainName as string | undefined,
-        createdAt: toISOStringSafe(data.createdAt, "createdAt", docSnap.id),
-        updatedAt: toISOStringSafe(data.updatedAt, "updatedAt", docSnap.id),
-      };
-    }
-
-    return null;
+    await bookingRecordsStore.whenReady();
+    return findBookingRecord(getBookingRecordIndex(), bookingId);
   } catch (error) {
     console.error(`[Firestore Error] getBookingRecordByBookingId (${bookingId}):`, error);
     return null;
@@ -1355,7 +1270,7 @@ export async function saveBookingRecord(data: {
     return { success: true, record };
   } catch (error: any) {
     console.error("[Firestore Error] saveBookingRecord:", error);
-    return { success: false, error: error.message || "Failed to save booking record" };
+    return { success: false, error: describeFirestoreError(error, "Failed to save booking record") };
   }
 }
 
@@ -1639,7 +1554,7 @@ export async function saveGroupBookingRecords(data: {
     return { success: true, record };
   } catch (error: any) {
     console.error("[Firestore Error] saveGroupBookingRecords:", error);
-    return { success: false, error: error.message || "Failed to save group booking records" };
+    return { success: false, error: describeFirestoreError(error, "Failed to save group booking records") };
   }
 }
 
@@ -1722,12 +1637,12 @@ export async function deleteBookingRecord(id: string): Promise<{ success: boolea
       }
     }
 
-    // Delete the booking record
-    await deleteDoc(docRef);
+    // Delete the booking record (with a tombstone so other devices drop it too)
+    await deleteSyncedDoc(db, "bookingRecords", id);
     return { success: true };
   } catch (error: any) {
     console.error(`[Firestore Error] deleteBookingRecord (${id}):`, error);
-    return { success: false, error: error.message || "Failed to delete booking record" };
+    return { success: false, error: describeFirestoreError(error, "Failed to delete booking record") };
   }
 }
 
@@ -1782,7 +1697,7 @@ export async function createBookingGroup(bookingIds: string[], name?: string): P
 
   } catch (error: any) {
     console.error("[Firestore Error] createBookingGroup:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: describeFirestoreError(error, "Something went wrong") };
   }
 }
 
@@ -1925,8 +1840,8 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
        // Wait for all individual records to be created/updated
        await Promise.all(individualRecordPromises);
 
-       // Delete the group booking record
-       await deleteDoc(doc(firestore, "bookingRecords", groupRecordDoc.id));
+       // Delete the group booking record (with a tombstone so other devices drop it too)
+       await deleteSyncedDoc(firestore, "bookingRecords", groupRecordDoc.id);
      } else {
        // No group record exists. This happens when booked details were saved
        // against a single individual booking (e.g. booked via the booking card
@@ -2035,7 +1950,7 @@ export async function ungroupBookings(groupId: string, bookings?: any[]): Promis
      return { success: true };
    } catch (error: any) {
      console.error("[Firestore Error] ungroupBookings:", error);
-     return { success: false, error: error.message };
+     return { success: false, error: describeFirestoreError(error, "Something went wrong") };
    }
 }
 
@@ -2062,7 +1977,7 @@ export async function addToBookingGroup(groupId: string, bookingId: string): Pro
         return { success: true };
     } catch (error: any) {
         console.error("[Firestore Error] addToBookingGroup:", error);
-        return { success: false, error: error.message };
+        return { success: false, error: describeFirestoreError(error, "Something went wrong") };
     }
 }
 
