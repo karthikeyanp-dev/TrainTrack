@@ -131,6 +131,7 @@ function createStores(): Stores {
           username: data.username as string,
           password: data.password as string,
           isVerified: data.isVerified ?? false,
+          isRailOneRegistered: data.isRailOneRegistered ?? false,
           walletAmount: (data.walletAmount as number) || 0,
           lastBookedDate: toDateString(data.lastBookedDate),
           previousLastBookedDate: data.previousLastBookedDate,

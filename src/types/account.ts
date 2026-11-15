@@ -4,6 +4,7 @@ export interface IrctcAccount {
   username: string;
   password: string;      // stored for authentication only
   isVerified?: boolean;  // whether the account has been verified
+  isRailOneRegistered?: boolean; // whether the account is registered on RailOne
   walletAmount: number;  // current balance
   lastBookedDate: string; // ISO date string: "YYYY-MM-DD"
   previousLastBookedDate?: string; // Stored previous lastBookedDate for reverting
