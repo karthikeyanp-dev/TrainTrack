@@ -582,16 +582,16 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                             <span className="text-muted-foreground block">Payment Method</span>
                             <span className="font-medium">{groupBookingDetails!.methodUsed}</span>
                           </div>
-                          {groupBookingDetails!.bookedStatus && (
-                            <div className="col-span-2 min-w-0 space-y-1">
-                              <span className="text-muted-foreground block">Booked Status</span>
-                              <span className="font-mono font-semibold select-all">{groupBookingDetails!.bookedStatus}</span>
-                            </div>
-                          )}
                           {groupBookingDetails!.trainName && (
-                            <div className="col-span-2 min-w-0 space-y-1">
+                            <div className="min-w-0 space-y-1">
                               <span className="text-muted-foreground block">Train</span>
                               <span className="font-medium break-words block">{groupBookingDetails!.trainName}</span>
+                            </div>
+                          )}
+                          {groupBookingDetails!.bookedStatus && (
+                            <div className="min-w-0 space-y-1">
+                              <span className="text-muted-foreground block">Booked Status</span>
+                              <span className="font-mono font-semibold select-all break-words block">{groupBookingDetails!.bookedStatus}</span>
                             </div>
                           )}
                         </div>

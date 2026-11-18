@@ -975,17 +975,17 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                         </div>
                       </div>
 
-                      {bookingRecord.bookedStatus && (
-                        <div className="col-span-2 pt-1 border-t border-border/40">
-                          <span className="text-muted-foreground text-[10px] font-semibold block uppercase tracking-wider">Booked Status</span>
-                          <div className="font-mono font-semibold text-xs text-foreground mt-0.5 select-all">{bookingRecord.bookedStatus}</div>
+                      {bookingRecord.trainName && (
+                        <div className="min-w-0 pt-1 border-t border-border/40">
+                          <span className="text-muted-foreground text-[10px] font-semibold block uppercase tracking-wider">Train</span>
+                          <div className="font-medium text-xs text-foreground mt-0.5 break-words">{bookingRecord.trainName}</div>
                         </div>
                       )}
 
-                      {bookingRecord.trainName && (
-                        <div className="col-span-2 pt-1 border-t border-border/40">
-                          <span className="text-muted-foreground text-[10px] font-semibold block uppercase tracking-wider">Train</span>
-                          <div className="font-medium text-xs text-foreground mt-0.5">{bookingRecord.trainName}</div>
+                      {bookingRecord.bookedStatus && (
+                        <div className="min-w-0 pt-1 border-t border-border/40">
+                          <span className="text-muted-foreground text-[10px] font-semibold block uppercase tracking-wider">Booked Status</span>
+                          <div className="font-mono font-semibold text-xs text-foreground mt-0.5 select-all break-words">{bookingRecord.bookedStatus}</div>
                         </div>
                       )}
                     </div>
