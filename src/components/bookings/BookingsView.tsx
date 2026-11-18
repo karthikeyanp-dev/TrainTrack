@@ -3,7 +3,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useInView } from 'react-intersection-observer';
 import { motion, AnimatePresence } from 'framer-motion';
-import type { Booking, TrainClass } from '@/types/booking';
+import type { Booking, BookingStatus, TrainClass } from '@/types/booking';
+import { ALL_BOOKING_STATUSES, getBookingStatusLabel, isBookedStatus } from '@/types/booking';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { AlertCircle, Search, Loader2, CalendarDays, CheckCircle2, Clock, Receipt, Layers, X, Filter } from "lucide-react";
@@ -27,24 +28,6 @@ import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { staggerContainer, staggerItem, fadeInUp } from "@/lib/animations";
 
-/**
- * Payment tracking feature start date.
- * Bookings created/updated before this date should NOT show as pending for payment tracking.
- * Set to March 6, 2026 (yesterday when feature was implemented).
- */
-const PAYMENT_TRACKING_START_DATE = new Date('2026-03-06T00:00:00.000Z');
-
-/**
- * Check if a booking is eligible for payment tracking (created/updated on or after the feature start date)
- */
-const isEligibleForPaymentTracking = (booking: Booking): boolean => {
-  const createdAt = new Date(booking.createdAt);
-  const updatedAt = new Date(booking.updatedAt);
-  // Use the later of createdAt or updatedAt
-  const relevantDate = updatedAt > createdAt ? updatedAt : createdAt;
-  return relevantDate >= PAYMENT_TRACKING_START_DATE;
-};
-
 const getLocalDateKey = (date: Date = new Date()): string => {
   const year = date.getFullYear();
   const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -65,8 +48,19 @@ const isRefundPending = (booking: Booking): boolean =>
   (booking.status === "Booking Failed (Paid)" || booking.status === "CNF & Cancelled") &&
   hasOpenRefund(booking);
 
-// Payment filter types
-export type PaymentFilterType = 'all' | 'payment-pending' | 'settlement-pending';
+// Completed-tab status filter
+export type CompletedStatusFilter = 'all' | BookingStatus;
+
+// Active chip colors mirror the StatusBadge palette so chips and card badges read as one system
+const STATUS_CHIP_ACTIVE: Record<string, { chip: string; count: string }> = {
+  "Booked": { chip: "bg-emerald-600 text-white ring-emerald-600/25", count: "bg-white/20" },
+  "Booked (WL)": { chip: "bg-teal-600 text-white ring-teal-600/25", count: "bg-white/20" },
+  "Missed": { chip: "bg-amber-500 text-black ring-amber-500/25", count: "bg-black/10" },
+  "Booking Failed (Paid)": { chip: "bg-rose-600 text-white ring-rose-600/25", count: "bg-white/20" },
+  "Booking Failed (Unpaid)": { chip: "bg-rose-600 text-white ring-rose-600/25", count: "bg-white/20" },
+  "User Cancelled": { chip: "bg-orange-500 text-white ring-orange-500/25", count: "bg-white/20" },
+  "CNF & Cancelled": { chip: "bg-purple-600 text-white ring-purple-600/25", count: "bg-white/20" },
+};
 
 // Search filter types
 export type BookingSearchFilter = 'all' | 'customer' | 'passenger' | 'others';
@@ -166,7 +160,7 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedBookingIds, setSelectedBookingIds] = useState<Set<string>>(new Set());
   const [isGrouping, setIsGrouping] = useState(false);
-  const [paymentFilter, setPaymentFilter] = useState<PaymentFilterType>('all');
+  const [statusFilter, setStatusFilter] = useState<CompletedStatusFilter>('all');
   const [activeTab, setActiveTab] = useState('pending');
   // Today's date key, refreshed so an open page rolls over past midnight
   const [todayKey, setTodayKey] = useState(() => getLocalDateKey());
@@ -270,10 +264,10 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
     setPage(1);
   }, [searchQuery, searchFilter]);
 
-  // Reset payment filter when search query changes
+  // Reset status filter when search query changes
   useEffect(() => {
     if (searchQuery) {
-      setPaymentFilter('all');
+      setStatusFilter('all');
     }
   }, [searchQuery]);
 
@@ -289,7 +283,7 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
     }
   }, [activeTab, hasRefunds]);
 
-  const { pendingBookingsByDate, pendingDates, completedBookingsByDate, completedDates, paymentPendingCount, settlementPendingCount, upcomingBookingsByDate, upcomingDates } = useMemo(() => {
+  const { pendingBookingsByDate, pendingDates, completedBookingsByDate, completedDates, completedStatusCounts, completedTotalCount, upcomingBookingsByDate, upcomingDates } = useMemo(() => {
     const sourceBookings = allBookings;
     const today = todayKey;
 
@@ -311,28 +305,20 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
         return b.status !== 'Requested' && visibleDateSet.has(b.bookingDate);
       });
 
-    // --- Payment Tracking Filter ---
-    // Count pending payments for eligible bookings (created/updated after feature start date)
-    const eligibleForTracking = completedBookingsToDisplay.filter(b => b.status === 'Booked' && isEligibleForPaymentTracking(b));
-    const paymentPendingCount = eligibleForTracking.filter(b => !b.paymentReceived).length;
-    const settlementPendingCount = eligibleForTracking.filter(b => !b.amountSettled).length;
+    // --- Status Filter ---
+    // Count bookings per status before filtering so chips show live totals
+    const statusCountMap = new Map<BookingStatus, number>();
+    completedBookingsToDisplay.forEach(b => {
+      statusCountMap.set(b.status, (statusCountMap.get(b.status) || 0) + 1);
+    });
+    const completedTotalCount = completedBookingsToDisplay.length;
+    const completedStatusCounts = ALL_BOOKING_STATUSES
+      .filter(s => s !== 'Requested')
+      .map(status => ({ status, count: statusCountMap.get(status) || 0 }))
+      .filter(({ status, count }) => count > 0 || status === statusFilter);
 
-    // Apply payment filter if active
-    if (paymentFilter !== 'all') {
-      completedBookingsToDisplay = completedBookingsToDisplay.filter(b => {
-        // Only "Booked" status with payment tracking eligibility
-        if (b.status !== 'Booked' || !isEligibleForPaymentTracking(b)) {
-          return false; // Hide non-eligible bookings when filter is active
-        }
-
-        if (paymentFilter === 'payment-pending') {
-          return !b.paymentReceived;
-        }
-        if (paymentFilter === 'settlement-pending') {
-          return !b.amountSettled;
-        }
-        return true;
-      });
+    if (statusFilter !== 'all') {
+      completedBookingsToDisplay = completedBookingsToDisplay.filter(b => b.status === statusFilter);
     }
 
     const completedBookingsByDate = groupBookingsByDate(
@@ -343,7 +329,7 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
 
     // --- Upcoming Journeys: booked tickets with journey date today or later ---
     const upcomingBookingsToDisplay = sourceBookings.filter(b => {
-      if (b.status !== 'Booked') return false;
+      if (!isBookedStatus(b.status)) return false;
       return toDateKey(b.journeyDate) >= today;
     });
 
@@ -358,8 +344,8 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
 
     const upcomingDates = Object.keys(upcomingBookingsByDate).sort((a, b) => a.localeCompare(b));
 
-    return { pendingBookingsByDate, pendingDates, completedBookingsByDate, completedDates, paymentPendingCount, settlementPendingCount, upcomingBookingsByDate, upcomingDates };
-  }, [allBookings, pendingBookings, visibleDates, searchQuery, paymentFilter, todayKey]);
+    return { pendingBookingsByDate, pendingDates, completedBookingsByDate, completedDates, completedStatusCounts, completedTotalCount, upcomingBookingsByDate, upcomingDates };
+  }, [allBookings, pendingBookings, visibleDates, searchQuery, statusFilter, todayKey]);
 
 
   // `selectable: false` renders a read-only list (no checkboxes) — used by the Upcoming tab,
@@ -668,70 +654,55 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
                 {renderGroupingActions()}
               </div>
 
-              {/* Filter Pills - Desktop: Horizontal, Mobile: Wrap or Single Select */}
-              <div className="flex flex-wrap items-center gap-1.5">
-                {/* All Filter */}
+              {/* Status Filter Chips - Desktop: Wrap, Mobile: single scrollable line */}
+              <div className="chip-scroll flex flex-nowrap items-center gap-1.5 overflow-x-auto pb-1.5 md:flex-wrap md:overflow-visible md:pb-0">
                 <button
-                  onClick={() => setPaymentFilter('all')}
+                  onClick={() => setStatusFilter('all')}
                   className={cn(
-                    "h-6 px-2.5 py-1 rounded-full text-[0.6rem] font-medium leading-none transition-all",
-                    paymentFilter === 'all'
+                    "h-6 shrink-0 whitespace-nowrap px-2.5 py-1 rounded-full text-[0.6rem] font-medium leading-none transition-all flex items-center gap-1",
+                    statusFilter === 'all'
                       ? "bg-primary text-primary-foreground shadow-elevation-2 ring-2 ring-primary/20"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                      : "bg-muted/50 text-muted-foreground hover:bg-muted/80 hover:text-foreground"
                   )}
                 >
                   All
+                  <span className={cn(
+                    "rounded-full px-1 py-0 text-[0.55rem] leading-none",
+                    statusFilter === 'all' ? "bg-white/20" : "bg-foreground/10"
+                  )}>
+                    {completedTotalCount}
+                  </span>
                 </button>
 
-                {/* Payment Pending - Only show if there are any */}
-                {paymentPendingCount > 0 && (
-                  <button
-                    onClick={() => setPaymentFilter('payment-pending')}
-                    className={cn(
-                      "h-6 px-2.5 py-1 rounded-full text-[0.6rem] font-medium leading-none transition-all flex items-center gap-1",
-                      paymentFilter === 'payment-pending'
-                        ? "bg-amber-500 text-white shadow-elevation-2 ring-2 ring-amber-500/20"
-                        : "bg-amber-500/10 text-amber-600 hover:bg-amber-500/20"
-                    )}
-                  >
-                    <span className="flex h-1.5 w-1.5 rounded-full bg-current animate-pulse" />
-                    Payment Pending
-                    <span className={cn(
-                      "rounded-full px-1 py-0 text-[0.55rem] leading-none",
-                      paymentFilter === 'payment-pending' ? "bg-white/20" : "bg-amber-500/20"
-                    )}>
-                      {paymentPendingCount}
-                    </span>
-                  </button>
-                )}
+                {completedStatusCounts.map(({ status, count }) => {
+                  const isActive = statusFilter === status;
+                  const activeColors = STATUS_CHIP_ACTIVE[status] ?? { chip: "bg-primary text-primary-foreground ring-primary/20", count: "bg-white/20" };
+                  return (
+                    <button
+                      key={status}
+                      onClick={() => setStatusFilter(isActive ? 'all' : status)}
+                      className={cn(
+                        "h-6 shrink-0 whitespace-nowrap px-2.5 py-1 rounded-full text-[0.6rem] font-medium leading-none transition-all flex items-center gap-1",
+                        isActive
+                          ? cn("shadow-elevation-2 ring-2", activeColors.chip)
+                          : "bg-muted/50 text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                      )}
+                    >
+                      {getBookingStatusLabel(status)}
+                      <span className={cn(
+                        "rounded-full px-1 py-0 text-[0.55rem] leading-none",
+                        isActive ? activeColors.count : "bg-foreground/10"
+                      )}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
 
-                {/* Settlement Pending - Only show if there are any */}
-                {settlementPendingCount > 0 && (
+                {statusFilter !== 'all' && (
                   <button
-                    onClick={() => setPaymentFilter('settlement-pending')}
-                    className={cn(
-                      "h-6 px-2.5 py-1 rounded-full text-[0.6rem] font-medium leading-none transition-all flex items-center gap-1",
-                      paymentFilter === 'settlement-pending'
-                        ? "bg-purple-500 text-white shadow-elevation-2 ring-2 ring-purple-500/20"
-                        : "bg-purple-500/10 text-purple-600 hover:bg-purple-500/20"
-                    )}
-                  >
-                    <span className="flex h-1.5 w-1.5 rounded-full bg-current" />
-                    Settlement Pending
-                    <span className={cn(
-                      "rounded-full px-1 py-0 text-[0.55rem] leading-none",
-                      paymentFilter === 'settlement-pending' ? "bg-white/20" : "bg-purple-500/20"
-                    )}>
-                      {settlementPendingCount}
-                    </span>
-                  </button>
-                )}
-
-                {/* Summary text when filters are active */}
-                {paymentFilter !== 'all' && (
-                  <button
-                    onClick={() => setPaymentFilter('all')}
-                    className="ml-1.5 text-[0.6rem] text-muted-foreground underline hover:text-foreground"
+                    onClick={() => setStatusFilter('all')}
+                    className="ml-1.5 shrink-0 whitespace-nowrap text-[0.6rem] text-muted-foreground underline hover:text-foreground"
                   >
                     Clear filter
                   </button>
@@ -742,15 +713,15 @@ export function BookingsView({ allBookings: rawAllBookings, pendingBookings: raw
           {completedDates.length === 0 ? (
             <Alert className="mt-4">
               {searchQuery ? <Search className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
-              <AlertTitle>{searchQuery ? "Search Results" : paymentFilter !== 'all' ? "No Pending Payments" : "No Completed Bookings"}</AlertTitle>
+              <AlertTitle>{searchQuery ? "Search Results" : statusFilter !== 'all' ? `No ${getBookingStatusLabel(statusFilter)} Bookings` : "No Completed Bookings"}</AlertTitle>
               <AlertDescription>
-                {searchQuery ? noCompletedMessage : paymentFilter !== 'all'
-                  ? `No bookings with ${paymentFilter === 'payment-pending' ? 'pending customer payments' : 'pending settlements'} found.`
+                {searchQuery ? noCompletedMessage : statusFilter !== 'all'
+                  ? `No completed bookings with status "${getBookingStatusLabel(statusFilter)}" found.`
                   : noCompletedMessage}
               </AlertDescription>
             </Alert>
           ) : (
-            <Accordion type="multiple" className="w-full space-y-4" defaultValue={completedDates.length > 0 ? [completedDates[0]] : []}>
+            <Accordion key={statusFilter} type="multiple" className="w-full space-y-4" defaultValue={completedDates.length > 0 ? [completedDates[0]] : []}>
               {completedDates.map((date, index) => (
                 <motion.div
                   key={`completed-${date}`}

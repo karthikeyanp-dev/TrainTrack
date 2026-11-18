@@ -1,7 +1,15 @@
 
 
-export const ALL_BOOKING_STATUSES = ["Requested", "Booked", "Missed", "Booking Failed (Paid)", "Booking Failed (Unpaid)", "CNF & Cancelled", "User Cancelled"] as const;
+export const ALL_BOOKING_STATUSES = ["Requested", "Booked", "Booked (WL)", "Missed", "Booking Failed (Paid)", "Booking Failed (Unpaid)", "CNF & Cancelled", "User Cancelled"] as const;
 export type BookingStatus = typeof ALL_BOOKING_STATUSES[number];
+
+// "Booked" is the stored value for confirmed tickets (shown as "Booked (CNF)");
+// kept unchanged so existing Firestore data needs no migration.
+export const isBookedStatus = (status?: string): boolean =>
+  status === "Booked" || status === "Booked (WL)";
+
+export const getBookingStatusLabel = (status: string): string =>
+  status === "Booked" ? "Booked (CNF)" : status;
 
 export const ALL_TRAIN_CLASSES = ["SL", "3A", "2A", "1A", "2S", "3E", "EC", "CC", "CC (Veg)", "CC (Non Veg)", "CC (No Food)", "UR"] as const;
 export type TrainClass = typeof ALL_TRAIN_CLASSES[number];
@@ -111,6 +119,9 @@ export interface BookingCancellation {
   // Set on the entry that turned the booking "CNF & Cancelled": the booking's
   // statusHandler just before, restored if that cancellation is undone.
   previousStatusHandler?: string;
+  // The booked status ("Booked" or "Booked (WL)") just before full cancellation,
+  // restored if that cancellation is undone.
+  previousStatus?: BookingStatus;
   irctcRefund: IrctcRefundLeg;
   customerRefund: CustomerRefundLeg;
   createdAt: string;          // ISO string

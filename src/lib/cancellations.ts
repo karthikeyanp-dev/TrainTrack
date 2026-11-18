@@ -22,6 +22,7 @@ import type {
   RefundDetails,
   RefundRecipientType,
 } from "@/types/booking";
+import { isBookedStatus } from "@/types/booking";
 
 /** Id of the entry synthesised for bookings cancelled before this feature existed. */
 export const LEGACY_CANCELLATION_ID = "legacy";
@@ -181,7 +182,7 @@ export function getCancelledPassengerCount(booking: CancellationSource): number 
 
 /** Some, but not all, passengers of a booked ticket were cancelled. */
 export function isPartiallyCancelled(booking: CancellationSource): boolean {
-  if (booking.status !== "Booked") return false;
+  if (!isBookedStatus(booking.status)) return false;
   const cancelled = getCancelledPassengerCount(booking);
   return cancelled > 0 && cancelled < booking.passengers.length;
 }

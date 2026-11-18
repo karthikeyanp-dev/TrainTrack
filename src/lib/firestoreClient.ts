@@ -44,7 +44,7 @@ import type {
   CustomerRefundLeg,
   RefundRecipientType,
 } from "@/types/booking";
-import { LEGACY_CLASS_MAP } from "@/types/booking";
+import { LEGACY_CLASS_MAP, isBookedStatus } from "@/types/booking";
 import type { BookingRecord } from "@/types/bookingRecord";
 import {
   LEGACY_CANCELLATION_ID,
@@ -595,7 +595,7 @@ export async function cancelBookingPassengers(input: {
           throw new Error("Booking not found. It may have been deleted.");
         }
         const data = snap.data();
-        if (data.status !== "Booked") {
+        if (!isBookedStatus(data.status)) {
           throw new Error(`Only booked tickets can be cancelled (the booking for ${data.userName} is "${data.status}").`);
         }
 
@@ -642,6 +642,7 @@ export async function cancelBookingPassengers(input: {
           cancellationGroupId: linkId,
           // Remembered so undoing this cancellation can restore who booked it.
           previousStatusHandler: becomesFullyCancelled ? (data.statusHandler as string | undefined) : undefined,
+          previousStatus: becomesFullyCancelled ? (data.status as BookingStatus) : undefined,
           irctcRefund: normalizeIrctcLeg({
             status: details.irctcRefund.status,
             recipientType: details.irctcRefund.recipientType,
@@ -865,7 +866,7 @@ export async function deleteBookingCancellation(
         updatedAt: serverTimestamp(),
       };
       if (data.status === "CNF & Cancelled") {
-        bookingUpdate.status = "Booked";
+        bookingUpdate.status = target.previousStatus || "Booked";
         bookingUpdate.statusReason = deleteField();
         bookingUpdate.statusHandler = target.previousStatusHandler || deleteField();
       }
@@ -1041,6 +1042,7 @@ export async function saveBookingRecord(data: {
   passengerCount?: number;
   methodUsed: string;
   trainName?: string;
+  bookedStatus?: string;
 }): Promise<{ success: boolean; error?: string; record?: any; errors?: any }> {
   if (!db) {
     return { success: false, error: "Firestore database is not configured" };
@@ -1182,6 +1184,9 @@ export async function saveBookingRecord(data: {
     if (data.trainName && data.trainName.trim() !== "") {
       recordData.trainName = data.trainName.trim();
     }
+    if (data.bookedStatus && data.bookedStatus.trim() !== "") {
+      recordData.bookedStatus = data.bookedStatus.trim().toUpperCase();
+    }
 
     let docId: string;
     let newRecordRef: ReturnType<typeof doc>;
@@ -1195,6 +1200,9 @@ export async function saveBookingRecord(data: {
       // For updates, use deleteField() to remove trainName if it was cleared
       if (!data.trainName || data.trainName.trim() === "") {
         recordData.trainName = deleteField();
+      }
+      if (!data.bookedStatus || data.bookedStatus.trim() === "") {
+        recordData.bookedStatus = deleteField();
       }
     } else {
       // Generate a new doc id upfront so the record write can be composed
@@ -1275,6 +1283,7 @@ export async function saveBookingRecord(data: {
       methodUsed: savedData.methodUsed,
       bookingTransactionId: savedData.bookingTransactionId,
       trainName: savedData.trainName as string | undefined,
+      bookedStatus: savedData.bookedStatus as string | undefined,
       createdAt: toISOStringSafe(savedData.createdAt, "createdAt", savedDoc.id),
       updatedAt: toISOStringSafe(savedData.updatedAt, "updatedAt", savedDoc.id),
     };
@@ -1302,6 +1311,7 @@ export async function saveGroupBookingRecords(data: {
   passengerCount?: number;
   methodUsed: string;
   trainName?: string;
+  bookedStatus?: string;
 }): Promise<{ success: boolean; error?: string; record?: any }> {
   if (!db) {
     return { success: false, error: "Firestore database is not configured" };
@@ -1485,6 +1495,9 @@ export async function saveGroupBookingRecords(data: {
     if (data.trainName && data.trainName.trim() !== "") {
       recordData.trainName = data.trainName.trim();
     }
+    if (data.bookedStatus && data.bookedStatus.trim() !== "") {
+      recordData.bookedStatus = data.bookedStatus.trim().toUpperCase();
+    }
 
     let docId: string;
     let newRecordRef: ReturnType<typeof doc>;
@@ -1497,6 +1510,9 @@ export async function saveGroupBookingRecords(data: {
       // For updates, use deleteField() to remove trainName if it was cleared
       if (!data.trainName || data.trainName.trim() === "") {
         recordData.trainName = deleteField();
+      }
+      if (!data.bookedStatus || data.bookedStatus.trim() === "") {
+        recordData.bookedStatus = deleteField();
       }
     } else {
       // Generate a new doc id upfront so the record write can be composed
@@ -1574,6 +1590,7 @@ export async function saveGroupBookingRecords(data: {
       methodUsed: savedData.methodUsed,
       bookingTransactionId: savedData.bookingTransactionId,
       trainName: savedData.trainName as string | undefined,
+      bookedStatus: savedData.bookedStatus as string | undefined,
       createdAt: toISOStringSafe(savedData.createdAt, "createdAt", savedDoc.id),
       updatedAt: toISOStringSafe(savedData.updatedAt, "updatedAt", savedDoc.id),
     };
@@ -1800,6 +1817,7 @@ export async function ungroupBookings(groupId: string, bookings?: Booking[]): Pr
        const bookedBy = groupRecordData.bookedBy;
        const bookedAccountUsername = groupRecordData.bookedAccountUsername;
        const trainName = groupRecordData.trainName;
+       const bookedStatus = groupRecordData.bookedStatus;
        const bookingTransactionId = groupRecordData.bookingTransactionId; // Preserve transaction ID
        const groupRecordCreatedAt = groupRecordData.createdAt;
        const bookingDate = groupRecordData.bookingDate;
@@ -1840,6 +1858,9 @@ export async function ungroupBookings(groupId: string, bookings?: Booking[]): Pr
           if (trainName) {
             baseRecordData.trainName = trainName;
           }
+          if (bookedStatus) {
+            baseRecordData.bookedStatus = bookedStatus;
+          }
 
           if (bookingDate) {
             baseRecordData.bookingDate = bookingDate;
@@ -1874,6 +1895,9 @@ export async function ungroupBookings(groupId: string, bookings?: Booking[]): Pr
 
            if (!trainName) {
              updateData.trainName = deleteField();
+           }
+           if (!bookedStatus) {
+             updateData.bookedStatus = deleteField();
            }
 
            await updateDoc(doc(firestore, "bookingRecords", existingDoc.id), updateData);
@@ -1940,6 +1964,7 @@ export async function ungroupBookings(groupId: string, bookings?: Booking[]): Pr
              if (sourceRecord.methodUsed) sharedRecordData.methodUsed = sourceRecord.methodUsed;
              if (sourceRecord.bookingTransactionId) sharedRecordData.bookingTransactionId = sourceRecord.bookingTransactionId;
              if (sourceRecord.trainName) sharedRecordData.trainName = sourceRecord.trainName;
+             if (sourceRecord.bookedStatus) sharedRecordData.bookedStatus = sourceRecord.bookedStatus;
              if (sourceRecord.bookingDate) sharedRecordData.bookingDate = sourceRecord.bookingDate;
 
              const existing = existingRecords.find(x => x.bookingId === booking.id);

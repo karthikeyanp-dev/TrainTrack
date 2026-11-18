@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ALL_BOOKING_STATUSES, type BookingStatus } from "@/types/booking";
+import { ALL_BOOKING_STATUSES, isBookedStatus, getBookingStatusLabel, type BookingStatus } from "@/types/booking";
 import { updateGroupBookingStatus, clearBookingCancellations } from "@/lib/firestoreClient";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { StatusReasonDialog } from "./StatusReasonDialog";
@@ -62,7 +62,7 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
   const totalPassengers = bookings.reduce((sum, b) => sum + b.passengers.length, 0);
   // Passengers of booked tickets who can still be cancelled.
   const cancellablePassengers = bookings.reduce(
-    (sum, b) => sum + (b.status === "Booked" ? getActivePassengers(b).length : 0),
+    (sum, b) => sum + (isBookedStatus(b.status) ? getActivePassengers(b).length : 0),
     0
   );
   const uniqueSources = Array.from(new Set(bookings.map(b => b.source)));
@@ -96,6 +96,8 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
     bookedAmount?: number;
     commission?: number;
     methodUsed: string;
+    bookedStatus?: string;
+    trainName?: string;
     /** Bookings the group record's fare covers (absent for combined individual records). */
     bookingIds?: string[];
     splitByBooking: { bookingId: string; bookingFor: string; passengers: number; amountCharged: number }[];
@@ -125,6 +127,8 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
         bookedAmount: typeof firstRecord.bookedAmount === "number" ? Number(firstRecord.bookedAmount.toFixed(2)) : undefined,
         commission: typeof firstRecord.commission === "number" ? Number(firstRecord.commission.toFixed(2)) : undefined,
         methodUsed: firstRecord.methodUsed,
+        bookedStatus: firstRecord.bookedStatus,
+        trainName: firstRecord.trainName,
         bookingIds: firstRecord.bookingIds,
         splitByBooking: bookings.map(booking => ({
           bookingId: booking.id,
@@ -150,6 +154,10 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
       bookedAccountUsername: legacyFirstRecord.bookedAccountUsername,
       totalAmount: Number(totalAmount.toFixed(2)),
       methodUsed: legacyFirstRecord.methodUsed,
+      // Individual records may differ; show the first entered value rather than
+      // strictly the first record's (which may predate these optional fields).
+      bookedStatus: valid.find(x => x.record.bookedStatus)?.record.bookedStatus,
+      trainName: valid.find(x => x.record.trainName)?.record.trainName,
       splitByBooking: valid.map(x => ({
         bookingId: x.booking.id,
         bookingFor: x.booking.userName,
@@ -234,7 +242,7 @@ export function BookingGroupCard({ groupId, bookings, selectionMode, selectedBoo
       .flatMap(booking =>
         booking.passengers.map(passenger => ({
           passenger,
-          cancelled: booking.status === "Booked" && isPassengerCancelled(booking, passenger),
+          cancelled: isBookedStatus(booking.status) && isPassengerCancelled(booking, passenger),
         }))
       )
       .map(({ passenger, cancelled }, index) => {
@@ -574,6 +582,18 @@ ${passengerDetailsText}${preferencesText ? `\n---\n${preferencesText}` : ""}${re
                             <span className="text-muted-foreground block">Payment Method</span>
                             <span className="font-medium">{groupBookingDetails!.methodUsed}</span>
                           </div>
+                          {groupBookingDetails!.bookedStatus && (
+                            <div className="col-span-2 min-w-0 space-y-1">
+                              <span className="text-muted-foreground block">Booked Status</span>
+                              <span className="font-mono font-semibold select-all">{groupBookingDetails!.bookedStatus}</span>
+                            </div>
+                          )}
+                          {groupBookingDetails!.trainName && (
+                            <div className="col-span-2 min-w-0 space-y-1">
+                              <span className="text-muted-foreground block">Train</span>
+                              <span className="font-medium break-words block">{groupBookingDetails!.trainName}</span>
+                            </div>
+                          )}
                         </div>
 
                         <div className="space-y-2">
@@ -746,11 +766,11 @@ function GroupStatusUpdate({ bookings, groupId, onCancelAll }: GroupStatusUpdate
   });
 
   const handleStatusSelect = (newStatus: string) => {
-    if (newStatus === "Booked") {
+    if (isBookedStatus(newStatus)) {
       // Show the booked details dialog
       setStatusToConfirm(newStatus as BookingStatus);
       setShowBookedDetailsDialog(true);
-    } else if (newStatus === "CNF & Cancelled" && currentStatus === "Booked") {
+    } else if (newStatus === "CNF & Cancelled" && isBookedStatus(currentStatus)) {
       // Cancelling confirmed tickets goes through the cancellation dialog so
       // the refund is captured along with it.
       onCancelAll();
@@ -812,14 +832,14 @@ function GroupStatusUpdate({ bookings, groupId, onCancelAll }: GroupStatusUpdate
           </SelectTrigger>
           <SelectContent>
             {ALL_BOOKING_STATUSES.filter((statusOption) => {
-              // If Requested - show: Requested, Booked, Booking Failed (Paid), Booking Failed (Unpaid), Missed, User Cancelled
+              // If Requested - show: Requested, Booked (CNF), Booked (WL), Booking Failed (Paid), Booking Failed (Unpaid), Missed, User Cancelled
               if (currentStatus === "Requested") {
-                return ["Requested", "Booked", "Booking Failed (Paid)", "Booking Failed (Unpaid)", "Missed", "User Cancelled"].includes(statusOption);
+                return ["Requested", "Booked", "Booked (WL)", "Booking Failed (Paid)", "Booking Failed (Unpaid)", "Missed", "User Cancelled"].includes(statusOption);
               }
 
-              // If Booked - show: Booked, Requested, CNF & Cancelled
-              if (currentStatus === "Booked") {
-                return ["Booked", "Requested", "CNF & Cancelled"].includes(statusOption);
+              // If Booked (CNF/WL) - show: Booked (CNF), Booked (WL), Requested, CNF & Cancelled
+              if (isBookedStatus(currentStatus)) {
+                return ["Booked", "Booked (WL)", "Requested", "CNF & Cancelled"].includes(statusOption);
               }
 
               // If CNF & Cancelled - show: CNF & Cancelled, Requested
@@ -846,7 +866,7 @@ function GroupStatusUpdate({ bookings, groupId, onCancelAll }: GroupStatusUpdate
                 hideIndicator
                 className="data-[state=checked]:bg-primary/15 data-[state=checked]:focus:bg-primary/25"
               >
-                {statusOption}
+                {getBookingStatusLabel(statusOption)}
               </SelectItem>
             ))}
           </SelectContent>

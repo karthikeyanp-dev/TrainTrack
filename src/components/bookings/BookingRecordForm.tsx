@@ -54,6 +54,7 @@ interface FormState {
   commission: string;
   methodUsed: PaymentMethod | "";
   trainName: string;
+  bookedStatus: string;
 }
 
 export function BookingRecordForm({
@@ -119,6 +120,7 @@ export function BookingRecordForm({
     commission: "",
     methodUsed: "",
     trainName: "",
+    bookedStatus: "",
   });
 
   useEffect(() => {
@@ -159,6 +161,7 @@ export function BookingRecordForm({
           commission: commAmt,
           methodUsed: existingRec.methodUsed,
           trainName: existingRec.trainName || "",
+          bookedStatus: existingRec.bookedStatus || "",
         });
       } else {
         // Pre-fill default suggested commission for new record
@@ -243,6 +246,7 @@ export function BookingRecordForm({
         commission: suggestedCommission > 0 ? suggestedCommission.toString() : "",
         methodUsed: "",
         trainName: "",
+        bookedStatus: "",
       });
       invalidateRecordDerivedQueries();
       loadData(); // Reload to refresh wallet balances
@@ -334,6 +338,7 @@ export function BookingRecordForm({
         passengerCount: totalPassengers,
         methodUsed: form.methodUsed,
         trainName: form.trainName.trim() || undefined,
+        bookedStatus: form.bookedStatus.trim().toUpperCase() || undefined,
       });
 
       if (groupResult.success) {
@@ -367,6 +372,7 @@ export function BookingRecordForm({
         passengerCount: singleCommissionInfo?.passengerCount,
         methodUsed: form.methodUsed,
         trainName: form.trainName.trim() || undefined,
+        bookedStatus: form.bookedStatus.trim().toUpperCase() || undefined,
       });
 
       if (result.success && result.record) {
@@ -530,19 +536,36 @@ export function BookingRecordForm({
         })()}
       </div>
 
-      <div className="space-y-1">
-        <Label htmlFor={`trainName-${bookingId}`} className="text-xs">
-          Train Name / No. (Optional)
-        </Label>
-        <Input
-          id={`trainName-${bookingId}`}
-          type="text"
-          value={form.trainName}
-          onChange={(e) => setForm((prev) => ({ ...prev, trainName: e.target.value }))}
-          placeholder="e.g., 12345 Tamil Nadu Express"
-          disabled={isSubmitting}
-          className="text-sm"
-        />
+      <div className="grid grid-cols-2 items-end gap-2">
+        <div className="space-y-1">
+          <Label htmlFor={`trainName-${bookingId}`} className="text-xs">
+            Train Name / No. (Optional)
+          </Label>
+          <Input
+            id={`trainName-${bookingId}`}
+            type="text"
+            value={form.trainName}
+            onChange={(e) => setForm((prev) => ({ ...prev, trainName: e.target.value }))}
+            placeholder="e.g., 12345 Tamil Nadu Express"
+            disabled={isSubmitting}
+            className="text-sm"
+          />
+        </div>
+
+        <div className="space-y-1">
+          <Label htmlFor={`bookedStatus-${bookingId}`} className="text-xs">
+            Booked Status (Optional)
+          </Label>
+          <Input
+            id={`bookedStatus-${bookingId}`}
+            type="text"
+            value={form.bookedStatus}
+            onChange={(e) => setForm((prev) => ({ ...prev, bookedStatus: e.target.value.toUpperCase() }))}
+            placeholder="e.g., CNF/S6/16/SU or WL/27"
+            disabled={isSubmitting}
+            className="text-sm font-mono"
+          />
+        </div>
       </div>
 
       <div className="flex gap-2 pt-2">

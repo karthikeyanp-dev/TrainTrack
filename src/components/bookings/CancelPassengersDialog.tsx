@@ -42,6 +42,7 @@ import {
   todayDateKey,
 } from "@/lib/cancellations";
 import type { Booking } from "@/types/booking";
+import { isBookedStatus } from "@/types/booking";
 import type { BookingRecord } from "@/types/bookingRecord";
 import { RefundRecipientPicker, type RefundRecipientValue } from "./RefundRecipientPicker";
 
@@ -116,7 +117,7 @@ export function CancelPassengersDialog({ open, onOpenChange, bookings, record, p
             age: passenger.age,
             gender: passenger.gender,
             cancelled,
-            selectable: !cancelled && booking.status === "Booked",
+            selectable: !cancelled && isBookedStatus(booking.status),
           };
         })
         .sort((a, b) => a.name.localeCompare(b.name));

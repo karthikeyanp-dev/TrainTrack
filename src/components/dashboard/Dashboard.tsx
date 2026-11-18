@@ -18,6 +18,7 @@ import {
   Plus
 } from "lucide-react";
 import type { Booking } from "@/types/booking";
+import { isBookedStatus, getBookingStatusLabel } from "@/types/booking";
 import { formatRupees, getRefundTotals, hasOpenRefund } from "@/lib/cancellations";
 import Link from "next/link";
 
@@ -98,7 +99,7 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
   // Calculate stats
   const totalBookings = allBookings.length;
   const pendingCount = pendingBookings.length;
-  const bookedCount = allBookings.filter(b => b.status === "Booked").length;
+  const bookedCount = allBookings.filter(b => isBookedStatus(b.status)).length;
   const failedCount = allBookings.filter(
     b => b.status === "Booking Failed (Unpaid)" || b.status === "Booking Failed (Paid)"
   ).length;
@@ -153,7 +154,7 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
       });
 
       const total = monthBookings.length;
-      const booked = monthBookings.filter((booking) => booking.status === "Booked").length;
+      const booked = monthBookings.filter((booking) => isBookedStatus(booking.status)).length;
       const failed = monthBookings.filter(
         (booking) => booking.status === "Booking Failed (Unpaid)" || booking.status === "Booking Failed (Paid)"
       ).length;
@@ -171,7 +172,7 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
       const general = monthBookings.filter((booking) => booking.bookingType === "General").length;
       const passengers = monthBookings.reduce((sum, b) => sum + (b.passengers?.length || 1), 0);
       const bookedPassengers = monthBookings
-        .filter((b) => b.status === "Booked")
+        .filter((b) => isBookedStatus(b.status))
         .reduce((sum, b) => sum + (b.passengers?.length || 1), 0);
 
       return {
@@ -446,11 +447,12 @@ export function Dashboard({ allBookings, pendingBookings }: DashboardProps) {
                       </div>
                       <div className={`px-2.5 py-1 rounded-full text-xs font-medium shrink-0 ${
                         booking.status === "Booked" ? "bg-green-500/10 text-green-600" :
+                        booking.status === "Booked (WL)" ? "bg-teal-500/10 text-teal-600" :
                         booking.status === "CNF & Cancelled" || booking.status === "User Cancelled" ? "bg-red-500/10 text-red-600" :
                         booking.status === "Requested" ? "bg-blue-500/10 text-blue-600" :
                         "bg-amber-500/10 text-amber-600"
                       }`}>
-                        {booking.status}
+                        {getBookingStatusLabel(booking.status)}
                       </div>
                     </motion.div>
                   ))}

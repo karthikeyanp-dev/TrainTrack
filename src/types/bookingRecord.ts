@@ -16,6 +16,7 @@ export interface BookingRecord {
   passengerCount?: number;  // Total passenger count for the booking
   methodUsed: PaymentMethod;
   trainName?: string;       // Optional train name/number at time of booking
+  bookedStatus?: string;    // Optional ticket status, e.g. "CNF/S6/16/SU", "WL/27", "PQWL/34"
   bookingDate?: string;     // YYYY-MM-DD - the 'Book by' date from the source booking
   createdAt: string;        // ISO string
   updatedAt: string;        // ISO string

@@ -217,6 +217,25 @@
   .focus-ring {
     @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
   }
+
+  /* Thin palette-tinted scrollbar for horizontal chip rows */
+  .chip-scroll {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--primary) / 0.35) transparent;
+  }
+  .chip-scroll::-webkit-scrollbar {
+    height: 4px;
+  }
+  .chip-scroll::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .chip-scroll::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: hsl(var(--primary) / 0.35);
+  }
+  .chip-scroll::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary) / 0.6);
+  }
 }
 
 @layer base {

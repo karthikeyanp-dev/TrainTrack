@@ -9,6 +9,7 @@ import {
   AlertTriangle, 
   XCircle, 
   UserX,
+  Hourglass,
   Info
 } from "lucide-react";
 
@@ -32,8 +33,14 @@ const statusConfig: Record<BookingStatus, {
   },
   "Booked": {
     icon: CheckCircle2,
-    label: "Booked",
+    label: "Booked (CNF)",
     className: "bg-emerald-600 text-white border-emerald-700",
+    pulse: false,
+  },
+  "Booked (WL)": {
+    icon: Hourglass,
+    label: "Booked (WL)",
+    className: "bg-teal-600 text-white border-teal-700",
     pulse: false,
   },
   "Missed": {

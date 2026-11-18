@@ -100,6 +100,7 @@ function mapBookingRecord(id: string, data: DocumentData): BookingRecord {
     bookingDate: data.bookingDate,
     methodUsed: data.methodUsed,
     trainName: data.trainName as string | undefined,
+    bookedStatus: data.bookedStatus as string | undefined,
     createdAt: toISOString(data.createdAt),
     updatedAt: toISOString(data.updatedAt),
   };

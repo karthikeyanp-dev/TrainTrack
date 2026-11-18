@@ -2,12 +2,12 @@
 "use client";
 
 import type { Booking, BookingStatus } from "@/types/booking";
-import { ALL_BOOKING_STATUSES } from "@/types/booking";
+import { ALL_BOOKING_STATUSES, isBookedStatus, getBookingStatusLabel } from "@/types/booking";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { StatusBadge } from "./StatusBadge";
-import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X, CreditCard, ArrowRight, Sparkles } from "lucide-react";
+import { CalendarDays, Users, AlertTriangle, CheckCircle2, XCircle, Info, UserX, Trash2, Edit3, Share2, Train, Clock, Copy, MessageSquare, Check, X, CreditCard, ArrowRight, Sparkles, Hourglass } from "lucide-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { updateBookingStatus, deleteBooking, getBookingRecordByBookingId, deleteBookingRecord, updateBookingPaymentTracking, clearBookingCancellations } from "@/lib/firestoreClient";
 import { useBookingRecord } from "@/hooks/useBookingRecords";
@@ -67,6 +67,7 @@ function getStatusIcon(status: BookingStatus) {
   switch (status) {
     case "Requested": return <Info className="h-4 w-4 text-blue-500" />;
     case "Booked": return <CheckCircle2 className="h-4 w-4 text-green-600" />;
+    case "Booked (WL)": return <Hourglass className="h-4 w-4 text-teal-600" />;
     case "Missed": return <AlertTriangle className="h-4 w-4 text-yellow-500" />;
     case "Booking Failed (Unpaid)":
     case "Booking Failed (Paid)": return <XCircle className="h-4 w-4 text-red-600" />;
@@ -178,7 +179,7 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
         queryClient.invalidateQueries({ queryKey: ['booking', updatedBooking.id] });
         toast({
           title: "Status Updated",
-          description: `Booking for ${updatedBooking.userName} is now ${updatedBooking.status}.`,
+          description: `Booking for ${updatedBooking.userName} is now ${getBookingStatusLabel(updatedBooking.status)}.`,
         });
       } else {
         toast({
@@ -261,11 +262,11 @@ export function BookingCard({ booking, isRefundMode = false, selectionMode = fal
   });
 
   const handleStatusSelect = (newStatus: string) => {
-    if (newStatus === "Booked") {
+    if (isBookedStatus(newStatus)) {
       // Show the booked details dialog
       setStatusToConfirm(newStatus as BookingStatus);
       setShowBookedDetailsDialog(true);
-    } else if (newStatus === "CNF & Cancelled" && booking.status === "Booked") {
+    } else if (newStatus === "CNF & Cancelled" && isBookedStatus(booking.status)) {
       // Cancelling a confirmed ticket goes through the cancellation dialog (all
       // travelling passengers pre-ticked) so the refund is captured with it.
       setCancelDialog({ open: true, all: true });
@@ -612,14 +613,14 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                       {ALL_BOOKING_STATUSES.filter((statusOption) => {
                         const currentStatus = booking.status;
 
-                        // If Requested - show: Requested, Booked, Booking Failed (Paid), Booking Failed (Unpaid), Missed, User Cancelled
+                        // If Requested - show: Requested, Booked (CNF), Booked (WL), Booking Failed (Paid), Booking Failed (Unpaid), Missed, User Cancelled
                         if (currentStatus === "Requested") {
-                          return ["Requested", "Booked", "Booking Failed (Paid)", "Booking Failed (Unpaid)", "Missed", "User Cancelled"].includes(statusOption);
+                          return ["Requested", "Booked", "Booked (WL)", "Booking Failed (Paid)", "Booking Failed (Unpaid)", "Missed", "User Cancelled"].includes(statusOption);
                         }
 
-                        // If Booked - show: Booked, Requested, CNF & Cancelled
-                        if (currentStatus === "Booked") {
-                          return ["Booked", "Requested", "CNF & Cancelled"].includes(statusOption);
+                        // If Booked (CNF/WL) - show: Booked (CNF), Booked (WL), Requested, CNF & Cancelled
+                        if (isBookedStatus(currentStatus)) {
+                          return ["Booked", "Booked (WL)", "Requested", "CNF & Cancelled"].includes(statusOption);
                         }
 
                         // If CNF & Cancelled - show: CNF & Cancelled, Requested
@@ -648,7 +649,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                         >
                           <div className="flex items-center gap-2">
                             {getStatusIcon(statusOption)}
-                            <span>{statusOption}</span>
+                            <span>{getBookingStatusLabel(statusOption)}</span>
                           </div>
                         </SelectItem>
                       ))}
@@ -974,6 +975,13 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                         </div>
                       </div>
 
+                      {bookingRecord.bookedStatus && (
+                        <div className="col-span-2 pt-1 border-t border-border/40">
+                          <span className="text-muted-foreground text-[10px] font-semibold block uppercase tracking-wider">Booked Status</span>
+                          <div className="font-mono font-semibold text-xs text-foreground mt-0.5 select-all">{bookingRecord.bookedStatus}</div>
+                        </div>
+                      )}
+
                       {bookingRecord.trainName && (
                         <div className="col-span-2 pt-1 border-t border-border/40">
                           <span className="text-muted-foreground text-[10px] font-semibold block uppercase tracking-wider">Train</span>
@@ -1050,7 +1058,7 @@ ${booking.remarks ? `Remarks: ${booking.remarks}` : ''}${preparedAccountsText}
                   </Button>
 
                   {/* Cancel some or all passengers of a confirmed ticket */}
-                  {booking.status === "Booked" && activePassengers.length > 0 && (
+                  {isBookedStatus(booking.status) && activePassengers.length > 0 && (
                     <Button
                       variant="outline"
                       size="sm"
