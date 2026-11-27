@@ -93,7 +93,9 @@ const toISOStringSafe = (value: any, fieldName: string, bookingId: string): stri
 };
 
 // Normalize legacy class names to new format
-const normalizeClassType = (classType: string): TrainClass => {
+const normalizeClassType = (classType: unknown): TrainClass => {
+  // Documents not written by the app may lack classType; never return undefined
+  if (typeof classType !== "string") return "" as TrainClass;
   // Check if it's a legacy class name and map it to the new format
   if (classType in LEGACY_CLASS_MAP) {
     return LEGACY_CLASS_MAP[classType as keyof typeof LEGACY_CLASS_MAP];
@@ -111,10 +113,10 @@ const mapDocToBooking = (document: DocumentSnapshot<DocumentData>, id: string): 
 
   return {
     id,
-    source: data.source as string,
-    destination: data.destination as string,
+    source: typeof data.source === "string" ? data.source : "",
+    destination: typeof data.destination === "string" ? data.destination : "",
     journeyDate: data.journeyDate as string,
-    userName: data.userName as string,
+    userName: typeof data.userName === "string" ? data.userName : "",
     passengers: Array.isArray(data.passengers) ? data.passengers as Passenger[] : [],
     bookingDate: data.bookingDate as string,
     classType: normalizeClassType(data.classType),
