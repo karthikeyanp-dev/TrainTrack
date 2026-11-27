@@ -47,18 +47,25 @@ const toDateString = (value: unknown): string => {
   return typeof value === "string" ? value : "";
 };
 
-const normalizeClassType = (classType: string): TrainClass =>
-  classType in LEGACY_CLASS_MAP
+// A document written by something other than the app (a console edit, a dev
+// script) can lack `classType`; the UI calls string methods on it, so never
+// let it through as undefined.
+const normalizeClassType = (classType: unknown): TrainClass => {
+  if (typeof classType !== "string") return "" as TrainClass;
+  return classType in LEGACY_CLASS_MAP
     ? LEGACY_CLASS_MAP[classType as keyof typeof LEGACY_CLASS_MAP]
     : (classType as TrainClass);
+};
+
+const toText = (value: unknown): string => (typeof value === "string" ? value : "");
 
 function mapBooking(id: string, data: DocumentData): Booking {
   return {
     id,
-    source: data.source as string,
-    destination: data.destination as string,
+    source: toText(data.source),
+    destination: toText(data.destination),
     journeyDate: data.journeyDate as string,
-    userName: data.userName as string,
+    userName: toText(data.userName),
     passengers: Array.isArray(data.passengers) ? (data.passengers as Passenger[]) : [],
     bookingDate: data.bookingDate as string,
     classType: normalizeClassType(data.classType),
